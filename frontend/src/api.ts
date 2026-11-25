@@ -151,6 +151,7 @@ export const api = {
   saveSettings: (body: any) => req('/api/settings', { method: 'POST', body: JSON.stringify(body) }),
   douyinApiHealth: (base?: string) => req(`/api/douyin-api/health${base ? `?base=${encodeURIComponent(base)}` : ''}`),
   createProject: (body: any) => req('/api/projects', { method: 'POST', body: JSON.stringify(body) }),
+  deleteProject: (id: number) => req(`/api/projects/${id}`, { method: 'DELETE' }),
 
   listKeywords: (projectId?: number) => req<KeywordItem[]>(`/api/keywords${projectId ? `?project_id=${projectId}` : ''}`),
   addKeyword: (body: any) => req('/api/keywords', { method: 'POST', body: JSON.stringify(body) }),

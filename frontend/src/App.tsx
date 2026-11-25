@@ -7,10 +7,12 @@ import {
   Flame,
   FolderKanban,
   Inbox,
+  Plus,
   Radio,
   Search,
   Settings,
   Terminal,
+  Trash2,
 } from 'lucide-react';
 import { api } from './api';
 import type { Project, ScriptTemplate } from './api';
@@ -39,14 +41,48 @@ export default function App() {
 
   const [calcOpen, setCalcOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [addingProj, setAddingProj] = useState(false);
+  const [newProjName, setNewProjName] = useState('');
+  const [projErr, setProjErr] = useState('');
 
-  const loadBoot = async () => {
+  const loadBoot = async (preferProjectId?: number) => {
     const data = await api.bootstrap();
     setBoot(data);
-    setProjects(data.projects || []);
     setTemplates(data.script_templates || []);
-    if (data.projects?.length > 0 && !data.projects.some((p: Project) => p.id === projectId)) {
-      setProjectId(data.projects[0].id);
+    const list: Project[] = data.projects || [];
+    setProjects(list);
+    if (preferProjectId && list.some((p) => p.id === preferProjectId)) {
+      setProjectId(preferProjectId);
+    } else if (list.length > 0 && !list.some((p) => p.id === projectId)) {
+      setProjectId(list[0].id);
+    }
+  };
+
+  const handleAddProject = async () => {
+    const name = newProjName.trim();
+    if (!name) return;
+    setProjErr('');
+    try {
+      const created = await api.createProject({ name });
+      setNewProjName('');
+      setAddingProj(false);
+      await loadBoot(created.id);
+    } catch (e: any) {
+      setProjErr(e.message);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    const cur = projects.find((p) => p.id === projectId);
+    if (!cur || projects.length <= 1) return;
+    if (!window.confirm(`确定删除项目「${cur.name}」吗？（已收录的视频素材会保留，不会丢失）`)) return;
+    setProjErr('');
+    try {
+      await api.deleteProject(projectId);
+      const next = projects.find((p) => p.id !== projectId);
+      await loadBoot(next?.id);
+    } catch (e: any) {
+      setProjErr(e.message);
     }
   };
 
@@ -80,11 +116,34 @@ export default function App() {
           </div>
         </div>
 
-        {/* 项目选择器 */}
-        <div className="p-3 border-b border-slate-800/80">
-          <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
-            <FolderKanban className="w-3 h-3" /> 当前研究项目
+        {/* 项目选择器（支持新增与删除） */}
+        <div className="p-3 border-b border-slate-800/80 space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <FolderKanban className="w-3 h-3" /> 当前研究项目
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  setAddingProj(!addingProj);
+                  setProjErr('');
+                }}
+                title="新建研究项目"
+                className="p-0.5 rounded hover:bg-cyan-500/20 text-cyan-400 transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={projects.length <= 1}
+                title={projects.length <= 1 ? '至少保留 1 个项目' : '删除当前项目'}
+                className="p-0.5 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 disabled:opacity-30 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
+
           <select
             value={projectId}
             onChange={(e) => setProjectId(Number(e.target.value))}
@@ -96,6 +155,26 @@ export default function App() {
               </option>
             ))}
           </select>
+
+          {addingProj && (
+            <div className="flex gap-1 pt-0.5">
+              <input
+                value={newProjName}
+                onChange={(e) => setNewProjName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
+                placeholder="输入新项目名..."
+                autoFocus
+                className="flex-1 min-w-0 bg-slate-950 border border-cyan-500/50 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none"
+              />
+              <button
+                onClick={handleAddProject}
+                className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] shrink-0"
+              >
+                加
+              </button>
+            </div>
+          )}
+          {projErr && <div className="text-[10px] text-rose-400">{projErr}</div>}
         </div>
 
         {/* 五大主页面导航 */}

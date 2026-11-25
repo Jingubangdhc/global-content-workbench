@@ -150,6 +150,24 @@ def api_create_project(body: ProjectCreate):
         conn.close()
 
 
+@app.delete("/api/projects/{proj_id}")
+def api_delete_project(proj_id: int):
+    """删除项目（至少保留 1 个项目；已收录素材解除关联但不删除数据）。"""
+    conn = get_conn()
+    try:
+        cnt = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        if cnt <= 1:
+            raise HTTPException(400, "至少需要保留 1 个研究项目，无法全部删除。")
+        conn.execute("UPDATE contents SET project_id = NULL WHERE project_id = ?", (proj_id,))
+        conn.execute("UPDATE revenue_evidence SET project_id = NULL WHERE project_id = ?", (proj_id,))
+        conn.execute("DELETE FROM keywords WHERE project_id = ?", (proj_id,))
+        conn.execute("DELETE FROM projects WHERE id = ?", (proj_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 # ==================== 页面①：关键词库与全网搜索中心 ====================
 @app.get("/api/keywords")
 def api_list_keywords(project_id: Optional[int] = None):
