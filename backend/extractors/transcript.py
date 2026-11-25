@@ -61,8 +61,77 @@ def get_whisper_model():
     return _WHISPER_CACHE[key], device
 
 
+def _crawl4ai_extract_markdown(url: str) -> str:
+    """阶段 A：当 requests + trafilatura 遇到 JS 动态渲染或 403 时，优先走 Crawl4AI，未装时自动回退 Jina Reader 免费转 Markdown。"""
+    try:
+        import asyncio
+        from crawl4ai import AsyncWebCrawler
+
+        async def _run():
+            async with AsyncWebCrawler(verbose=False) as crawler:
+                res = await crawler.arun(url=url)
+                md = getattr(res, "markdown", None)
+                if hasattr(md, "raw_markdown"):
+                    return (md.raw_markdown or "").strip()
+                return str(md or "").strip()
+
+        out = asyncio.run(_run())
+        if len(out) >= 40:
+            return out
+    except Exception:
+        pass
+    # 零依赖兜底：Jina Reader 公开免费网页转 Markdown 服务
+    try:
+        r = requests.get(f"https://r.jina.ai/{url}", headers={"User-Agent": BROWSER_UA, "X-Return-Format": "markdown"}, timeout=20)
+        if r.status_code == 200 and len(r.text.strip()) >= 40:
+            return r.text.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _transcribe_with_sensevoice(audio_path: Path) -> dict | None:
+    """阶段 C：阿里 SenseVoice 中文/多语言极速语音识别（通过 funasr_onnx 或 funasr 运行，未装时自动回退 Whisper）。"""
+    try:
+        from funasr import AutoModel
+
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+        device, _ = _detect_whisper_device()
+        key = ("sensevoice", device)
+        if key not in _WHISPER_CACHE:
+            _WHISPER_CACHE[key] = AutoModel(
+                model="iic/SenseVoiceSmall",
+                trust_remote_code=False,
+                device="cuda:0" if device == "cuda" else "cpu",
+                disable_update=True,
+            )
+        res = _WHISPER_CACHE[key].generate(input=str(audio_path), cache={}, language="auto", use_itn=True)
+        raw = (res[0].get("text") or "").strip() if res else ""
+        # 清理 SenseVoice 输出的情感/事件标签 <|zh|><|NEUTRAL|> 等
+        import re as _re
+        clean = _re.sub(r"<\|[^|]+\|>", "", raw).strip()
+        if clean:
+            return {
+                "ok": True,
+                "extract_method": f"sensevoice_{device}",
+                "language": "zh/auto",
+                "raw_text": clean,
+                "segments": [],
+                "error": "",
+            }
+    except Exception:
+        return None
+    return None
+
+
 def transcribe_local_audio(audio_path: Path, language: str | None = None) -> dict:
-    """使用 faster-whisper 转写本地音视频文件。"""
+    """优先按用户设置选择 SenseVoice（中文极速）或 faster-whisper（RTX 4060 CUDA / CPU）。"""
+    engine = os.getenv("ASR_ENGINE", "whisper").strip().lower()
+    if engine == "sensevoice":
+        sv = _transcribe_with_sensevoice(audio_path)
+        if sv:
+            return sv
+
     model, device = get_whisper_model()
     segs_iter, info = model.transcribe(str(audio_path), language=language, vad_filter=True)
     segments = []
@@ -110,38 +179,51 @@ def extract_transcript_pipeline(platform: str, platform_item_id: str, url: str, 
         except Exception:
             pass  # 无字幕则继续往下走音频转写
 
-    # L2：网页/文章/社区帖子
+    # L2：网页/文章/社区帖子（先轻量 requests+trafilatura，失败自动升级 Crawl4AI 无头浏览器抓取）
     if platform in ("web", "reddit", "zhihu", "weibo"):
         try:
             r = requests.get(url, headers={"User-Agent": BROWSER_UA}, timeout=20)
-            if r.status_code != 200:
+            if r.status_code == 200:
+                text = (trafilatura.extract(r.text) or "").strip()
+                if len(text) >= 40:
+                    return {
+                        "ok": True,
+                        "extract_method": "trafilatura",
+                        "language": "auto",
+                        "raw_text": text,
+                        "segments": [],
+                        "error": "",
+                    }
+            # 轻量提取失败或遇到 403/JS渲染 -> 自动升级 Crawl4AI
+            c4 = _crawl4ai_extract_markdown(url)
+            if len(c4) >= 40:
                 return {
-                    "ok": False,
-                    "extract_method": "trafilatura",
-                    "language": "",
-                    "raw_text": "",
+                    "ok": True,
+                    "extract_method": "crawl4ai",
+                    "language": "auto",
+                    "raw_text": c4,
                     "segments": [],
-                    "error": f"目标站点返回 HTTP {r.status_code}（拒绝程序抓取），请直接在浏览器复制正文粘贴到右侧。",
-                }
-            text = trafilatura.extract(r.text) or ""
-            if len(text.strip()) < 30:
-                return {
-                    "ok": False,
-                    "extract_method": "trafilatura",
-                    "language": "",
-                    "raw_text": "",
-                    "segments": [],
-                    "error": "页面需要登录或为动态渲染，未能自动抽取正文，请手动粘贴。",
+                    "error": "",
                 }
             return {
-                "ok": True,
-                "extract_method": "trafilatura",
-                "language": "auto",
-                "raw_text": text.strip(),
+                "ok": False,
+                "extract_method": "trafilatura+crawl4ai",
+                "language": "",
+                "raw_text": "",
                 "segments": [],
-                "error": "",
+                "error": f"目标站点返回 HTTP {r.status_code} 且 Crawl4AI 未能穿透登录/风控，请直接在浏览器复制正文粘贴到左侧。",
             }
         except Exception as e:
+            c4 = _crawl4ai_extract_markdown(url)
+            if len(c4) >= 40:
+                return {
+                    "ok": True,
+                    "extract_method": "crawl4ai",
+                    "language": "auto",
+                    "raw_text": c4,
+                    "segments": [],
+                    "error": "",
+                }
             return {
                 "ok": False,
                 "extract_method": "trafilatura",

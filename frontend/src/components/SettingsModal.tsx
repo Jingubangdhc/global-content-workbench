@@ -17,6 +17,9 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
   const [llmModel, setLlmModel] = useState(env.llm_model || 'deepseek-chat');
   const [llmKey, setLlmKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
+  const [douyinApiBase, setDouyinApiBase] = useState(env.douyin_api_base || '');
+  const [douyinStatus, setDouyinStatus] = useState('');
+  const [asrEngine, setAsrEngine] = useState(env.asr_engine || 'whisper');
   const [cookieBrowser, setCookieBrowser] = useState(settings.cookie_browser || 'none');
   const [lowThreshold, setLowThreshold] = useState(settings.low_follower_threshold || '50000');
   const [saving, setSaving] = useState(false);
@@ -25,6 +28,16 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
   if (!open) return null;
 
   const bookmarkletHref = `javascript:(function(){window.open('http://127.0.0.1:8000/quick-collect?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'_blank','width=460,height=280');})();`;
+
+  const testDouyin = async () => {
+    setDouyinStatus('检测中...');
+    try {
+      const r = await api.douyinApiHealth(douyinApiBase || 'http://127.0.0.1:8080');
+      setDouyinStatus(r.ok ? `✅ ${r.message}` : `⚠️ ${r.message}`);
+    } catch (e: any) {
+      setDouyinStatus('❌ ' + e.message);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -37,6 +50,8 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
         llm_model: llmModel,
         llm_api_key: llmKey || undefined,
         tavily_api_key: tavilyKey || undefined,
+        douyin_api_base: douyinApiBase,
+        asr_engine: asrEngine,
       });
       setMsg('✅ 已写入本地 .env 与数据库');
       setLlmKey('');
@@ -169,22 +184,51 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
             </div>
           </div>
 
+          {/* 2.5 阶段 B：Douyin_TikTok_Download_API 微服务对接 */}
+          <div className="space-y-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-cyan-300 font-semibold">抖音/TikTok 无水印解析服务（Douyin_TikTok_Download_API）</span>
+              <span className="text-[11px] text-slate-400">双击 tools/start_douyin_api.bat 启动</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={douyinApiBase}
+                onChange={(e) => setDouyinApiBase(e.target.value)}
+                placeholder="例如 http://127.0.0.1:8080（留空则走内置 yt-dlp）"
+                className="flex-1 bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
+              />
+              <button
+                type="button"
+                onClick={testDouyin}
+                className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700"
+              >
+                检测连通
+              </button>
+            </div>
+            {douyinStatus && <div className="text-[11px] text-amber-300">{douyinStatus}</div>}
+          </div>
+
           {/* 3. 本地语音识别状态与浏览器书签小工具 */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-slate-200 font-semibold mb-1">
+            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-slate-200 font-semibold">
                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
                 <span>本地语音识别引擎</span>
               </div>
               <div className="text-slate-400">
-                当前运行设备：
+                当前显卡：
                 <span className="font-mono-num text-emerald-400 font-semibold ml-1">
-                  {boot?.whisper_active_device === 'cuda' ? 'RTX 4060 CUDA 加速' : 'CPU int8 (实测 4 倍速)'}
+                  {boot?.whisper_active_device === 'cuda' ? 'RTX 4060 CUDA 加速' : 'CPU int8'}
                 </span>
               </div>
-              <div className="text-[11px] text-slate-500 mt-1">
-                注：若需开启 RTX 4060 CUDA 加速，安装 nvidia-cublas-cu12 后重启即自动切换。
-              </div>
+              <select
+                value={asrEngine}
+                onChange={(e) => setAsrEngine(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200"
+              >
+                <option value="whisper">Faster-Whisper（英文/多语言均衡）</option>
+                <option value="sensevoice">SenseVoice（阿里开源·中文口播极速）</option>
+              </select>
             </div>
             <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3">
               <div className="flex items-center gap-1.5 text-slate-200 font-semibold mb-1">

@@ -17,11 +17,12 @@ import type { KeywordItem } from '../api';
 interface Props {
   projectId: number;
   lowFollowerThreshold: number;
+  externalQuery?: string | null;
   onOpenTranscript: (contentId: number) => void;
 }
 
 /** 页面①：关键词搜爆款中心（SOP 22词 + YT/B站直拉 + 异常倍数计算 + 10大必看平台跳板） */
-export default function SearchHub({ projectId, lowFollowerThreshold, onOpenTranscript }: Props) {
+export default function SearchHub({ projectId, lowFollowerThreshold, externalQuery, onOpenTranscript }: Props) {
   const [keywords, setKeywords] = useState<KeywordItem[]>([]);
   const [selectedKw, setSelectedKw] = useState<KeywordItem | null>(null);
   const [query, setQuery] = useState('medical tourism China');
@@ -58,6 +59,12 @@ export default function SearchHub({ projectId, lowFollowerThreshold, onOpenTrans
   useEffect(() => {
     loadKeywords();
   }, [projectId]);
+
+  useEffect(() => {
+    if (externalQuery) {
+      setQuery(externalQuery);
+    }
+  }, [externalQuery]);
 
   useEffect(() => {
     if (query.trim()) {

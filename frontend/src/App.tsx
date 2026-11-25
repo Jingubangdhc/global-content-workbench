@@ -7,6 +7,7 @@ import {
   Flame,
   FolderKanban,
   Inbox,
+  Radio,
   Search,
   Settings,
   Terminal,
@@ -17,12 +18,13 @@ import RevenueCalculatorDrawer from './components/RevenueCalculatorDrawer';
 import SettingsModal from './components/SettingsModal';
 import ContentAuthors from './pages/ContentAuthors';
 import CreatorTracker from './pages/CreatorTracker';
+import HotTrends from './pages/HotTrends';
 import ResourceDirectory from './pages/ResourceDirectory';
 import RevenueRadar from './pages/RevenueRadar';
 import SearchHub from './pages/SearchHub';
 import TranscriptStudio from './pages/TranscriptStudio';
 
-type PageKey = 'search' | 'tracker' | 'contents' | 'transcript' | 'revenue' | 'directory';
+type PageKey = 'search' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'revenue' | 'directory';
 
 export default function App() {
   const [boot, setBoot] = useState<any>(null);
@@ -31,6 +33,7 @@ export default function App() {
   const [templates, setTemplates] = useState<ScriptTemplate[]>([]);
 
   const [page, setPage] = useState<PageKey>('search');
+  const [searchSeedKw, setSearchSeedKw] = useState<string | null>(null);
   const [activeContentId, setActiveContentId] = useState<number | null>(null);
   const [xrayTarget, setXrayTarget] = useState<{ query: string; platform: string } | null>(null);
 
@@ -53,6 +56,7 @@ export default function App() {
 
   const navItems: { key: PageKey; label: string; sub: string; icon: any }[] = [
     { key: 'search', label: '关键词搜爆款', sub: '10大平台 + YT排序直拉', icon: Search },
+    { key: 'trends', label: '全网实时热榜', sub: '8大平台热搜实时看', icon: Radio },
     { key: 'tracker', label: '爆款博主追踪', sub: '贴主页直看视频与倍数', icon: Flame },
     { key: 'contents', label: '素材与作者库', sub: '收录 + 变现指纹', icon: Inbox },
     { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 二创', icon: FileText },
@@ -147,9 +151,19 @@ export default function App() {
           <SearchHub
             projectId={projectId}
             lowFollowerThreshold={lowThreshold}
+            externalQuery={searchSeedKw}
             onOpenTranscript={(cid) => {
               setActiveContentId(cid);
               setPage('transcript');
+            }}
+          />
+        )}
+        {page === 'trends' && (
+          <HotTrends
+            projectId={projectId}
+            onJumpSearchKeyword={(kw) => {
+              setSearchSeedKw(kw);
+              setPage('search');
             }}
           />
         )}

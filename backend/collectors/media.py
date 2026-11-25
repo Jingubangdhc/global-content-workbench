@@ -9,6 +9,7 @@ from urllib.parse import quote_plus, urlparse
 import requests
 import yt_dlp
 
+from backend.collectors.douyin_api import parse_via_douyin_api
 from backend.config import BROWSER_UA
 from backend.extractors.bio_scanner import scan_monetization_signals
 
@@ -435,6 +436,12 @@ def fetch_link_metadata(url: str, fallback_title: str = "", cookie_browser: str 
             return base
 
     if platform in ("bilibili", "tiktok", "douyin", "xiaohongshu", "instagram", "x"):
+        # 阶段 B：若已配置本地 Douyin_TikTok_Download_API，优先走该服务解析抖音/TikTok 无水印与真实统计
+        if platform in ("douyin", "tiktok"):
+            api_meta = parse_via_douyin_api(url)
+            if api_meta and api_meta.get("platform_item_id"):
+                base.update(api_meta)
+                return base
         try:
             with yt_dlp.YoutubeDL(_ydl_opts(cookie_browser=cookie_browser)) as y:
                 i = y.extract_info(url, download=False)

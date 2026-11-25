@@ -149,6 +149,7 @@ async function req<T = any>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   bootstrap: () => req('/api/bootstrap'),
   saveSettings: (body: any) => req('/api/settings', { method: 'POST', body: JSON.stringify(body) }),
+  douyinApiHealth: (base?: string) => req(`/api/douyin-api/health${base ? `?base=${encodeURIComponent(base)}` : ''}`),
   createProject: (body: any) => req('/api/projects', { method: 'POST', body: JSON.stringify(body) }),
 
   listKeywords: (projectId?: number) => req<KeywordItem[]>(`/api/keywords${projectId ? `?project_id=${projectId}` : ''}`),
@@ -164,6 +165,7 @@ export const api = {
     req('/api/search/bilibili', { method: 'POST', body: JSON.stringify({ keyword, limit: 8 }) }),
   searchWeb: (keyword: string) =>
     req('/api/search/web', { method: 'POST', body: JSON.stringify({ keyword }) }),
+  hotTrends: (force = false) => req(`/api/trends/hot?force=${force ? 'true' : 'false'}`),
 
   collectLinks: (body: any) => req('/api/collect', { method: 'POST', body: JSON.stringify(body) }),
   importCsv: async (file: File, projectId?: number) => {

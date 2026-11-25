@@ -34,6 +34,7 @@ def get_env_config() -> dict:
     llm_key = os.getenv("LLM_API_KEY", "").strip()
     tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
     yt_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    douyin_api_base = os.getenv("DOUYIN_API_BASE", "").strip()
     return {
         "llm_base_url": os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip(),
         "llm_model": os.getenv("LLM_MODEL", "deepseek-chat").strip(),
@@ -41,6 +42,8 @@ def get_env_config() -> dict:
         "llm_key_masked": f"{llm_key[:4]}****{llm_key[-4:]}" if len(llm_key) >= 8 else ("已配置" if llm_key else ""),
         "tavily_configured": bool(tavily_key),
         "youtube_api_configured": bool(yt_key),
+        "douyin_api_base": douyin_api_base,
+        "asr_engine": os.getenv("ASR_ENGINE", "whisper").strip(),
         "whisper_model_size": os.getenv("WHISPER_MODEL_SIZE", "small").strip(),
         "whisper_device": os.getenv("WHISPER_DEVICE", "auto").strip(),
     }

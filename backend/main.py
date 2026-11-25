@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
+from backend.collectors.douyin_api import check_douyin_api_health
+from backend.collectors.hot_trends import fetch_all_hot_trends
 from backend.collectors.media import (
     calc_youtube_video_outlier,
     extract_urls_from_text,
@@ -81,6 +83,13 @@ class SettingsUpdate(BaseModel):
     llm_model: Optional[str] = None
     tavily_api_key: Optional[str] = None
     youtube_api_key: Optional[str] = None
+    douyin_api_base: Optional[str] = None
+    asr_engine: Optional[str] = None
+
+
+@app.get("/api/douyin-api/health")
+def api_douyin_health(base: Optional[str] = None):
+    return check_douyin_api_health(base)
 
 
 @app.post("/api/settings")
@@ -107,6 +116,10 @@ def api_save_settings(body: SettingsUpdate):
         env_updates["TAVILY_API_KEY"] = body.tavily_api_key
     if body.youtube_api_key:
         env_updates["YOUTUBE_API_KEY"] = body.youtube_api_key
+    if body.douyin_api_base is not None:
+        env_updates["DOUYIN_API_BASE"] = body.douyin_api_base
+    if body.asr_engine is not None:
+        env_updates["ASR_ENGINE"] = body.asr_engine
     if env_updates:
         save_env_keys(env_updates)
 
@@ -238,6 +251,11 @@ def api_search_bilibili(body: SearchReq):
 @app.post("/api/search/web")
 def api_search_web(body: SearchReq):
     return search_web_articles(body.keyword)
+
+
+@app.get("/api/trends/hot")
+def api_hot_trends(force: bool = Query(False)):
+    return {"sources": fetch_all_hot_trends(force=force)}
 
 
 # ==================== 页面②：万能收录、书签投递与作者库 ====================
