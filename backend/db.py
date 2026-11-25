@@ -161,6 +161,46 @@ CREATE TABLE IF NOT EXISTS script_templates (
     cta TEXT,
     precaution TEXT
 );
+
+CREATE TABLE IF NOT EXISTS quotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_id INTEGER REFERENCES contents(id) ON DELETE SET NULL,
+    quote_text TEXT NOT NULL,
+    category TEXT DEFAULT '金句',
+    timestamp_sec REAL,
+    source_url TEXT,
+    note TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    asset_type TEXT DEFAULT 'image',
+    title TEXT,
+    thumb_url TEXT,
+    asset_url TEXT NOT NULL,
+    source_page_url TEXT,
+    author TEXT,
+    license TEXT,
+    commercial_ok TEXT DEFAULT '需核实',
+    segment_note TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    platform_comment_id TEXT,
+    author TEXT,
+    text TEXT NOT NULL,
+    like_count INTEGER DEFAULT 0,
+    is_question INTEGER DEFAULT 0,
+    is_pain_point INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(content_id, platform_comment_id)
+);
 """
 
 
@@ -260,6 +300,13 @@ def init_db() -> dict:
     """初始化表结构并幂等导入种子数据。"""
     conn = get_conn()
     conn.executescript(SCHEMA_SQL)
+
+    # 幂等迁移：为老库 transcripts 表追加 heatmap_json 与 breakdown_json 字段
+    tr_cols = {r["name"] for r in conn.execute("PRAGMA table_info(transcripts)").fetchall()}
+    if "heatmap_json" not in tr_cols:
+        conn.execute("ALTER TABLE transcripts ADD COLUMN heatmap_json TEXT")
+    if "breakdown_json" not in tr_cols:
+        conn.execute("ALTER TABLE transcripts ADD COLUMN breakdown_json TEXT")
 
     # 默认设置
     defaults = {

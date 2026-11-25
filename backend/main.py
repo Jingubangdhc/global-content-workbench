@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
+from backend.collectors.assets import search_real_assets
+from backend.collectors.comments import fetch_video_comments, summarize_comment_keywords
 from backend.collectors.douyin_api import check_douyin_api_health
 from backend.collectors.hot_trends import fetch_all_hot_trends
 from backend.collectors.media import (
@@ -27,6 +29,7 @@ from backend.collectors.media import (
 from backend.config import TMP_AUDIO_DIR, get_env_config, save_env_keys
 from backend.db import get_conn, init_db, normalize_url
 from backend.exporters.export import build_docx_bytes, build_markdown, build_sop_excel_bytes
+from backend.extractors.analysis import fetch_youtube_heatmap_highlights, run_anchored_breakdown
 from backend.extractors.transcript import (
     _detect_whisper_device,
     extract_transcript_pipeline,
@@ -85,6 +88,8 @@ class SettingsUpdate(BaseModel):
     youtube_api_key: Optional[str] = None
     douyin_api_base: Optional[str] = None
     asr_engine: Optional[str] = None
+    pexels_api_key: Optional[str] = None
+    pixabay_api_key: Optional[str] = None
 
 
 @app.get("/api/douyin-api/health")
@@ -120,6 +125,10 @@ def api_save_settings(body: SettingsUpdate):
         env_updates["DOUYIN_API_BASE"] = body.douyin_api_base
     if body.asr_engine is not None:
         env_updates["ASR_ENGINE"] = body.asr_engine
+    if body.pexels_api_key:
+        env_updates["PEXELS_API_KEY"] = body.pexels_api_key
+    if body.pixabay_api_key:
+        env_updates["PIXABAY_API_KEY"] = body.pixabay_api_key
     if env_updates:
         save_env_keys(env_updates)
 
@@ -1136,3 +1145,223 @@ def api_del_evidence(eid: int):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+# ==================== 优化①：热力高光 + 强锚定爆款拆解 + 个人金句库 ====================
+@app.post("/api/analysis/heatmap/{cid}")
+def api_heatmap(cid: int):
+    conn = get_conn()
+    c = conn.execute("SELECT * FROM contents WHERE id = ?", (cid,)).fetchone()
+    if not c:
+        conn.close()
+        raise HTTPException(404, "未找到该素材")
+    if c["platform"] != "youtube":
+        conn.close()
+        return {"ok": False, "highlights": [], "message": "目前仅 YouTube 提供公开最多重播热力图（Most Replayed）。"}
+    t = conn.execute("SELECT segments_json FROM transcripts WHERE content_id = ?", (cid,)).fetchone()
+    segs = json.loads(t["segments_json"]) if (t and t["segments_json"]) else []
+    res = fetch_youtube_heatmap_highlights(c["url"], segments=segs)
+    if res["ok"]:
+        conn.execute(
+            """INSERT INTO transcripts(content_id, heatmap_json, updated_at)
+               VALUES (?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(content_id) DO UPDATE SET heatmap_json=excluded.heatmap_json, updated_at=CURRENT_TIMESTAMP""",
+            (cid, json.dumps(res["highlights"], ensure_ascii=False)),
+        )
+        conn.commit()
+    conn.close()
+    return res
+
+
+@app.post("/api/analysis/breakdown/{cid}")
+def api_breakdown(cid: int):
+    conn = get_conn()
+    c = conn.execute("SELECT * FROM contents WHERE id = ?", (cid,)).fetchone()
+    t = conn.execute("SELECT * FROM transcripts WHERE content_id = ?", (cid,)).fetchone()
+    if not c or not t or not (t["raw_text"] or "").strip():
+        conn.close()
+        raise HTTPException(400, "请先提取或粘贴原文，再执行强锚定爆款拆解。")
+    try:
+        data = run_anchored_breakdown(t["raw_text"], title=c["title"] or "")
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, str(e))
+    conn.execute(
+        "UPDATE transcripts SET breakdown_json = ?, updated_at = CURRENT_TIMESTAMP WHERE content_id = ?",
+        (json.dumps(data, ensure_ascii=False), cid),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "breakdown": data}
+
+
+@app.get("/api/quotes")
+def api_list_quotes(q: Optional[str] = None):
+    conn = get_conn()
+    if q:
+        like = f"%{q}%"
+        rows = conn.execute("SELECT * FROM quotes WHERE quote_text LIKE ? OR category LIKE ? OR note LIKE ? ORDER BY id DESC", (like, like, like)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM quotes ORDER BY id DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+class QuoteCreate(BaseModel):
+    content_id: Optional[int] = None
+    quote_text: str
+    category: str = "金句"
+    timestamp_sec: Optional[float] = None
+    source_url: str = ""
+    note: str = ""
+
+
+@app.post("/api/quotes")
+def api_add_quote(body: QuoteCreate):
+    conn = get_conn()
+    cur = conn.execute(
+        "INSERT INTO quotes(content_id, quote_text, category, timestamp_sec, source_url, note) VALUES (?, ?, ?, ?, ?, ?)",
+        (body.content_id, body.quote_text.strip(), body.category, body.timestamp_sec, body.source_url, body.note),
+    )
+    conn.commit()
+    row = dict(conn.execute("SELECT * FROM quotes WHERE id = ?", (cur.lastrowid,)).fetchone())
+    conn.close()
+    return row
+
+
+@app.delete("/api/quotes/{qid}")
+def api_del_quote(qid: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM quotes WHERE id = ?", (qid,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ==================== 优化②：合规真实素材搜索 + 授权台账 ====================
+@app.get("/api/assets/search")
+def api_search_assets(q: str = Query(..., min_length=1), source: str = Query("all")):
+    return search_real_assets(q.strip(), source=source)
+
+
+@app.get("/api/assets/saved/{cid}")
+def api_list_saved_assets(cid: int):
+    conn = get_conn()
+    rows = [dict(r) for r in conn.execute("SELECT * FROM media_assets WHERE content_id = ? ORDER BY id DESC", (cid,)).fetchall()]
+    conn.close()
+    return rows
+
+
+class AssetSave(BaseModel):
+    content_id: int
+    source: str
+    asset_type: str = "image"
+    title: str = ""
+    thumb_url: str = ""
+    asset_url: str
+    source_page_url: str = ""
+    author: str = ""
+    license: str = ""
+    commercial_ok: str = "需核实"
+    segment_note: str = ""
+
+
+@app.post("/api/assets/saved")
+def api_save_asset(body: AssetSave):
+    conn = get_conn()
+    cur = conn.execute(
+        """INSERT INTO media_assets
+           (content_id, source, asset_type, title, thumb_url, asset_url, source_page_url, author, license, commercial_ok, segment_note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            body.content_id, body.source, body.asset_type, body.title, body.thumb_url,
+            body.asset_url, body.source_page_url, body.author, body.license, body.commercial_ok, body.segment_note,
+        ),
+    )
+    conn.commit()
+    row = dict(conn.execute("SELECT * FROM media_assets WHERE id = ?", (cur.lastrowid,)).fetchone())
+    conn.close()
+    return row
+
+
+@app.delete("/api/assets/saved/{aid}")
+def api_del_asset(aid: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM media_assets WHERE id = ?", (aid,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ==================== 优化③：高赞评论拉取与 0-Token 痛点词频 ====================
+@app.get("/api/comments/{cid}")
+def api_list_comments(cid: int, only_questions: bool = Query(False)):
+    conn = get_conn()
+    sql = "SELECT * FROM comments WHERE content_id = ?"
+    if only_questions:
+        sql += " AND is_question = 1"
+    sql += " ORDER BY is_pain_point DESC, like_count DESC"
+    rows = [dict(r) for r in conn.execute(sql, (cid,)).fetchall()]
+    conn.close()
+    return {"comments": rows, "top_keywords": summarize_comment_keywords(rows)}
+
+
+@app.post("/api/comments/fetch/{cid}")
+def api_fetch_comments(cid: int, max_comments: int = Query(50)):
+    conn = get_conn()
+    c = conn.execute("SELECT * FROM contents WHERE id = ?", (cid,)).fetchone()
+    if not c:
+        conn.close()
+        raise HTTPException(404, "未找到该素材")
+    try:
+        items = fetch_video_comments(c["url"], max_comments=min(max_comments, 80))
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, f"评论拉取失败（仅 YouTube 等公开评论接口支持免登拉取）：{str(e)[:150]}")
+    for it in items:
+        conn.execute(
+            """INSERT OR IGNORE INTO comments(content_id, platform_comment_id, author, text, like_count, is_question)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (cid, it["platform_comment_id"], it["author"], it["text"], it["like_count"], it["is_question"]),
+        )
+    conn.commit()
+    rows = [dict(r) for r in conn.execute("SELECT * FROM comments WHERE content_id = ? ORDER BY is_pain_point DESC, like_count DESC", (cid,)).fetchall()]
+    conn.close()
+    return {"ok": True, "fetched": len(items), "comments": rows, "top_keywords": summarize_comment_keywords(rows)}
+
+
+@app.patch("/api/comments/{comment_id}/pain")
+def api_toggle_pain_comment(comment_id: int, is_pain_point: int = Query(1)):
+    conn = get_conn()
+    conn.execute("UPDATE comments SET is_pain_point = ? WHERE id = ?", (is_pain_point, comment_id))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ==================== 下游视频渲染交接包（可直接交给独立 Remotion + Skills 工作区） ====================
+@app.get("/api/export/handoff/{cid}")
+def api_export_video_handoff(cid: int):
+    conn = get_conn()
+    c = conn.execute("SELECT c.*, cr.name AS creator_name FROM contents c LEFT JOIN creators cr ON cr.id = c.creator_id WHERE c.id = ?", (cid,)).fetchone()
+    if not c:
+        conn.close()
+        raise HTTPException(404, "未找到素材")
+    t = conn.execute("SELECT * FROM transcripts WHERE content_id = ?", (cid,)).fetchone()
+    assets = [dict(r) for r in conn.execute("SELECT * FROM media_assets WHERE content_id = ? ORDER BY id", (cid,)).fetchall()]
+    pain_comments = [dict(r) for r in conn.execute("SELECT author, text, like_count FROM comments WHERE content_id = ? AND (is_pain_point=1 OR is_question=1) ORDER BY like_count DESC LIMIT 15", (cid,)).fetchall()]
+    conn.close()
+    pkg = {
+        "schema": "global-content-workbench/video-handoff-v1",
+        "source_content": dict(c),
+        "my_script_draft": (t["my_draft_text"] if t else "") or "",
+        "hook_analysis": (t["hook_analysis"] if t else "") or "",
+        "script_template": (t["script_template_type"] if t else "") or "",
+        "authorized_media_assets": assets,
+        "audience_pain_comments": pain_comments,
+    }
+    return StreamingResponse(
+        io.BytesIO(json.dumps(pkg, ensure_ascii=False, indent=2).encode("utf-8")),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="video_handoff_{cid}.json"'},
+    )

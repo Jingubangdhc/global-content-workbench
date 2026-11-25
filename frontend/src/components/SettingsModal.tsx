@@ -17,6 +17,8 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
   const [llmModel, setLlmModel] = useState(env.llm_model || 'deepseek-chat');
   const [llmKey, setLlmKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
+  const [pexelsKey, setPexelsKey] = useState('');
+  const [pixabayKey, setPixabayKey] = useState('');
   const [douyinApiBase, setDouyinApiBase] = useState(env.douyin_api_base || '');
   const [douyinStatus, setDouyinStatus] = useState('');
   const [asrEngine, setAsrEngine] = useState(env.asr_engine || 'whisper');
@@ -50,6 +52,8 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
         llm_model: llmModel,
         llm_api_key: llmKey || undefined,
         tavily_api_key: tavilyKey || undefined,
+        pexels_api_key: pexelsKey || undefined,
+        pixabay_api_key: pixabayKey || undefined,
         douyin_api_base: douyinApiBase,
         asr_engine: asrEngine,
       });
@@ -159,6 +163,22 @@ export default function SettingsModal({ open, onClose, boot, onSaved }: Props) {
               placeholder="输入 Tavily API Key（留空保持不变）"
               className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
             />
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <input
+                type="password"
+                value={pexelsKey}
+                onChange={(e) => setPexelsKey(e.target.value)}
+                placeholder={`Pexels 免费素材 Key (${env.pexels_configured ? '已配置' : '选填'})`}
+                className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
+              />
+              <input
+                type="password"
+                value={pixabayKey}
+                onChange={(e) => setPixabayKey(e.target.value)}
+                placeholder={`Pixabay 免费素材 Key (${env.pixabay_configured ? '已配置' : '选填'})`}
+                className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3 pt-2">
               <div>
                 <div className="text-slate-400 mb-1">读取浏览器登录态（突破 B站/社媒受限）</div>

@@ -224,6 +224,24 @@ export const api = {
   listEvidence: () => req<RevenueEvidence[]>('/api/revenue/evidence'),
   addEvidence: (body: any) => req<RevenueEvidence>('/api/revenue/evidence', { method: 'POST', body: JSON.stringify(body) }),
   delEvidence: (id: number) => req(`/api/revenue/evidence/${id}`, { method: 'DELETE' }),
+
+  // 优化①②③：热力高光、强锚定拆解、金句库、合规素材台账、高赞评论
+  fetchHeatmap: (cid: number) => req(`/api/analysis/heatmap/${cid}`, { method: 'POST' }),
+  runBreakdown: (cid: number) => req(`/api/analysis/breakdown/${cid}`, { method: 'POST' }),
+  listQuotes: (q?: string) => req(`/api/quotes${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  addQuote: (body: any) => req('/api/quotes', { method: 'POST', body: JSON.stringify(body) }),
+  delQuote: (id: number) => req(`/api/quotes/${id}`, { method: 'DELETE' }),
+
+  searchAssets: (q: string, source = 'all') => req(`/api/assets/search?q=${encodeURIComponent(q)}&source=${source}`),
+  listSavedAssets: (cid: number) => req(`/api/assets/saved/${cid}`),
+  saveAsset: (body: any) => req('/api/assets/saved', { method: 'POST', body: JSON.stringify(body) }),
+  delAsset: (aid: number) => req(`/api/assets/saved/${aid}`, { method: 'DELETE' }),
+
+  listComments: (cid: number, onlyQuestions = false) =>
+    req(`/api/comments/${cid}?only_questions=${onlyQuestions ? 'true' : 'false'}`),
+  fetchComments: (cid: number) => req(`/api/comments/fetch/${cid}`, { method: 'POST' }),
+  togglePainComment: (commentId: number, val: number) =>
+    req(`/api/comments/${commentId}/pain?is_pain_point=${val}`, { method: 'PATCH' }),
 };
 
 export function fmtNum(n?: number | null): string {
