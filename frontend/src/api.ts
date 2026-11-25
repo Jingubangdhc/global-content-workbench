@@ -227,6 +227,7 @@ export const api = {
 
   // 优化①②③：热力高光、强锚定拆解、金句库、合规素材台账、高赞评论
   fetchHeatmap: (cid: number) => req(`/api/analysis/heatmap/${cid}`, { method: 'POST' }),
+  translateHeatmap: (cid: number) => req(`/api/analysis/heatmap/${cid}/translate`, { method: 'POST' }),
   runBreakdown: (cid: number) => req(`/api/analysis/breakdown/${cid}`, { method: 'POST' }),
   listQuotes: (q?: string) => req(`/api/quotes${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   addQuote: (body: any) => req('/api/quotes', { method: 'POST', body: JSON.stringify(body) }),
@@ -240,6 +241,7 @@ export const api = {
   listComments: (cid: number, onlyQuestions = false) =>
     req(`/api/comments/${cid}?only_questions=${onlyQuestions ? 'true' : 'false'}`),
   fetchComments: (cid: number) => req(`/api/comments/fetch/${cid}`, { method: 'POST' }),
+  translateComments: (cid: number) => req(`/api/comments/${cid}/translate`, { method: 'POST' }),
   togglePainComment: (commentId: number, val: number) =>
     req(`/api/comments/${commentId}/pain?is_pain_point=${val}`, { method: 'PATCH' }),
 };

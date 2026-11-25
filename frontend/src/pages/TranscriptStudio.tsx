@@ -195,6 +195,39 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
     }
   };
 
+  const runTranslateHeatmap = async () => {
+    if (!activeContentId) return;
+    setTranslating(true);
+    setMsg('⏳ 正在多语言批量翻译热力高光（自动识别英/俄/西/法等语种）...');
+    try {
+      const r = await api.translateHeatmap(activeContentId);
+      setHeatmap(r.highlights || []);
+      setMsg(`✅ 热力高光多语翻译完成（模型：${r.model}，Token：${r.total_tokens || '—'}，已自动缓存）`);
+    } catch (e: any) {
+      setMsg('❌ ' + e.message);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const runTranslateComments = async () => {
+    if (!activeContentId) return;
+    setTranslating(true);
+    setMsg('⏳ 正在多语言批量翻译前 30 条高赞评论...');
+    try {
+      const r = await api.translateComments(activeContentId);
+      setComments(r.comments || []);
+      setMsg(
+        r.message ||
+          `✅ 已批量翻译 ${r.translated_count} 条评论（模型：${r.model}，Token：${r.total_tokens || '—'}，已缓存）`
+      );
+    } catch (e: any) {
+      setMsg('❌ ' + e.message);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   const runBreakdown = async () => {
     if (!activeContentId) return;
     setAnalyzing(true);
@@ -465,6 +498,16 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                         <Flame className="w-3.5 h-3.5" />
                         0-Token 拉取 YouTube 最多重播高光
                       </button>
+                      {heatmap.length > 0 && (
+                        <button
+                          onClick={runTranslateHeatmap}
+                          disabled={translating}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-300 font-medium flex items-center gap-1"
+                        >
+                          {translating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Languages className="w-3.5 h-3.5" />}
+                          多语言一键翻译高光
+                        </button>
+                      )}
                       <button
                         onClick={runBreakdown}
                         disabled={analyzing || !rawText.trim()}
@@ -480,19 +523,25 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                       <div className="space-y-1.5">
                         <div className="font-bold text-emerald-300">📈 观众反复重播热力高光（0-Token 客观数据）</div>
                         {heatmap.map((h, i) => (
-                          <div key={i} className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1">
+                          <div key={i} className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1.5">
                             <div className="flex items-center justify-between">
                               <span className="font-mono-num text-cyan-300 font-semibold">
                                 #{i + 1} · {fmtDur(Math.floor(h.start_sec))} ~ {fmtDur(Math.floor(h.end_sec))} （重播热度 {(h.heat * 100).toFixed(0)}%）
+                                {h.lang ? <span className="ml-2 px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">{h.lang}→中</span> : null}
                               </span>
                               <button
-                                onClick={() => saveQuote(h.snippet, '热力高光', h.start_sec)}
+                                onClick={() => saveQuote(h.snippet_zh ? `${h.snippet_zh}\n（原文：${h.snippet}）` : h.snippet, '热力高光', h.start_sec)}
                                 className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-200"
                               >
                                 + 存金句库
                               </button>
                             </div>
                             <div className="text-slate-300 leading-relaxed">{h.snippet}</div>
+                            {h.snippet_zh && (
+                              <div className="text-indigo-200 bg-indigo-500/10 border-l-2 border-indigo-400 pl-2.5 py-1 rounded-r leading-relaxed">
+                                {h.snippet_zh}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -510,6 +559,7 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                             </span>
                           </div>
                           <div className="text-slate-200 italic">“{breakdown.hook_quote}”</div>
+                          {breakdown.hook_quote_zh && <div className="text-indigo-200">译：{breakdown.hook_quote_zh}</div>}
                           <div className="text-slate-400">{breakdown.hook_why}</div>
                         </div>
 
@@ -522,6 +572,7 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                               </span>
                             </div>
                             <div className="text-slate-400">“{m.quote}”</div>
+                            {m.quote_zh && <div className="text-indigo-200">译：{m.quote_zh}</div>}
                             <div className="text-cyan-300/90">{m.mechanism}</div>
                           </div>
                         ))}
@@ -533,12 +584,13 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                               <div key={idx} className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 flex items-start justify-between gap-2">
                                 <div>
                                   <div className="text-slate-100">“{q.text}”</div>
+                                  {q.text_zh && <div className="text-indigo-200 mt-0.5">译：{q.text_zh}</div>}
                                   <div className="text-[10px] text-slate-400 mt-0.5">
                                     {q.category} · {q.usage} · {q.verified ? '✅核验通过' : '⚠️待核'}
                                   </div>
                                 </div>
                                 <button
-                                  onClick={() => saveQuote(q.text, q.category)}
+                                  onClick={() => saveQuote(q.text_zh ? `${q.text_zh}\n（原文：${q.text}）` : q.text, q.category)}
                                   className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] shrink-0"
                                 >
                                   + 存库
@@ -654,14 +706,26 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                 {rightTab === 'comments' && (
                   <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <button
-                        onClick={doFetchComments}
-                        disabled={analyzing}
-                        className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium flex items-center gap-1"
-                      >
-                        {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
-                        0-Token 拉取前 50 条高赞评论
-                      </button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={doFetchComments}
+                          disabled={analyzing}
+                          className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium flex items-center gap-1"
+                        >
+                          {analyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                          0-Token 拉取前 50 条高赞评论
+                        </button>
+                        {comments.length > 0 && (
+                          <button
+                            onClick={runTranslateComments}
+                            disabled={translating}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-300 font-medium flex items-center gap-1"
+                          >
+                            {translating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Languages className="w-3.5 h-3.5" />}
+                            多语言一键翻译前 30 条
+                          </button>
+                        )}
+                      </div>
                       <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
                         <input type="checkbox" checked={onlyQ} onChange={(e) => setOnlyQ(e.target.checked)} />
                         只看用户提问句（找选题痛点）
@@ -703,6 +767,11 @@ export default function TranscriptStudio({ activeContentId, onSelectContent, tem
                             </button>
                           </div>
                           <div className="text-slate-200 leading-relaxed">{cm.text}</div>
+                          {cm.translated_zh && (
+                            <div className="text-indigo-200 bg-indigo-500/10 border-l-2 border-indigo-400 pl-2 py-0.5 rounded-r leading-relaxed">
+                              {cm.translated_zh}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

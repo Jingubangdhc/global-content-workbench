@@ -74,17 +74,19 @@ def run_anchored_breakdown(raw_text: str, title: str = "") -> dict:
 严格要求：
 1. 你看不到平台后台真实完播率与CTR，严禁编造因果断言，只能做“结构机制解释”。
 2. 每一条 hook_quote、retention_mechanics.quote 和 quotes.text 都必须【一字不差】摘录自下方原文，严禁改写或杜撰！
-3. 仅返回合法 JSON，不要任何 markdown 代码块标记，格式如下：
+3. 原文可能是任意语种（英/俄/西/法/日/韩等），所有分析说明请用【简体中文】输出，并对每条外语原话同步提供中文译文（*_zh 字段）。
+4. 仅返回合法 JSON，不要任何 markdown 代码块标记，格式如下：
 {{
   "hook_type": "前15秒钩子类型（如反常识提问/利益承诺/冲突故事）",
   "hook_quote": "原文开头的原话摘录",
+  "hook_quote_zh": "hook_quote 的简体中文译文",
   "hook_why": "为什么能留住前15秒注意力（1-2句话）",
   "retention_mechanics": [
-    {{"stage": "阶段名", "quote": "原文原话摘录", "mechanism": "留存/叙事手法与可迁移模板"}}
+    {{"stage": "阶段名", "quote": "原文原话摘录", "quote_zh": "中文译文", "mechanism": "留存/叙事手法与可迁移模板"}}
   ],
   "business_angle": "潜在变现/转化角度或观众痛点",
   "quotes": [
-    {{"text": "原文高传播金句原话", "category": "反常识|数字冲击|情绪共鸣|提问Hook", "usage": "适合做封面/开头/结尾"}}
+    {{"text": "原文高传播金句原话", "text_zh": "金句简体中文译文", "category": "反常识|数字冲击|情绪共鸣|提问Hook", "usage": "适合做封面/开头/结尾"}}
   ]
 }}
 

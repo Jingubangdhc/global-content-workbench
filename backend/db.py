@@ -301,12 +301,15 @@ def init_db() -> dict:
     conn = get_conn()
     conn.executescript(SCHEMA_SQL)
 
-    # 幂等迁移：为老库 transcripts 表追加 heatmap_json 与 breakdown_json 字段
+    # 幂等迁移：为老库 transcripts / comments 表追加新字段
     tr_cols = {r["name"] for r in conn.execute("PRAGMA table_info(transcripts)").fetchall()}
     if "heatmap_json" not in tr_cols:
         conn.execute("ALTER TABLE transcripts ADD COLUMN heatmap_json TEXT")
     if "breakdown_json" not in tr_cols:
         conn.execute("ALTER TABLE transcripts ADD COLUMN breakdown_json TEXT")
+    cm_cols = {r["name"] for r in conn.execute("PRAGMA table_info(comments)").fetchall()}
+    if "translated_zh" not in cm_cols:
+        conn.execute("ALTER TABLE comments ADD COLUMN translated_zh TEXT")
 
     # 默认设置
     defaults = {

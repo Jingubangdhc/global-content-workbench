@@ -316,3 +316,43 @@ def translate_with_llm(text: str, target_lang: str = "简体中文") -> dict:
         "model": model,
         "total_tokens": total_tokens,
     }
+
+
+def translate_batch_with_llm(texts: list[str], target_lang: str = "简体中文") -> dict:
+    """
+    批量多语言翻译（自动识别英/俄/西/法/日/韩/阿等任意语种 -> 简体中文），
+    一次请求打包返回 JSON 数组，大幅节省 Token。
+    """
+    import re as _re
+
+    api_key = os.getenv("LLM_API_KEY", "").strip()
+    base_url = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip()
+    model = os.getenv("LLM_MODEL", "deepseek-chat").strip()
+    if not api_key:
+        raise ValueError("尚未配置 LLM_API_KEY，请在左下角【设置】中填写兼容 OpenAI 格式的 API Key。")
+
+    numbered = [{"i": idx, "text": (t or "")[:1200]} for idx, t in enumerate(texts)]
+    prompt = (
+        f"你是精通多语言（英文、俄语、西班牙语、法语、日语、韩语、德语、阿拉伯语等）的自媒体翻译官。"
+        f"请自动识别下面 JSON 数组中每条 text 的源语言，并将其自然、准确地翻译为{target_lang}（若本来就是中文则润色保留）。"
+        f"仅返回合法 JSON 数组，不要任何 markdown 代码块或多余文字，格式严格为：\n"
+        f'[{{"i": 0, "lang": "EN/RU/ES/FR/JA/ZH等简写", "zh": "中文译文"}}]\n\n'
+        f"待翻译列表：\n{json.dumps(numbered, ensure_ascii=False)}"
+    )
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    resp = client.chat.completions.create(
+        model=model,
+        temperature=0.2,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = (resp.choices[0].message.content or "").strip()
+    raw = _re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=_re.IGNORECASE).strip()
+    parsed = json.loads(raw)
+    by_idx = {int(x["i"]): {"lang": str(x.get("lang", "")), "zh": str(x.get("zh", ""))} for x in parsed if "i" in x}
+    results = [by_idx.get(i, {"lang": "", "zh": ""}) for i in range(len(texts))]
+    return {
+        "results": results,
+        "model": model,
+        "total_tokens": resp.usage.total_tokens if resp.usage else None,
+    }

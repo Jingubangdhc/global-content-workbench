@@ -34,6 +34,7 @@ from backend.extractors.transcript import (
     _detect_whisper_device,
     extract_transcript_pipeline,
     transcribe_local_audio,
+    translate_batch_with_llm,
     translate_with_llm,
 )
 
@@ -1173,6 +1174,33 @@ def api_heatmap(cid: int):
     return res
 
 
+@app.post("/api/analysis/heatmap/{cid}/translate")
+def api_translate_heatmap(cid: int):
+    """按次批量多语言翻译热力高光片段，并写回本地缓存。"""
+    conn = get_conn()
+    t = conn.execute("SELECT heatmap_json FROM transcripts WHERE content_id = ?", (cid,)).fetchone()
+    if not t or not t["heatmap_json"]:
+        conn.close()
+        raise HTTPException(400, "尚未拉取热力高光，请先点击拉取热力高光。")
+    highlights = json.loads(t["heatmap_json"])
+    texts = [h.get("snippet", "") for h in highlights]
+    try:
+        tr = translate_batch_with_llm(texts)
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, str(e))
+    for h, r in zip(highlights, tr["results"]):
+        h["lang"] = r.get("lang", "")
+        h["snippet_zh"] = r.get("zh", "")
+    conn.execute(
+        "UPDATE transcripts SET heatmap_json = ?, updated_at = CURRENT_TIMESTAMP WHERE content_id = ?",
+        (json.dumps(highlights, ensure_ascii=False), cid),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "highlights": highlights, "model": tr["model"], "total_tokens": tr["total_tokens"]}
+
+
 @app.post("/api/analysis/breakdown/{cid}")
 def api_breakdown(cid: int):
     conn = get_conn()
@@ -1337,6 +1365,42 @@ def api_toggle_pain_comment(comment_id: int, is_pain_point: int = Query(1)):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+@app.post("/api/comments/{cid}/translate")
+def api_translate_comments(cid: int, limit: int = Query(30)):
+    """按次批量多语言翻译前 N 条尚未翻译的高赞评论并落库缓存。"""
+    conn = get_conn()
+    targets = conn.execute(
+        """SELECT id, text FROM comments
+           WHERE content_id = ? AND length(coalesce(translated_zh,'')) = 0
+           ORDER BY is_pain_point DESC, like_count DESC LIMIT ?""",
+        (cid, min(limit, 40)),
+    ).fetchall()
+    if not targets:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM comments WHERE content_id = ? ORDER BY is_pain_point DESC, like_count DESC", (cid,)).fetchall()]
+        conn.close()
+        return {"ok": True, "translated_count": 0, "comments": rows, "message": "前 30 条高赞评论均已翻译过（已命中缓存，0 Token）。"}
+    try:
+        tr = translate_batch_with_llm([r["text"] for r in targets])
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, str(e))
+    for row, res in zip(targets, tr["results"]):
+        zh = res.get("zh", "")
+        lang = res.get("lang", "")
+        val = f"[{lang}] {zh}" if (lang and zh) else zh
+        conn.execute("UPDATE comments SET translated_zh = ? WHERE id = ?", (val, row["id"]))
+    conn.commit()
+    rows = [dict(r) for r in conn.execute("SELECT * FROM comments WHERE content_id = ? ORDER BY is_pain_point DESC, like_count DESC", (cid,)).fetchall()]
+    conn.close()
+    return {
+        "ok": True,
+        "translated_count": len(targets),
+        "model": tr["model"],
+        "total_tokens": tr["total_tokens"],
+        "comments": rows,
+    }
 
 
 # ==================== 下游视频渲染交接包（可直接交给独立 Remotion + Skills 工作区） ====================
