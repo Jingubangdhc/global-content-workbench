@@ -33,19 +33,67 @@ def _fetch_bilibili() -> list[dict]:
     return items[:25]
 
 
-def _fetch_v2ex() -> list[dict]:
-    r = requests.get("https://www.v2ex.com/api/topics/hot.json", headers=HEADERS, timeout=12)
+def _fetch_google_news_us() -> list[dict]:
+    """Google News 美国全球热榜官方 RSS（本机实测 HTTP 200 极速稳定）。"""
+    r = requests.get("https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en", headers=HEADERS, timeout=15)
     r.raise_for_status()
-    return [
-        {
+    root = ET.fromstring(r.text)
+    items = []
+    for i, el in enumerate(root.findall(".//item")[:25], 1):
+        title = (el.findtext("title") or "").strip()
+        link = (el.findtext("link") or "").strip()
+        src_el = el.find("source")
+        src_name = (src_el.text or "").strip() if src_el is not None else "Google News"
+        items.append({
             "rank": i,
-            "title": x.get("title", ""),
-            "url": x.get("url", "https://www.v2ex.com/"),
-            "hot": f"{x.get('replies', 0)} 回复",
-            "extra": (x.get("node") or {}).get("title", ""),
-        }
-        for i, x in enumerate(r.json()[:25], 1)
-    ]
+            "title": title,
+            "url": link,
+            "hot": "US Top",
+            "extra": src_name,
+        })
+    return items
+
+
+def _fetch_qqnews() -> list[dict]:
+    """腾讯新闻官方热榜接口（本机实测 HTTP 200）。"""
+    r = requests.get("https://r.inews.qq.com/gw/event/hot_ranking_list?page_size=25", headers=HEADERS, timeout=12)
+    r.raise_for_status()
+    idlist = r.json().get("idlist") or []
+    news = (idlist[0].get("newslist") or []) if idlist else []
+    items = []
+    for x in news:
+        title = (x.get("title") or "").strip()
+        if not title:
+            continue
+        url = x.get("url") or (f"https://new.qq.com/rain/a/{x.get('id', '')}" if x.get("id") else "https://news.qq.com/")
+        hot_val = (x.get("hotEvent") or {}).get("hotScore") or x.get("readCount") or ""
+        hot_str = f"{round(int(hot_val) / 10000, 1)}万" if str(hot_val).isdigit() and int(hot_val) >= 10000 else str(hot_val)
+        items.append({
+            "rank": len(items) + 1,
+            "title": title,
+            "url": url,
+            "hot": hot_str,
+            "extra": x.get("source") or "",
+        })
+    return items[:25]
+
+
+def _fetch_thepaper() -> list[dict]:
+    """澎湃新闻官方热榜接口（本机实测 HTTP 200）。"""
+    r = requests.get("https://cache.thepaper.cn/contentapi/wwwIndex/rightSidebar", headers=HEADERS, timeout=12)
+    r.raise_for_status()
+    hot_news = (r.json().get("data") or {}).get("hotNews") or []
+    items = []
+    for i, x in enumerate(hot_news[:25], 1):
+        cid = x.get("contId", "")
+        items.append({
+            "rank": i,
+            "title": (x.get("name") or "").strip(),
+            "url": f"https://www.thepaper.cn/newsDetail_forward_{cid}" if cid else "https://www.thepaper.cn/",
+            "hot": f"{x.get('praiseTimes', '')} 赞" if x.get("praiseTimes") else "",
+            "extra": (x.get("nodeInfo") or {}).get("name", ""),
+        })
+    return items
 
 
 def _fetch_github_trending() -> list[dict]:
@@ -219,10 +267,10 @@ SOURCES: list[tuple[str, str, str, Callable[[], list[dict]]]] = [
     ("douyin", "抖音热搜榜", "国内", _fetch_douyin),
     ("toutiao", "今日头条热榜", "国内", _fetch_toutiao),
     ("baidu", "百度热搜", "国内", _fetch_baidu),
-    ("v2ex", "V2EX 热议", "国内", _fetch_v2ex),
+    ("qqnews", "腾讯新闻热榜", "国内", _fetch_qqnews),
+    ("thepaper", "澎湃新闻热榜", "国内", _fetch_thepaper),
+    ("gnews_us", "Google News (美国)", "海外", _fetch_google_news_us),
     ("github", "GitHub 7日新星榜", "海外", _fetch_github_trending),
-    ("hackernews", "Hacker News", "海外", _fetch_hackernews),
-    ("weibo", "微博热搜", "国内", _fetch_weibo),
 ]
 
 
