@@ -4,6 +4,7 @@ import {
   Compass,
   DollarSign,
   FileText,
+  Flame,
   FolderKanban,
   Inbox,
   Search,
@@ -15,12 +16,13 @@ import type { Project, ScriptTemplate } from './api';
 import RevenueCalculatorDrawer from './components/RevenueCalculatorDrawer';
 import SettingsModal from './components/SettingsModal';
 import ContentAuthors from './pages/ContentAuthors';
+import CreatorTracker from './pages/CreatorTracker';
 import ResourceDirectory from './pages/ResourceDirectory';
 import RevenueRadar from './pages/RevenueRadar';
 import SearchHub from './pages/SearchHub';
 import TranscriptStudio from './pages/TranscriptStudio';
 
-type PageKey = 'search' | 'contents' | 'transcript' | 'revenue' | 'directory';
+type PageKey = 'search' | 'tracker' | 'contents' | 'transcript' | 'revenue' | 'directory';
 
 export default function App() {
   const [boot, setBoot] = useState<any>(null);
@@ -50,7 +52,8 @@ export default function App() {
   }, []);
 
   const navItems: { key: PageKey; label: string; sub: string; icon: any }[] = [
-    { key: 'search', label: '关键词搜爆款', sub: '10大平台 + YT直拉', icon: Search },
+    { key: 'search', label: '关键词搜爆款', sub: '10大平台 + YT排序直拉', icon: Search },
+    { key: 'tracker', label: '爆款博主追踪', sub: '贴主页直看视频与倍数', icon: Flame },
     { key: 'contents', label: '素材与作者库', sub: '收录 + 变现指纹', icon: Inbox },
     { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 二创', icon: FileText },
     { key: 'revenue', label: '赛道收益雷达', sub: '11大变现 + 决策卡', icon: DollarSign },
@@ -147,6 +150,19 @@ export default function App() {
             onOpenTranscript={(cid) => {
               setActiveContentId(cid);
               setPage('transcript');
+            }}
+          />
+        )}
+        {page === 'tracker' && (
+          <CreatorTracker
+            projectId={projectId}
+            onOpenTranscript={(cid) => {
+              setActiveContentId(cid);
+              setPage('transcript');
+            }}
+            onInspectCreatorRevenue={(handle, platform) => {
+              setXrayTarget({ query: handle, platform });
+              setPage('revenue');
             }}
           />
         )}

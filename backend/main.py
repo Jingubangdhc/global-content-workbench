@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from backend.collectors.media import (
     calc_youtube_video_outlier,
     extract_urls_from_text,
+    fetch_creator_profile_and_videos,
     fetch_link_metadata,
     get_jump_links,
     search_bilibili,
@@ -202,17 +203,18 @@ class SearchReq(BaseModel):
     keyword: str
     keyword_id: Optional[int] = None
     limit: int = 18
+    sort_by: str = "relevance"
 
 
 @app.post("/api/search/youtube")
 def api_search_youtube(body: SearchReq):
-    items = search_youtube(body.keyword, limit=min(body.limit, 25))
+    items = search_youtube(body.keyword, limit=min(body.limit, 25), sort_by=body.sort_by)
     if body.keyword_id:
         conn = get_conn()
         conn.execute("UPDATE keywords SET last_searched_at = CURRENT_TIMESTAMP WHERE id = ?", (body.keyword_id,))
         conn.commit()
         conn.close()
-    return {"keyword": body.keyword, "count": len(items), "items": items}
+    return {"keyword": body.keyword, "sort_by": body.sort_by, "count": len(items), "items": items}
 
 
 class OutlierReq(BaseModel):
@@ -512,6 +514,149 @@ def api_patch_creator(cr_id: int, body: CreatorPatch):
         sets = ", ".join(f"{k} = ?" for k in fields)
         conn.execute(f"UPDATE creators SET {sets} WHERE id = ?", (*fields.values(), cr_id))
         conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+class TrackCreatorReq(BaseModel):
+    profile_url: str
+    project_id: Optional[int] = None
+    limit: int = 15
+    strengths_note: str = ""
+
+
+def _save_tracked_creator(conn, data: dict, project_id: Optional[int], note: str = "") -> dict:
+    mon_json = json.dumps(data.get("detected_monetization") or {}, ensure_ascii=False)
+    row_c = conn.execute(
+        "SELECT id FROM creators WHERE platform = ? AND platform_creator_id = ?",
+        (data["platform"], data["platform_creator_id"]),
+    ).fetchone()
+    if not row_c:
+        cur = conn.execute(
+            """INSERT INTO creators
+               (platform, platform_creator_id, name, handle, profile_url, follower_count,
+                baseline_median_views, baseline_updated_at, bio_text, detected_monetization_json,
+                strengths_note, is_starred)
+               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, 1)""",
+            (
+                data["platform"], data["platform_creator_id"], data["name"], data["handle"],
+                data["profile_url"], data.get("follower_count"), data.get("baseline_median_views"),
+                data.get("bio_text", ""), mon_json, note,
+            ),
+        )
+        cr_id = cur.lastrowid
+    else:
+        cr_id = row_c["id"]
+        conn.execute(
+            """UPDATE creators SET
+               name = COALESCE(?, name),
+               handle = CASE WHEN length(coalesce(?,''))>0 THEN ? ELSE handle END,
+               profile_url = CASE WHEN length(coalesce(?,''))>0 THEN ? ELSE profile_url END,
+               follower_count = COALESCE(?, follower_count),
+               baseline_median_views = COALESCE(?, baseline_median_views),
+               baseline_updated_at = CURRENT_TIMESTAMP,
+               bio_text = CASE WHEN length(coalesce(?,''))>0 THEN ? ELSE bio_text END,
+               detected_monetization_json = CASE WHEN length(coalesce(?,''))>20 THEN ? ELSE detected_monetization_json END,
+               strengths_note = CASE WHEN length(coalesce(?,''))>0 THEN ? ELSE strengths_note END
+               WHERE id = ?""",
+            (
+                data["name"], data["handle"], data["handle"], data["profile_url"], data["profile_url"],
+                data.get("follower_count"), data.get("baseline_median_views"),
+                data.get("bio_text", ""), data.get("bio_text", ""), mon_json, mon_json, note, note, cr_id,
+            ),
+        )
+
+    added_videos = 0
+    for v in data.get("videos") or []:
+        ex = conn.execute(
+            "SELECT id FROM contents WHERE platform = ? AND platform_item_id = ?",
+            (v["platform"], v["platform_item_id"]),
+        ).fetchone()
+        if ex:
+            conn.execute(
+                """UPDATE contents SET
+                   creator_id = ?, view_count = COALESCE(?, view_count),
+                   outlier_score = COALESCE(?, outlier_score),
+                   views_to_followers = COALESCE(?, views_to_followers)
+                   WHERE id = ?""",
+                (cr_id, v.get("view_count"), v.get("outlier_score"), v.get("views_to_followers"), ex["id"]),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO contents
+                   (project_id, creator_id, platform, platform_item_id, content_type, title, url,
+                    thumbnail_url, published_at, duration_sec, view_count, like_count, comment_count,
+                    views_to_followers, outlier_score, collect_reason, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inbox')""",
+                (
+                    project_id, cr_id, v["platform"], v["platform_item_id"], v.get("content_type"),
+                    v.get("title"), v["url"], v.get("thumbnail_url"), v.get("published_at"),
+                    v.get("duration_sec"), v.get("view_count"), v.get("like_count"),
+                    v.get("comment_count"), v.get("views_to_followers"), v.get("outlier_score"),
+                    f"博主追踪:{data['name']}",
+                ),
+            )
+            added_videos += 1
+    return {"creator_id": cr_id, "total_fetched": len(data.get("videos") or []), "added_videos": added_videos, "warning": data.get("warning", "")}
+
+
+@app.post("/api/creators/track")
+def api_track_creator(body: TrackCreatorReq):
+    urls = extract_urls_from_text(body.profile_url)
+    if not urls:
+        raise HTTPException(400, "请输入有效的博主主页链接（以 http:// 或 https:// 开头）。")
+    conn = get_conn()
+    cookie_browser = _get_setting(conn, "cookie_browser", "none")
+    data = fetch_creator_profile_and_videos(urls[0], limit=min(body.limit, 30), cookie_browser=cookie_browser)
+    res = _save_tracked_creator(conn, data, body.project_id, body.strengths_note)
+    conn.commit()
+    conn.close()
+    return {"ok": True, "creator_name": data["name"], **res}
+
+
+@app.post("/api/creators/{cr_id}/refresh")
+def api_refresh_creator(cr_id: int, limit: int = Query(15)):
+    conn = get_conn()
+    cr = conn.execute("SELECT * FROM creators WHERE id = ?", (cr_id,)).fetchone()
+    if not cr or not cr["profile_url"]:
+        conn.close()
+        raise HTTPException(404, "该博主缺少主页链接，无法自动刷新。")
+    cookie_browser = _get_setting(conn, "cookie_browser", "none")
+    data = fetch_creator_profile_and_videos(cr["profile_url"], limit=min(limit, 30), cookie_browser=cookie_browser)
+    res = _save_tracked_creator(conn, data, None, "")
+    conn.commit()
+    conn.close()
+    return {"ok": True, "creator_name": data["name"], **res}
+
+
+@app.get("/api/creators/{cr_id}/videos")
+def api_creator_videos(cr_id: int):
+    conn = get_conn()
+    cr = conn.execute("SELECT * FROM creators WHERE id = ?", (cr_id,)).fetchone()
+    if not cr:
+        conn.close()
+        raise HTTPException(404, "未找到该博主")
+    videos = [
+        dict(r)
+        for r in conn.execute(
+            """SELECT c.*,
+                      CASE WHEN length(coalesce(t.raw_text,'')) > 0 THEN 1 ELSE 0 END AS has_transcript
+               FROM contents c
+               LEFT JOIN transcripts t ON t.content_id = c.id
+               WHERE c.creator_id = ?
+               ORDER BY c.outlier_score DESC, c.view_count DESC, c.id DESC""",
+            (cr_id,),
+        ).fetchall()
+    ]
+    conn.close()
+    return {"creator": dict(cr), "videos": videos}
+
+
+@app.delete("/api/creators/{cr_id}")
+def api_delete_creator(cr_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM creators WHERE id = ?", (cr_id,))
+    conn.commit()
     conn.close()
     return {"ok": True}
 

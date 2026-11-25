@@ -156,8 +156,8 @@ export const api = {
   delKeyword: (id: number) => req(`/api/keywords/${id}`, { method: 'DELETE' }),
 
   jumpLinks: (q: string) => req(`/api/search/jump-links?q=${encodeURIComponent(q)}`),
-  searchYouTube: (keyword: string, keyword_id?: number) =>
-    req('/api/search/youtube', { method: 'POST', body: JSON.stringify({ keyword, keyword_id, limit: 18 }) }),
+  searchYouTube: (keyword: string, keyword_id?: number, sort_by = 'relevance') =>
+    req('/api/search/youtube', { method: 'POST', body: JSON.stringify({ keyword, keyword_id, limit: 18, sort_by }) }),
   calcOutlier: (url: string) =>
     req('/api/search/youtube-outlier', { method: 'POST', body: JSON.stringify({ url }) }),
   searchBilibili: (keyword: string) =>
@@ -187,6 +187,11 @@ export const api = {
 
   listCreators: (platform?: string) => req<CreatorItem[]>(`/api/creators${platform && platform !== 'all' ? `?platform=${platform}` : ''}`),
   patchCreator: (id: number, body: any) => req(`/api/creators/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  trackCreator: (body: { profile_url: string; project_id?: number; limit?: number; strengths_note?: string }) =>
+    req('/api/creators/track', { method: 'POST', body: JSON.stringify(body) }),
+  refreshCreator: (id: number, limit = 15) => req(`/api/creators/${id}/refresh?limit=${limit}`, { method: 'POST' }),
+  creatorVideos: (id: number) => req<{ creator: CreatorItem; videos: ContentItem[] }>(`/api/creators/${id}/videos`),
+  delCreator: (id: number) => req(`/api/creators/${id}`, { method: 'DELETE' }),
 
   getTranscript: (cid: number) => req(`/api/transcripts/${cid}`),
   extractTranscript: (cid: number) => req(`/api/extract/${cid}`, { method: 'POST' }),

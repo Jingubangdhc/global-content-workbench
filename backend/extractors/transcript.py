@@ -2,6 +2,7 @@
 import ctypes
 import json
 import os
+import sys
 import uuid
 from pathlib import Path
 
@@ -14,6 +15,25 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from backend.config import BROWSER_UA, TMP_AUDIO_DIR
 
 _WHISPER_CACHE = {}
+_CUDA_DIRS_REGISTERED = False
+
+
+def _register_nvidia_dll_dirs() -> None:
+    """Windows 下将 pip 安装的 nvidia-cublas / nvidia-cudnn bin 目录加入 DLL 搜索路径。"""
+    global _CUDA_DIRS_REGISTERED
+    if _CUDA_DIRS_REGISTERED:
+        return
+    _CUDA_DIRS_REGISTERED = True
+    nvidia_root = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+    if not nvidia_root.exists():
+        return
+    for bin_dir in nvidia_root.glob("*/bin"):
+        if bin_dir.is_dir():
+            try:
+                os.add_dll_directory(str(bin_dir))
+            except Exception:
+                pass
+            os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
 
 
 def _detect_whisper_device() -> tuple[str, str]:
@@ -21,6 +41,7 @@ def _detect_whisper_device() -> tuple[str, str]:
     pref = os.getenv("WHISPER_DEVICE", "auto").strip().lower()
     if pref == "cpu":
         return "cpu", "int8"
+    _register_nvidia_dll_dirs()
     try:
         ctypes.CDLL("cublas64_12.dll")
         return "cuda", "float16"

@@ -29,6 +29,7 @@ export default function SearchHub({ projectId, lowFollowerThreshold, onOpenTrans
   const newCat = '自定义';
 
   const [tab, setTab] = useState<'youtube' | 'bilibili' | 'web' | 'jump'>('youtube');
+  const [ytSort, setYtSort] = useState('relevance');
   const [ytItems, setYtItems] = useState<any[]>([]);
   const [biliItems, setBiliItems] = useState<any[]>([]);
   const [webRes, setWebRes] = useState<any>(null);
@@ -71,7 +72,7 @@ export default function SearchHub({ projectId, lowFollowerThreshold, onOpenTrans
     try {
       api.jumpLinks(q).then(setJumps).catch(() => {});
       if (tab === 'youtube') {
-        const r = await api.searchYouTube(q, kwId ?? selectedKw?.id);
+        const r = await api.searchYouTube(q, kwId ?? selectedKw?.id, ytSort);
         setYtItems(r.items || []);
       } else if (tab === 'bilibili') {
         const r = await api.searchBilibili(q);
@@ -253,6 +254,18 @@ export default function SearchHub({ projectId, lowFollowerThreshold, onOpenTrans
                 className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-100 focus:outline-none"
               />
             </div>
+            <select
+              value={ytSort}
+              onChange={(e) => setYtSort(e.target.value)}
+              className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-cyan-300 shrink-0"
+              title="YouTube 直拉排序逻辑"
+            >
+              <option value="relevance">YT：综合相关</option>
+              <option value="month_views">YT：本月爆款(播放↓)</option>
+              <option value="week_views">YT：本周爆款(播放↓)</option>
+              <option value="views">YT：历史最高播放</option>
+              <option value="latest">YT：最新发布</option>
+            </select>
             <button
               onClick={() => runSearch()}
               disabled={loading}

@@ -107,14 +107,40 @@ def get_jump_links(keyword: str) -> dict:
     return {"keyword": keyword, "pinned_10": pinned_10, "trends_and_web": trends_and_web}
 
 
-def search_youtube(keyword: str, limit: int = 20) -> list[dict]:
-    """免 API Key 使用 yt-dlp 搜索 YouTube 爆款视频（Phase 0 已实测 1.7s 返回 15 条）。"""
-    with yt_dlp.YoutubeDL(_ydl_opts({"extract_flat": True})) as y:
-        info = y.extract_info(f"ytsearch{limit}:{keyword}", download=False)
+YT_SORT_SP = {
+    "views": "CAM%253D",          # 按观看次数最高
+    "latest": "CAI%253D",         # 按上传时间最新
+    "month_views": "CAMSBAgEEAE%253D",  # 本月 + 视频 + 按观看次数
+    "week_views": "CAMSBAgDEAE%253D",   # 本周 + 视频 + 按观看次数
+}
+
+
+def search_youtube(keyword: str, limit: int = 20, sort_by: str = "relevance") -> list[dict]:
+    """免 API Key 使用 yt-dlp 搜索 YouTube 爆款视频，支持综合相关/播放量最高/本月爆款/本周爆款/最新。"""
+    sp = YT_SORT_SP.get(sort_by)
+    target = (
+        f"https://www.youtube.com/results?search_query={quote_plus(keyword)}&sp={sp}"
+        if sp
+        else f"ytsearch{limit}:{keyword}"
+    )
+    entries = []
+    try:
+        with yt_dlp.YoutubeDL(_ydl_opts({"extract_flat": True, "playlistend": limit})) as y:
+            info = y.extract_info(target, download=False)
+        entries = (info or {}).get("entries") or []
+    except Exception:
+        entries = []
+
+    # 若带 sp 参数的搜索页受限，平滑降级到 ytsearch 并本地按播放量排序
+    if not entries and sp:
+        with yt_dlp.YoutubeDL(_ydl_opts({"extract_flat": True})) as y:
+            info = y.extract_info(f"ytsearch{limit}:{keyword}", download=False)
+        entries = (info or {}).get("entries") or []
+
     items = []
-    for e in (info or {}).get("entries") or []:
+    for e in entries:
         vid = e.get("id")
-        if not vid:
+        if not vid or len(str(vid)) != 11:
             continue
         dur = e.get("duration")
         ctype = "short_video" if (dur is not None and dur <= 65) else "long_video"
@@ -135,7 +161,110 @@ def search_youtube(keyword: str, limit: int = 20) -> list[dict]:
             "duration_sec": int(dur) if dur is not None else None,
             "content_type": ctype,
         })
-    return items
+    if sort_by in ("views", "month_views", "week_views"):
+        items.sort(key=lambda x: x.get("view_count") or 0, reverse=True)
+    return items[:limit]
+
+
+def fetch_creator_profile_and_videos(profile_url: str, limit: int = 15, cookie_browser: str = "none") -> dict:
+    """
+    爆款博主追踪核心：根据博主主页链接抓取博主资料 + 近期 N 条作品，
+    自动计算该频道播放中位数与每条视频的异常爆款倍数。
+    """
+    u = profile_url.strip()
+    platform, _ = detect_platform(u)
+    if "youtube.com" in u.lower() or "youtu.be" in u.lower():
+        platform = "youtube"
+
+    p = urlparse(u)
+    clean_path = p.path.strip("/")
+    fallback_id = clean_path.split("/")[-1] if clean_path else hashlib.md5(u.encode()).hexdigest()[:10]
+    fallback_handle = fallback_id.lstrip("@")
+
+    result = {
+        "platform": platform,
+        "platform_creator_id": fallback_id,
+        "name": fallback_handle or u,
+        "handle": fallback_handle,
+        "profile_url": u,
+        "follower_count": None,
+        "baseline_median_views": None,
+        "bio_text": "",
+        "detected_monetization": scan_monetization_signals(""),
+        "videos": [],
+        "warning": "",
+    }
+
+    target_url = u
+    if platform == "youtube" and not any(u.rstrip("/").endswith(s) for s in ("/videos", "/shorts", "/streams")):
+        target_url = u.rstrip("/") + "/videos"
+
+    try:
+        with yt_dlp.YoutubeDL(_ydl_opts({"extract_flat": True, "playlistend": limit}, cookie_browser=cookie_browser)) as y:
+            info = y.extract_info(target_url, download=False)
+        if not info:
+            raise RuntimeError("未返回频道数据")
+
+        ch_id = info.get("channel_id") or info.get("uploader_id") or fallback_id
+        ch_name = info.get("channel") or info.get("uploader") or info.get("title") or fallback_handle
+        # 去掉 YouTube 自动拼上的 " - Videos" 后缀
+        ch_name = re.sub(r"\s*-\s*Videos$", "", str(ch_name), flags=re.IGNORECASE).strip()
+        handle = str(info.get("uploader_id") or fallback_handle).lstrip("@")
+        bio = info.get("description") or ""
+        followers = info.get("channel_follower_count")
+
+        raw_entries = info.get("entries") or []
+        vids = []
+        views_pool = []
+        for e in raw_entries:
+            if not e:
+                continue
+            vid = e.get("id")
+            vurl = e.get("url") or (f"https://www.youtube.com/watch?v={vid}" if platform == "youtube" and vid else "")
+            if not vurl:
+                continue
+            if not vurl.startswith("http") and platform == "youtube":
+                vurl = f"https://www.youtube.com/watch?v={vurl}"
+            vc = e.get("view_count")
+            if vc is not None:
+                views_pool.append(vc)
+            dur = e.get("duration")
+            thumbs = e.get("thumbnails") or []
+            thumb = thumbs[-1].get("url") if thumbs else (f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if platform == "youtube" and vid else "")
+            vids.append({
+                "platform": platform,
+                "platform_item_id": str(vid or hashlib.md5(vurl.encode()).hexdigest()[:12]),
+                "title": e.get("title") or vurl,
+                "url": vurl,
+                "thumbnail_url": thumb,
+                "published_at": e.get("upload_date") or "",
+                "duration_sec": int(dur) if dur is not None else None,
+                "content_type": "short_video" if (dur is not None and dur <= 65) else "long_video",
+                "view_count": vc,
+                "like_count": e.get("like_count"),
+                "comment_count": e.get("comment_count"),
+            })
+
+        median_v = round(float(statistics.median(views_pool)), 1) if views_pool else None
+        for v in vids:
+            vc = v.get("view_count")
+            v["outlier_score"] = round(vc / median_v, 2) if (vc is not None and median_v and median_v > 0) else None
+            v["views_to_followers"] = round(vc / followers, 2) if (vc is not None and followers and followers > 0) else None
+
+        result.update({
+            "platform_creator_id": str(ch_id),
+            "name": ch_name,
+            "handle": handle,
+            "profile_url": info.get("channel_url") or u,
+            "follower_count": followers,
+            "baseline_median_views": median_v,
+            "bio_text": bio,
+            "detected_monetization": scan_monetization_signals(bio),
+            "videos": vids,
+        })
+    except Exception as e:
+        result["warning"] = f"该平台主页受限未能自动拉取视频列表（已收录博主主页，可手动添加视频）：{str(e)[:150]}"
+    return result
 
 
 def calc_youtube_video_outlier(video_url: str) -> dict:
