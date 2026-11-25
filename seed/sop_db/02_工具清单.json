@@ -1,0 +1,189 @@
+[
+ {
+  "工具": "Google Search",
+  "国内对应": "百度联想/相关搜索",
+  "官网地址（可复制）": "https://www.google.com/",
+  "具体操作路径": "英文搜索词→搜索框补全→People also ask/相关搜索",
+  "英文检索示例": "healthcare in China",
+  "你能得到什么": "发现长尾问题/问法",
+  "最重要的局限": "结果会个人化；不是搜索量",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.google.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Google Trends",
+  "国内对应": "巨量算数趋势",
+  "官网地址（可复制）": "https://trends.google.com/trends/explore",
+  "具体操作路径": "Explore→国家→时间→Search type→Related queries",
+  "英文检索示例": "medical tourism China",
+  "你能得到什么": "Top/Rising、相对兴趣",
+  "最重要的局限": "归一化0–100不是绝对人数",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://trends.google.com/trends/explore, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "YouTube Search",
+  "国内对应": "抖音搜索",
+  "官网地址（可复制）": "https://www.youtube.com/",
+  "具体操作路径": "英文搜索→筛选日期/类型→看视频和评论",
+  "英文检索示例": "China hospital experience",
+  "你能得到什么": "发现标题、封面、开场",
+  "最重要的局限": "高播放≠适配自己账号",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.youtube.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "YouTube Studio Trends",
+  "国内对应": "创作者热点/受众需求",
+  "官网地址（可复制）": "https://studio.youtube.com/",
+  "具体操作路径": "Analytics→Trends→搜索主题；若模块可用",
+  "英文检索示例": "Chinese healthcare",
+  "你能得到什么": "Top searches / Breakout videos",
+  "最重要的局限": "模块按地区/账号逐步开放",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://studio.youtube.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "TikTok Creative Center",
+  "国内对应": "抖音热点宝",
+  "官网地址（可复制）": "https://ads.tiktok.com/creative/creativeCenter/trends",
+  "具体操作路径": "Trends→Country→Health/Travel→7/30 days",
+  "英文检索示例": "medical travel",
+  "你能得到什么": "热门标签/创意形式",
+  "最重要的局限": "广告库数据不是自然视频数据",
+  "优先级": "可选",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://ads.tiktok.com/creative/creativeCenter/trends, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Reddit",
+  "国内对应": "知乎/百度知道",
+  "官网地址（可复制）": "https://www.reddit.com/",
+  "具体操作路径": "搜索英文问题→Posts/Comments→Top/New",
+  "英文检索示例": "hospital China foreigners",
+  "你能得到什么": "人群焦虑/真实表达",
+  "最重要的局限": "评论不等于事实",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.reddit.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Quora",
+  "国内对应": "知乎长问答",
+  "官网地址（可复制）": "https://www.quora.com/",
+  "具体操作路径": "搜索问句→看回答日期及论据",
+  "英文检索示例": "China hospital insurance",
+  "你能得到什么": "常见疑问和答案框架",
+  "最重要的局限": "问答存在营销/过时信息",
+  "优先级": "可选",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.quora.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Google News",
+  "国内对应": "微博/今日热榜",
+  "官网地址（可复制）": "https://news.google.com/",
+  "具体操作路径": "搜索关键主题→按新闻日期确认",
+  "英文检索示例": "China medical tourism",
+  "你能得到什么": "及时发现政策/事件",
+  "最重要的局限": "需回到政策原始机关核查",
+  "优先级": "可选",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://news.google.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "vidIQ",
+  "国内对应": "抖音对标分析",
+  "官网地址（可复制）": "https://vidiq.com/",
+  "具体操作路径": "搜索关键词/对标视频、异常值",
+  "英文检索示例": "medical tourism",
+  "你能得到什么": "竞品与热点线索",
+  "最重要的局限": "第三方估计并非内部指标",
+  "优先级": "可选",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://vidiq.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Viewstats",
+  "国内对应": "对标异常视频",
+  "官网地址（可复制）": "https://www.viewstats.com/",
+  "具体操作路径": "检索频道/标题，观察outlier",
+  "英文检索示例": "healthcare",
+  "你能得到什么": "发现异常高表现的视频",
+  "最重要的局限": "高级功能可能收费",
+  "优先级": "可选",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.viewstats.com/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Pexels",
+  "国内对应": "可用素材站",
+  "官网地址（可复制）": "https://www.pexels.com/videos/",
+  "具体操作路径": "英文搜索→下载→记录每个素材页面链接",
+  "英文检索示例": "Shanghai skyline",
+  "你能得到什么": "城市/交通/通用氛围镜头",
+  "最重要的局限": "商标/人物/背书仍受限制",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.pexels.com/videos/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "Wikimedia Commons",
+  "国内对应": "图片/历史材料",
+  "官网地址（可复制）": "https://commons.wikimedia.org/",
+  "具体操作路径": "搜索→进入文件页→查作者/许可证",
+  "英文检索示例": "Shanghai history",
+  "你能得到什么": "历史地图/建筑/公共资料",
+  "最重要的局限": "每个文件授权不同",
+  "优先级": "可选",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://commons.wikimedia.org/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "YouTube Audio Library",
+  "国内对应": "无版权音乐查找",
+  "官网地址（可复制）": "https://www.youtube.com/audiolibrary",
+  "具体操作路径": "Studio→Audio Library→筛Mood/Duration/Attribution",
+  "英文检索示例": "travel hopeful",
+  "你能得到什么": "音乐和音效",
+  "最重要的局限": "有些曲目需要署名",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.youtube.com/audiolibrary, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "WHO",
+  "国内对应": "国际卫生事实",
+  "官网地址（可复制）": "https://www.who.int/",
+  "具体操作路径": "官网搜索主题→核对机构/年份/定义",
+  "英文检索示例": "health systems",
+  "你能得到什么": "卫生数据、制度背景",
+  "最重要的局限": "宏观数据不能代替医院报价",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.who.int/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "中国国家卫生健康委",
+  "国内对应": "中国医疗政策",
+  "官网地址（可复制）": "https://www.nhc.gov.cn/",
+  "具体操作路径": "用中文搜索通知→核对发布日期",
+  "英文检索示例": "国际医疗服务",
+  "你能得到什么": "官方政策/医疗数据",
+  "最重要的局限": "及时性和地区适用性需核对",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.nhc.gov.cn/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "中国移民管理局",
+  "国内对应": "签证与入境",
+  "官网地址（可复制）": "https://www.nia.gov.cn/",
+  "具体操作路径": "核对国籍/入境方式/日期/资格",
+  "英文检索示例": "外国人入境",
+  "你能得到什么": "入境政策来源",
+  "最重要的局限": "不能把过境免签当医疗签证",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://www.nia.gov.cn/, friendlyName=打开 ↗"
+ },
+ {
+  "工具": "YouTube医疗政策",
+  "国内对应": "发布前政策自检",
+  "官网地址（可复制）": "https://support.google.com/youtube/answer/13813322?hl=en",
+  "具体操作路径": "打开官方医疗错误信息政策→逐条核对",
+  "英文检索示例": "treatment comparison",
+  "你能得到什么": "降低违规和误导风险",
+  "最重要的局限": "需区分事实科普与医疗建议",
+  "优先级": "必用",
+  "打开网站": "HYPERLINK is not implemented. linkLocation=https://support.google.com/youtube/answer/13813322?hl=en, friendlyName=打开 ↗"
+ }
+]

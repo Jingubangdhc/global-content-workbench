@@ -1,0 +1,183 @@
+import { useEffect, useState } from 'react';
+import {
+  Calculator,
+  Compass,
+  DollarSign,
+  FileText,
+  FolderKanban,
+  Inbox,
+  Search,
+  Settings,
+  Terminal,
+} from 'lucide-react';
+import { api } from './api';
+import type { Project, ScriptTemplate } from './api';
+import RevenueCalculatorDrawer from './components/RevenueCalculatorDrawer';
+import SettingsModal from './components/SettingsModal';
+import ContentAuthors from './pages/ContentAuthors';
+import ResourceDirectory from './pages/ResourceDirectory';
+import RevenueRadar from './pages/RevenueRadar';
+import SearchHub from './pages/SearchHub';
+import TranscriptStudio from './pages/TranscriptStudio';
+
+type PageKey = 'search' | 'contents' | 'transcript' | 'revenue' | 'directory';
+
+export default function App() {
+  const [boot, setBoot] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState<number>(1);
+  const [templates, setTemplates] = useState<ScriptTemplate[]>([]);
+
+  const [page, setPage] = useState<PageKey>('search');
+  const [activeContentId, setActiveContentId] = useState<number | null>(null);
+  const [xrayTarget, setXrayTarget] = useState<{ query: string; platform: string } | null>(null);
+
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const loadBoot = async () => {
+    const data = await api.bootstrap();
+    setBoot(data);
+    setProjects(data.projects || []);
+    setTemplates(data.script_templates || []);
+    if (data.projects?.length > 0 && !data.projects.some((p: Project) => p.id === projectId)) {
+      setProjectId(data.projects[0].id);
+    }
+  };
+
+  useEffect(() => {
+    loadBoot();
+  }, []);
+
+  const navItems: { key: PageKey; label: string; sub: string; icon: any }[] = [
+    { key: 'search', label: '关键词搜爆款', sub: '10大平台 + YT直拉', icon: Search },
+    { key: 'contents', label: '素材与作者库', sub: '收录 + 变现指纹', icon: Inbox },
+    { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 二创', icon: FileText },
+    { key: 'revenue', label: '赛道收益雷达', sub: '11大变现 + 决策卡', icon: DollarSign },
+    { key: 'directory', label: '网址导航总库', sub: '166站全量筛选', icon: Compass },
+  ];
+
+  const lowThreshold = parseInt(boot?.settings?.low_follower_threshold || '50000', 10);
+
+  return (
+    <div className="h-screen w-screen flex bg-[#070b14] text-slate-200 overflow-hidden">
+      {/* 左侧金融终端风导航栏 */}
+      <aside className="w-56 shrink-0 bg-[#0b1120] border-r border-slate-800/90 flex flex-col">
+        <div className="p-4 border-b border-slate-800/90">
+          <div className="flex items-center gap-2 text-cyan-400 font-bold text-sm tracking-tight">
+            <Terminal className="w-4 h-4" />
+            <span>全球情报工作台</span>
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1 font-mono-num">
+            MVP v1.0 · TERMINAL DARK
+          </div>
+        </div>
+
+        {/* 项目选择器 */}
+        <div className="p-3 border-b border-slate-800/80">
+          <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
+            <FolderKanban className="w-3 h-3" /> 当前研究项目
+          </div>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(Number(e.target.value))}
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-100 font-medium"
+          >
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 五大主页面导航 */}
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+          {navItems.map((n) => {
+            const Icon = n.icon;
+            const active = page === n.key;
+            return (
+              <button
+                key={n.key}
+                onClick={() => setPage(n.key)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl transition flex items-center gap-2.5 ${
+                  active
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-100 border border-transparent'
+                }`}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold">{n.label}</div>
+                  <div className="text-[10px] opacity-70 truncate">{n.sub}</div>
+                </div>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* 底部常驻工具按钮 */}
+        <div className="p-2.5 border-t border-slate-800/90 space-y-1.5">
+          <button
+            onClick={() => setCalcOpen(true)}
+            className="w-full py-2 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-medium flex items-center gap-2"
+          >
+            <Calculator className="w-4 h-4" />
+            <span>收益反推计算器</span>
+          </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs flex items-center justify-between"
+          >
+            <span className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-slate-400" />
+              <span>翻译 Key / 设置</span>
+            </span>
+            <span className={`w-2 h-2 rounded-full ${boot?.env?.llm_configured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+          </button>
+        </div>
+      </aside>
+
+      {/* 主内容区域 */}
+      <main className="flex-1 flex flex-col min-w-0 p-3.5 overflow-hidden">
+        {page === 'search' && (
+          <SearchHub
+            projectId={projectId}
+            lowFollowerThreshold={lowThreshold}
+            onOpenTranscript={(cid) => {
+              setActiveContentId(cid);
+              setPage('transcript');
+            }}
+          />
+        )}
+        {page === 'contents' && (
+          <ContentAuthors
+            projectId={projectId}
+            onOpenTranscript={(cid) => {
+              setActiveContentId(cid);
+              setPage('transcript');
+            }}
+            onInspectCreatorRevenue={(handle, platform) => {
+              setXrayTarget({ query: handle, platform });
+              setPage('revenue');
+            }}
+          />
+        )}
+        {page === 'transcript' && (
+          <TranscriptStudio
+            activeContentId={activeContentId}
+            onSelectContent={setActiveContentId}
+            templates={templates}
+          />
+        )}
+        {page === 'revenue' && (
+          <RevenueRadar initialXray={xrayTarget} onOpenCalc={() => setCalcOpen(true)} />
+        )}
+        {page === 'directory' && <ResourceDirectory />}
+      </main>
+
+      <RevenueCalculatorDrawer open={calcOpen} onClose={() => setCalcOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} boot={boot} onSaved={loadBoot} />
+    </div>
+  );
+}

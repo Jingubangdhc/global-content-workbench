@@ -1,0 +1,16 @@
+# 密钥与本地环境
+.env
+.venv/
+__pycache__/
+*.py[cod]
+
+# 本地数据库与临时音视频
+data/
+phase0/tmp_audio/
+phase0/results*.json
+
+# 前端依赖与构建产物
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+Thumbs.db

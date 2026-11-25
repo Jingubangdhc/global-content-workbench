@@ -1,0 +1,14 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+python-dotenv>=1.0.1
+requests>=2.32.0
+yt-dlp>=2026.11.0
+youtube-transcript-api>=1.0.0
+trafilatura>=2.0.0
+faster-whisper>=1.2.0
+# 必须锁定 PyAV < 16，防止 Python 3.14 下 faster-whisper 触发 metadata_errors 崩溃
+av>=14.0.0,<16.0.0
+python-docx>=1.1.2
+openpyxl>=3.1.5
+openai>=1.55.0
