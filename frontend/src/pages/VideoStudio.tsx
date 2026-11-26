@@ -212,12 +212,13 @@ export default function VideoStudio({ projectId }: Props) {
   const [playing, setPlaying] = useState(false);
   const [viewMode, setViewMode] = useState<'editor' | 'library' | 'native'>('editor');
   const [stageScale, setStageScale] = useState(0.35);
+  const [stageFit, setStageFit] = useState<{ w: number; h: number }>({ w: 640, h: 360 });
   const [dragDelta, setDragDelta] = useState<{ x: number; y: number } | null>(null);
   const dragStartRef = useRef<{ clientX: number; clientY: number; origX: number; origY: number } | null>(null);
   const [debouncedDoc, setDebouncedDoc] = useState<OverlayDoc>(doc);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoUploadInputRef = useRef<HTMLInputElement | null>(null);
-  const stageBoxRef = useRef<HTMLDivElement | null>(null);
+  const stageOuterRef = useRef<HTMLDivElement | null>(null);
   const overlayIframeRef = useRef<HTMLIFrameElement | null>(null);
   const [iframeReady, setIframeReady] = useState(false);
 
@@ -733,19 +734,30 @@ export default function VideoStudio({ projectId }: Props) {
   const stageH = isVertical ? 1920 : 1080;
 
   useEffect(() => {
-    const el = stageBoxRef.current;
+    const el = stageOuterRef.current;
     if (!el) return;
     const update = () => {
       const rect = el.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        setStageScale(Math.min(rect.width / stageW, rect.height / stageH));
-      }
+      const availW = Math.max(120, rect.width - 12);
+      const availH = Math.max(120, rect.height - 12);
+      const scale = Math.min(availW / stageW, availH / stageH);
+      setStageScale(scale);
+      setStageFit({ w: Math.floor(stageW * scale), h: Math.floor(stageH * scale) });
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, [stageW, stageH, viewMode]);
+
+  const handleSwitchRatio = async (ratio: '16:9' | '9:16' | '4:3') => {
+    const ratioCode = ratio === '9:16' ? 'v' : ratio === '4:3' ? '4:3' : 'h';
+    setDoc((prev) => ({ ...prev, ratio: ratioCode }));
+    if (activeProj) {
+      setActiveProj({ ...activeProj, aspect_ratio: ratio });
+      await api.patchVideoProject(activeProj.id, { aspect_ratio: ratio }).catch(() => {});
+    }
+  };
 
   const overlayIframeSrc = useMemo(() => {
     if (!engine?.reachable || debouncedDoc.cards.length === 0) return '';
@@ -836,8 +848,9 @@ export default function VideoStudio({ projectId }: Props) {
       if (win && typeof win.__startExport === 'function' && typeof win.__setExportT === 'function') {
         try {
           win.__startExport();
-          win.__setExportT(currentTime);
+          win.__setExportT(currentTimeRef.current);
           setIframeReady(true);
+          setDragDelta(null);
         } catch {}
         if (mainWaitTimerRef.current) {
           window.clearInterval(mainWaitTimerRef.current);
@@ -1006,22 +1019,23 @@ export default function VideoStudio({ projectId }: Props) {
           >
             <Eye className="w-3.5 h-3.5" /> 安全区
           </button>
-          {activeProj && (
-            <select
-              value={activeProj.aspect_ratio}
-              onChange={async (e) => {
-                const ratio = e.target.value;
-                await api.patchVideoProject(activeProj.id, { aspect_ratio: ratio });
-                setActiveProj({ ...activeProj, aspect_ratio: ratio });
-                setDoc({ ...doc, ratio: ratio === '9:16' ? 'v' : ratio === '4:3' ? '4:3' : 'h' });
-              }}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-cyan-300"
-            >
-              <option value="16:9">16:9 横版</option>
-              <option value="9:16">9:16 竖版</option>
-              <option value="4:3">4:3 横版</option>
-            </select>
-          )}
+          {/* 16:9 / 9:16 / 4:3 一键画幅胶囊切换 */}
+          <div className="flex rounded-lg overflow-hidden border border-slate-700 text-[11px] shrink-0">
+            {(['16:9', '9:16', '4:3'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => handleSwitchRatio(r)}
+                className={`px-2 py-1 font-mono-num ${
+                  (activeProj?.aspect_ratio || '16:9') === r
+                    ? 'bg-cyan-600/35 text-cyan-200 font-semibold'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                }`}
+                title={r === '16:9' ? '横屏 1920×1080' : r === '9:16' ? '竖屏 1080×1920' : '4:3 1440×1080'}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
           <button onClick={() => setSrtModal(true)} disabled={!activeProj} className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40">
             <FileText className="w-3.5 h-3.5 text-cyan-400" /> SRT
           </button>
@@ -1324,13 +1338,14 @@ export default function VideoStudio({ projectId }: Props) {
 
           {/* 中栏：主舞台画布（带 SAFE 人物安全区） + 增强版多轨时间轴 */}
           <div className="flex-1 flex flex-col gap-2 min-w-0 overflow-hidden">
-            <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col min-h-0">
-              <div className="flex-1 flex items-center justify-center bg-[#060a12] rounded-lg border border-slate-800/80 relative overflow-hidden min-h-[240px]">
+            <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl p-2 flex flex-col min-h-0">
+              <div
+                ref={stageOuterRef}
+                className="flex-1 flex items-center justify-center bg-[#060a12] rounded-lg border border-slate-800/80 relative overflow-hidden min-h-[240px]"
+              >
                 <div
-                  ref={stageBoxRef}
-                  className={`relative bg-[#090d16] border border-slate-700/80 overflow-hidden flex items-center justify-center ${
-                    isVertical ? 'h-full aspect-[9/16]' : is43 ? 'h-full aspect-[4/3]' : 'w-full h-full max-w-[1000px] aspect-video'
-                  }`}
+                  style={{ width: `${stageFit.w}px`, height: `${stageFit.h}px` }}
+                  className="relative bg-[#090d16] border border-slate-700/80 overflow-hidden flex items-center justify-center shadow-2xl"
                 >
                   {activeProj?.reference_video_path ? (
                     <video
@@ -1348,10 +1363,14 @@ export default function VideoStudio({ projectId }: Props) {
                     )
                   )}
 
-                  {/* SAFE 人物安全区剪影参考线（独立受安全区边框与人物占位双开关控制） */}
+                  {/* SAFE 人物安全区剪影参考线（横屏居中 9:16 框；竖屏直接贴合全画幅） */}
                   {showSafeZone && (showSafeBorder || showAvatarGuide) && (
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center select-none">
-                      <div className={`h-[92%] aspect-[9/16] rounded-sm relative flex flex-col items-center justify-end overflow-hidden ${showSafeBorder ? 'border border-slate-700/50' : ''}`}>
+                      <div
+                        className={`${isVertical ? 'w-[92%] h-[92%]' : 'h-[92%] aspect-[9/16]'} rounded-sm relative flex flex-col items-center justify-end overflow-hidden ${
+                          showSafeBorder ? 'border border-slate-700/50' : ''
+                        }`}
+                      >
                         {showSafeBorder && <span className="absolute top-2 text-[10px] tracking-[0.25em] text-slate-500 font-mono-num">SAFE</span>}
                         {showAvatarGuide && (
                           <>
@@ -1364,7 +1383,7 @@ export default function VideoStudio({ projectId }: Props) {
                     </div>
                   )}
 
-                  {/* 同源真实 Overlay Studio 透明动效渲染层（支持画布内直接鼠标拖拽挪动选中卡片） */}
+                  {/* 同源真实 Overlay Studio 透明动效渲染层（不重建 iframe + 暗底零白光 + 画布直接鼠标拖拽） */}
                   {overlayIframeSrc && (
                     <div
                       className={`absolute inset-0 overflow-hidden flex items-center justify-center ${
@@ -1394,16 +1413,17 @@ export default function VideoStudio({ projectId }: Props) {
                         const nextX = Math.max(-600, Math.min(600, dragStartRef.current.origX + dxStage));
                         const nextY = Math.max(-450, Math.min(450, dragStartRef.current.origY + dyStage));
                         dragStartRef.current = null;
-                        setDragDelta(null);
                         if (dxStage !== 0 || dyStage !== 0) {
+                          setIframeReady(false);
                           updateSelectedCard({
                             params: { ...(selectedCard.params || {}), offsetX: nextX, offsetY: nextY },
                           });
+                        } else {
+                          setDragDelta(null);
                         }
                       }}
                     >
                       <iframe
-                        key={overlayIframeSrc}
                         ref={overlayIframeRef}
                         src={overlayIframeSrc}
                         title="Overlay Studio 实时真动效画布"
@@ -1416,6 +1436,9 @@ export default function VideoStudio({ projectId }: Props) {
                           transformOrigin: 'center center',
                           border: 0,
                           background: 'transparent',
+                          colorScheme: 'dark',
+                          opacity: iframeReady ? 1 : 0,
+                          transition: 'opacity 120ms ease-out',
                           flexShrink: 0,
                           pointerEvents: 'none',
                         }}
