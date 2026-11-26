@@ -288,6 +288,42 @@ export const api = {
   getRenderJob: (jobUid: string) => req(`/api/video/render-jobs/${jobUid}`),
   cancelRenderJob: (jobUid: string) =>
     req(`/api/video/render-jobs/${jobUid}/cancel`, { method: 'POST' }),
+
+  // G2 多平台发布中心（B01–B11，全平台只填写不自动发布）
+  publishCapabilities: () => req('/api/publish/capabilities'),
+  listPublishAccounts: (projectId?: number) =>
+    req(`/api/publish/accounts${projectId ? `?project_id=${projectId}` : ''}`),
+  createPublishAccount: (body: any) =>
+    req('/api/publish/accounts', { method: 'POST', body: JSON.stringify(body) }),
+  checkPublishAccount: (aid: number, body: { authorization_state: string; open_login_window?: boolean }) =>
+    req(`/api/publish/accounts/${aid}/check-login`, { method: 'POST', body: JSON.stringify(body) }),
+  delPublishAccount: (aid: number) => req(`/api/publish/accounts/${aid}`, { method: 'DELETE' }),
+  listPublishPackages: (projectId?: number) =>
+    req(`/api/publish/packages${projectId ? `?project_id=${projectId}` : ''}`),
+  createPublishPackage: (body: any) =>
+    req('/api/publish/packages', { method: 'POST', body: JSON.stringify(body) }),
+  getPublishPackage: (pid: number) => req(`/api/publish/packages/${pid}`),
+  patchPublishPackage: (pid: number, body: any) =>
+    req(`/api/publish/packages/${pid}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delPublishPackage: (pid: number) => req(`/api/publish/packages/${pid}`, { method: 'DELETE' }),
+  uploadPublishCover: async (pid: number, slot: string, file: File) => {
+    const fd = new FormData();
+    fd.append('slot', slot);
+    fd.append('file', file);
+    const res = await fetch(`/api/publish/packages/${pid}/covers`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  generatePublishDrafts: (pid: number, body: any = {}) =>
+    req(`/api/publish/packages/${pid}/generate-drafts`, { method: 'POST', body: JSON.stringify(body) }),
+  validatePublishPackage: (pid: number, platforms?: string[]) =>
+    req(`/api/publish/packages/${pid}/validate`, { method: 'POST', body: JSON.stringify({ platforms }) }),
+  authorizeFillTasks: (body: any) =>
+    req('/api/publish/tasks/authorize-fill', { method: 'POST', body: JSON.stringify(body) }),
+  reconcilePublishTask: (tid: number, body: any) =>
+    req(`/api/publish/tasks/${tid}/reconcile`, { method: 'POST', body: JSON.stringify(body) }),
+  publishCalendar: (projectId?: number) =>
+    req(`/api/publish/calendar${projectId ? `?project_id=${projectId}` : ''}`),
 };
 
 export function fmtNum(n?: number | null): string {

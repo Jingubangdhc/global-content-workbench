@@ -301,6 +301,59 @@ CREATE TABLE IF NOT EXISTS integration_audit_events (
     payload_json TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ==================== G2: 多平台发布中心（B01–B11）增量表 ====================
+CREATE TABLE IF NOT EXISTS platform_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    platform TEXT NOT NULL,
+    external_uid TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    local_profile_ref TEXT,
+    authorization_state TEXT DEFAULT 'unverified',
+    last_checked_at TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(platform, external_uid)
+);
+
+CREATE TABLE IF NOT EXISTS publish_packages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    topic_id INTEGER,
+    video_project_id INTEGER REFERENCES video_projects(id) ON DELETE SET NULL,
+    render_job_id INTEGER REFERENCES render_jobs(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    video_file_path TEXT,
+    covers_json TEXT DEFAULT '{}',
+    drafts_json TEXT DEFAULT '{}',
+    rules_version TEXT DEFAULT 'gcw-rules-2026.11',
+    schedule_timezone TEXT DEFAULT 'Asia/Shanghai',
+    validation_json TEXT,
+    content_hash TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS publish_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    package_id INTEGER NOT NULL REFERENCES publish_packages(id) ON DELETE CASCADE,
+    account_id INTEGER REFERENCES platform_accounts(id) ON DELETE SET NULL,
+    platform TEXT NOT NULL,
+    version_no INTEGER DEFAULT 1,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    state TEXT DEFAULT 'draft',
+    approval_scope TEXT DEFAULT 'fill_only',
+    scheduled_at TEXT,
+    actual_published_at TEXT,
+    external_item_id TEXT,
+    published_url TEXT,
+    last_error TEXT,
+    logs_json TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -429,12 +482,14 @@ def init_db() -> dict:
         "low_follower_threshold": "50000",
         "theme": "terminal_dark",
         "feature_video_studio": "1",
-        "feature_publish_hub": "0",
+        "feature_publish_hub": "1",
         "feature_performance_hub": "0",
         "feature_obsidian_check": "0",
     }
     for k, v in defaults.items():
         conn.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES (?, ?)", (k, v))
+    # G2 已获用户批准，确保老库升级后开启 PublishHub 开关
+    conn.execute("UPDATE app_settings SET value = '1' WHERE key = 'feature_publish_hub'")
 
     # 默认项目
     conn.execute(

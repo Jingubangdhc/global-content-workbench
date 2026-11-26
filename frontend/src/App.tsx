@@ -11,6 +11,7 @@ import {
   Plus,
   Radio,
   Search,
+  Send,
   Settings,
   Terminal,
   Trash2,
@@ -22,13 +23,14 @@ import SettingsModal from './components/SettingsModal';
 import ContentAuthors from './pages/ContentAuthors';
 import CreatorTracker from './pages/CreatorTracker';
 import HotTrends from './pages/HotTrends';
+import PublishHub from './pages/PublishHub';
 import ResourceDirectory from './pages/ResourceDirectory';
 import RevenueRadar from './pages/RevenueRadar';
 import SearchHub from './pages/SearchHub';
 import TranscriptStudio from './pages/TranscriptStudio';
 import VideoStudio from './pages/VideoStudio';
 
-type PageKey = 'search' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'video' | 'revenue' | 'directory';
+type PageKey = 'search' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'video' | 'publish' | 'revenue' | 'directory';
 
 export default function App() {
   const [boot, setBoot] = useState<any>(null);
@@ -100,6 +102,9 @@ export default function App() {
     { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 二创', icon: FileText },
     ...(boot?.settings?.feature_video_studio !== '0'
       ? [{ key: 'video' as PageKey, label: '智能视频制作', sub: '25卡动效 + 透明层导出', icon: Clapperboard }]
+      : []),
+    ...(boot?.settings?.feature_publish_hub === '1'
+      ? [{ key: 'publish' as PageKey, label: '多平台发布', sub: '7平台只填写 · 人工确认', icon: Send }]
       : []),
     { key: 'revenue', label: '赛道收益雷达', sub: '11大变现 + 决策卡', icon: DollarSign },
     { key: 'directory', label: '网址导航总库', sub: '166站全量筛选', icon: Compass },
@@ -285,6 +290,7 @@ export default function App() {
           />
         )}
         {page === 'video' && <VideoStudio projectId={projectId} />}
+        {page === 'publish' && <PublishHub projectId={projectId} />}
         {page === 'revenue' && (
           <RevenueRadar initialXray={xrayTarget} onOpenCalc={() => setCalcOpen(true)} />
         )}
