@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Bookmark,
   CheckCircle2,
   Clapperboard,
   Download,
   ExternalLink,
+  Eye,
   FileText,
   Film,
   History,
@@ -14,9 +16,12 @@ import {
   Play,
   Plus,
   Redo2,
+  RotateCcw,
   Save,
   ShieldAlert,
+  Sliders,
   Sparkles,
+  Star,
   Trash2,
   Undo2,
   Upload,
@@ -43,12 +48,73 @@ interface OverlayDoc {
   version: 1;
   ratio?: 'h' | 'v' | '4:3';
   theme?: 'dark' | 'light';
+  glow?: boolean;
+  breath?: boolean;
+  inkColor?: string;
+  fxScale?: number;
+  animSpeed?: number;
   exportFps?: number;
   srt?: { start: number; end: number; text: string }[];
   cards: OverlayCard[];
 }
 
-/** G1 智能视频制作页面（A01–A16，独立回环接入 Overlay Studio 1.4.0） */
+interface StylePreset {
+  id: string;
+  name: string;
+  style: Record<string, any>;
+}
+
+const ACCENT_OPTIONS = [
+  { id: 'blue', label: '数据蓝', swatch: '#38bdf8' },
+  { id: 'red', label: '复古红', swatch: '#f43f5e' },
+  { id: 'amber', label: '砖金橙', swatch: '#f59e0b' },
+  { id: 'green', label: '翡翠绿', swatch: '#10b981' },
+  { id: 'purple', label: '紫罗兰', swatch: '#a855f7' },
+];
+
+const GLASS_OPTIONS = [
+  { id: '', label: '关闭' },
+  { id: 'light', label: '亮色' },
+  { id: 'dark', label: '暗色' },
+];
+
+const SHADOW_OPTIONS = [
+  { id: '', label: '无' },
+  { id: 'soft', label: '柔和' },
+  { id: 'crisp', label: '清晰' },
+  { id: 'strong', label: '剧烈' },
+];
+
+const POSITION_OPTIONS = [
+  { id: 'center', label: '居中' },
+  { id: 'left', label: '左侧' },
+  { id: 'right', label: '右侧' },
+  { id: 'top', label: '顶部' },
+  { id: 'bottom', label: '底部' },
+];
+
+const GROUP_COLORS: Record<string, string> = {
+  常驻层: 'bg-sky-500/35 border-sky-400/50 text-sky-100',
+  证据实证: 'bg-emerald-500/35 border-emerald-400/50 text-emerald-100',
+  数据指标: 'bg-cyan-500/35 border-cyan-400/50 text-cyan-100',
+  对比取舍: 'bg-amber-500/35 border-amber-400/50 text-amber-100',
+  金句观点: 'bg-rose-500/35 border-rose-400/50 text-rose-100',
+  步骤流程: 'bg-indigo-500/35 border-indigo-400/50 text-indigo-100',
+  教程标注: 'bg-violet-500/35 border-violet-400/50 text-violet-100',
+  文字进场: 'bg-fuchsia-500/35 border-fuchsia-400/50 text-fuchsia-100',
+  人物锚定: 'bg-teal-500/35 border-teal-400/50 text-teal-100',
+  '场景 · 运镜': 'bg-orange-500/35 border-orange-400/50 text-orange-100',
+  '场景 · B-roll': 'bg-slate-600/50 border-slate-400/50 text-slate-100',
+};
+
+function fmtClock(sec: number): string {
+  const s = Math.max(0, sec);
+  const m = Math.floor(s / 60);
+  const rem = (s % 60).toFixed(1).padStart(4, '0');
+  return `${m}:${rem}`;
+}
+
+/** G1 智能视频制作页面（完整复刻 Overlay Studio 高频编辑体验，独立回环同源驱动零源码复制） */
 export default function VideoStudio({ projectId }: Props) {
   const [caps, setCaps] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
@@ -58,7 +124,17 @@ export default function VideoStudio({ projectId }: Props) {
   const [contents, setContents] = useState<ContentItem[]>([]);
   const [feedbackRules, setFeedbackRules] = useState<any[]>([]);
 
-  const [doc, setDoc] = useState<OverlayDoc>({ version: 1, ratio: 'h', theme: 'dark', exportFps: 30, cards: [] });
+  const [doc, setDoc] = useState<OverlayDoc>({
+    version: 1,
+    ratio: 'h',
+    theme: 'dark',
+    glow: false,
+    breath: false,
+    fxScale: 1,
+    animSpeed: 1,
+    exportFps: 30,
+    cards: [],
+  });
   const [undoStack, setUndoStack] = useState<OverlayDoc[]>([]);
   const [redoStack, setRedoStack] = useState<OverlayDoc[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -66,24 +142,45 @@ export default function VideoStudio({ projectId }: Props) {
 
   const [effectSearch, setEffectSearch] = useState('');
   const [effectGroup, setEffectGroup] = useState('全部');
+  const [onlyFavEffects, setOnlyFavEffects] = useState(false);
+  const [favEffects, setFavEffects] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('gcw_fav_effects') || '["stat-proof","growth-curve","quote-lockup","blur-text","versus-card"]');
+    } catch {
+      return [];
+    }
+  });
+  const [presets, setPresets] = useState<StylePreset[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('gcw_overlay_presets') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
   const [hoverEffect, setHoverEffect] = useState<{ eff: any; top: number } | null>(null);
   const hoverIframeRef = useRef<HTMLIFrameElement | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
   const mainWaitTimerRef = useRef<number | null>(null);
+
   const [rightTab, setRightTab] = useState<'props' | 'lint' | 'sfx' | 'feedback' | 'versions'>('props');
+  const [showSafeZone, setShowSafeZone] = useState(true);
+  const [globalModal, setGlobalModal] = useState(false);
+  const [replayNonce, setReplayNonce] = useState(0);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [viewMode, setViewMode] = useState<'workbench' | 'native'>('workbench');
   const [stageScale, setStageScale] = useState(0.35);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoUploadInputRef = useRef<HTMLInputElement | null>(null);
   const stageBoxRef = useRef<HTMLDivElement | null>(null);
   const overlayIframeRef = useRef<HTMLIFrameElement | null>(null);
   const [iframeReady, setIframeReady] = useState(false);
 
   const [newProjModal, setNewProjModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newRatio, setNewRatio] = useState<'16:9' | '9:16'>('16:9');
+  const [newRatio, setNewRatio] = useState<'16:9' | '9:16' | '4:3'>('16:9');
   const [srtModal, setSrtModal] = useState(false);
   const [srtInput, setSrtInput] = useState('');
   const [selectedContentId, setSelectedContentId] = useState<number | ''>('');
@@ -100,6 +197,16 @@ export default function VideoStudio({ projectId }: Props) {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 4200);
+  };
+
+  const toggleFav = (eid: string) => {
+    setFavEffects((prev) => {
+      const next = prev.includes(eid) ? prev.filter((x) => x !== eid) : [...prev, eid];
+      try {
+        localStorage.setItem('gcw_fav_effects', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   };
 
   const loadAll = async (preferVid?: number) => {
@@ -122,7 +229,7 @@ export default function VideoStudio({ projectId }: Props) {
       await openProject(target.id);
     } else {
       setActiveProj(null);
-      setDoc({ version: 1, ratio: 'h', theme: 'dark', exportFps: 30, cards: [] });
+      setDoc({ version: 1, ratio: 'h', theme: 'dark', glow: false, breath: false, fxScale: 1, animSpeed: 1, exportFps: 30, cards: [] });
       setVersions([]);
       setRenderJobs([]);
       setLintRes(null);
@@ -135,14 +242,24 @@ export default function VideoStudio({ projectId }: Props) {
     setVersions(data.versions || []);
     setRenderJobs(data.render_jobs || []);
     const parsedDoc: OverlayDoc = data.project.draft_overlay_json
-      ? JSON.parse(data.project.draft_overlay_json)
-      : { version: 1, ratio: data.project.aspect_ratio === '9:16' ? 'v' : 'h', theme: 'dark', exportFps: 30, cards: [] };
+      ? { fxScale: 1, animSpeed: 1, exportFps: 30, ...JSON.parse(data.project.draft_overlay_json) }
+      : {
+          version: 1,
+          ratio: data.project.aspect_ratio === '9:16' ? 'v' : data.project.aspect_ratio === '4:3' ? '4:3' : 'h',
+          theme: 'dark',
+          glow: false,
+          breath: false,
+          fxScale: 1,
+          animSpeed: 1,
+          exportFps: 30,
+          cards: [],
+        };
     setDoc(parsedDoc);
     setUndoStack([]);
     setRedoStack([]);
     setSelectedCardId(parsedDoc.cards?.[0]?.id || null);
     setLintRes(data.project.lint_summary_json ? JSON.parse(data.project.lint_summary_json) : null);
-    setCurrentTime(0);
+    setCurrentTime(parsedDoc.cards?.[0]?.start ? Number((parsedDoc.cards[0].start + 0.4).toFixed(1)) : 0);
     setPlaying(false);
   };
 
@@ -168,19 +285,19 @@ export default function VideoStudio({ projectId }: Props) {
     return () => clearInterval(timer);
   }, [activeJobUid]);
 
-  // 播放时钟同步（无参考视频时也支持虚拟时钟预览）
+  // 播放时钟同步
+  const totalDur = Math.max(10, (activeProj?.duration_ms || 15000) / 1000, ...doc.cards.map((c) => c.end));
   useEffect(() => {
     if (!playing) return;
-    const totalSec = Math.max(10, (activeProj?.duration_ms || 15000) / 1000);
     const timer = setInterval(() => {
       if (videoRef.current && !videoRef.current.paused) {
         setCurrentTime(videoRef.current.currentTime);
       } else {
-        setCurrentTime((t) => (t + 0.1 >= totalSec ? 0 : Number((t + 0.1).toFixed(2))));
+        setCurrentTime((t) => (t + 0.1 >= totalDur ? 0 : Number((t + 0.1).toFixed(2))));
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [playing, activeProj?.duration_ms]);
+  }, [playing, totalDur]);
 
   const mutateDoc = (next: OverlayDoc) => {
     setUndoStack((s) => [...s.slice(-25), doc]);
@@ -203,6 +320,37 @@ export default function VideoStudio({ projectId }: Props) {
     setRedoStack((r) => r.slice(0, -1));
     setDoc(next);
   };
+
+  // 键盘快捷键：Space 播放/暂停、←/→ 微调 ±0.5s、Delete 删除选中卡
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setPlaying((p) => {
+          const next = !p;
+          if (videoRef.current) {
+            if (next) videoRef.current.play().catch(() => {});
+            else videoRef.current.pause();
+          }
+          return next;
+        });
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        setCurrentTime((t) => Math.max(0, Number((t - 0.5).toFixed(1))));
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentTime((t) => Math.min(totalDur, Number((t + 0.5).toFixed(1))));
+      } else if ((e.code === 'Delete' || e.code === 'Backspace') && selectedCardId) {
+        e.preventDefault();
+        mutateDoc({ ...doc, cards: doc.cards.filter((c) => c.id !== selectedCardId) });
+        setSelectedCardId(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedCardId, doc, totalDur]);
 
   const createProject = async () => {
     if (!newTitle.trim()) return;
@@ -248,7 +396,7 @@ export default function VideoStudio({ projectId }: Props) {
     setBusy('compile');
     try {
       const r = await api.compileVideoOverlay(activeProj.id, useLlm);
-      setDoc(r.doc);
+      setDoc({ fxScale: 1, animSpeed: 1, exportFps: 30, ...r.doc });
       setLintRes(r.lint);
       setSelectedCardId(r.doc.cards?.[0]?.id || null);
       await openProject(activeProj.id);
@@ -292,12 +440,16 @@ export default function VideoStudio({ projectId }: Props) {
         video_project_id: activeProj.id,
         mode,
         effect_id: mode === 'single' ? selectedCard?.kind || 'quote-lockup' : undefined,
+        single_params: mode === 'single' ? selectedCard?.params || {} : undefined,
         include_webm: includeWebm,
-        fps: activeProj.fps || 30,
-        duration_sec: mode === 'single' ? 4 : Math.max(4, Math.min(30, (activeProj.duration_ms || 6000) / 1000)),
+        fps: doc.exportFps || activeProj.fps || 30,
+        duration_sec:
+          mode === 'single'
+            ? Math.max(2, Number(((selectedCard?.end || 4) - (selectedCard?.start || 0)).toFixed(1)))
+            : Math.max(4, Math.min(60, totalDur)),
       });
       setActiveJobUid(r.job_uid);
-      showToast('🎬 已发起真实透明导出任务，正在调用独立 Overlay Studio 渲染...');
+      showToast(mode === 'single' ? '🎬 已发起单卡透明 MOV 导出...' : '🎬 已发起全片透明 MOV + WebM 导出...');
     } catch (e: any) {
       showToast('导出受阻：' + e.message);
     } finally {
@@ -305,15 +457,24 @@ export default function VideoStudio({ projectId }: Props) {
     }
   };
 
+  const handleReplay = () => {
+    const startT = selectedCard ? selectedCard.start : 0;
+    setCurrentTime(startT);
+    setReplayNonce((n) => n + 1);
+    setPlaying(true);
+    if (videoRef.current) {
+      videoRef.current.currentTime = startT;
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
   const handleProposeFeedback = async () => {
     if (!activeProj) return;
     try {
-      const r = await api.createVideoFeedback(activeProj.id, {});
-      const rules = await api.listVideoFeedbackRules(projectId);
-      setFeedbackRules(rules);
+      await api.createVideoFeedback(activeProj.id, {});
+      setFeedbackRules(await api.listVideoFeedbackRules(projectId));
       setRightTab('feedback');
       showToast('✅ 已生成差异偏好候选规则（需您手动批准后才生效）');
-      return r;
     } catch (e: any) {
       showToast(e.message);
     }
@@ -333,8 +494,7 @@ export default function VideoStudio({ projectId }: Props) {
       await api.uploadCustomSfx(fd);
       setSfxName('');
       setSfxFile(null);
-      const c = await api.videoCapabilities();
-      setCaps(c);
+      setCaps(await api.videoCapabilities());
       showToast('✅ 自定义授权音效已入库');
     } catch (e: any) {
       showToast('上传失败：' + e.message);
@@ -342,10 +502,12 @@ export default function VideoStudio({ projectId }: Props) {
   };
 
   const effects: any[] = caps?.effects || [];
+  const effectById = useMemo(() => Object.fromEntries(effects.map((e) => [e.id, e])), [effects]);
   const groups = useMemo(() => ['全部', ...Array.from(new Set(effects.map((e) => e.group)))], [effects]);
   const filteredEffects = useMemo(
     () =>
       effects.filter((e) => {
+        if (onlyFavEffects && !favEffects.includes(e.id)) return false;
         if (effectGroup !== '全部' && e.group !== effectGroup) return false;
         if (effectSearch.trim()) {
           const q = effectSearch.toLowerCase();
@@ -353,35 +515,85 @@ export default function VideoStudio({ projectId }: Props) {
         }
         return true;
       }),
-    [effects, effectGroup, effectSearch]
+    [effects, effectGroup, effectSearch, onlyFavEffects, favEffects]
   );
 
-  const selectedCard = useMemo(
-    () => doc.cards.find((c) => c.id === selectedCardId) || null,
-    [doc.cards, selectedCardId]
-  );
+  const selectedCard = useMemo(() => doc.cards.find((c) => c.id === selectedCardId) || null, [doc.cards, selectedCardId]);
+  const selectedEffectMeta = selectedCard ? effectById[selectedCard.kind] : null;
 
-  const addEffectCard = (eff: any) => {
-    const start = Number(currentTime.toFixed(1));
+  const addEffectCard = (eff: any, atTime?: number, cloneParams?: Record<string, any>) => {
+    const start = Number((atTime ?? currentTime).toFixed(1));
     const end = Number((start + 4.0).toFixed(1));
     const cid = `card-${Date.now().toString(36).slice(-4)}`;
-    // 传空对象让上游 Overlay Studio 自动填充该卡完整官方默认参数，确保真实动效立即可见
     const newCard: OverlayCard = {
       id: cid,
       kind: eff.id,
       start,
       end,
-      params: {},
+      params: cloneParams ? { ...cloneParams } : {},
     };
     mutateDoc({ ...doc, cards: [...doc.cards, newCard] });
     setSelectedCardId(cid);
-    setCurrentTime(Number((start + 0.5).toFixed(1)));
+    setCurrentTime(Number((start + 0.6).toFixed(1)));
+    setRightTab('props');
   };
 
-  // 自适应计算真实 1920x1080 / 1080x1920 透明渲染画布的缩放比例
+  const updateSelectedCard = (patch: Partial<OverlayCard>) => {
+    if (!selectedCard) return;
+    mutateDoc({
+      ...doc,
+      cards: doc.cards.map((c) => (c.id === selectedCard.id ? { ...c, ...patch } : c)),
+    });
+  };
+
+  const updateSelectedParam = (key: string, val: any) => {
+    if (!selectedCard) return;
+    const nextParams = { ...(selectedCard.params || {}) };
+    if (val === '' || val === undefined) delete nextParams[key];
+    else nextParams[key] = val;
+    updateSelectedCard({ params: nextParams });
+  };
+
+  const saveCurrentStylePreset = () => {
+    if (!selectedCard) return;
+    const name = window.prompt('输入样式预设名称（如：暗底数据蓝+玻璃）');
+    if (!name?.trim()) return;
+    const styleKeys = ['theme', 'accent', 'glass', 'glassAlpha', 'shadow', 'scale', 'speed'];
+    const style: Record<string, any> = {};
+    for (const k of styleKeys) {
+      if (selectedCard.params?.[k] !== undefined) style[k] = selectedCard.params[k];
+    }
+    const next = [{ id: Date.now().toString(36), name: name.trim(), style }, ...presets].slice(0, 12);
+    setPresets(next);
+    try {
+      localStorage.setItem('gcw_overlay_presets', JSON.stringify(next));
+    } catch {}
+    showToast(`✅ 已保存样式预设「${name.trim()}」`);
+  };
+
+  const applyStylePreset = (p: StylePreset) => {
+    if (!selectedCard) return;
+    updateSelectedCard({ params: { ...(selectedCard.params || {}), ...p.style } });
+    showToast(`已套用预设「${p.name}」`);
+  };
+
+  const ignoreWarningRule = (cardId: string, rule: string) => {
+    mutateDoc({
+      ...doc,
+      cards: doc.cards.map((c) => {
+        if (c.id !== cardId) return c;
+        const cur = Array.isArray(c.lintOff) ? c.lintOff : [];
+        return { ...c, lintOff: Array.from(new Set([...cur, rule])) };
+      }),
+    });
+    showToast(`已显式忽略 ${cardId} 的 ${rule} 警告（保存后留痕）`);
+  };
+
+  // 自适应真实 1920x1080 / 1080x1920 / 1440x1080 画布缩放
   const engine = caps?.engine;
   const isVertical = activeProj?.aspect_ratio === '9:16';
-  const stageW = isVertical ? 1080 : 1920;
+  const is43 = activeProj?.aspect_ratio === '4:3';
+  const stageW = isVertical ? 1080 : is43 ? 1440 : 1920;
   const stageH = isVertical ? 1920 : 1080;
 
   useEffect(() => {
@@ -399,13 +611,16 @@ export default function VideoStudio({ projectId }: Props) {
     return () => ro.disconnect();
   }, [stageW, stageH, viewMode]);
 
-  // 构造同源真实渲染 iframe URL（仅包含已激活工程的当前编排 JSON）
   const overlayIframeSrc = useMemo(() => {
     if (!engine?.reachable || doc.cards.length === 0) return '';
-    const payload = {
+    const ratioCode = isVertical ? 'v' : is43 ? '4:3' : 'h';
+    const payload: Record<string, any> = {
       version: 1,
-      ratio: isVertical ? 'v' : 'h',
+      ratio: ratioCode,
       theme: doc.theme || 'dark',
+      glow: !!doc.glow,
+      breath: !!doc.breath,
+      inkColor: doc.inkColor || undefined,
       cards: doc.cards.map((c) => ({
         id: c.id,
         kind: c.kind,
@@ -415,10 +630,11 @@ export default function VideoStudio({ projectId }: Props) {
       })),
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
-    return `/overlay-engine/?export=1&ratio=${isVertical ? 'v' : 'h'}&doc=${encoded}`;
-  }, [engine?.reachable, isVertical, doc]);
+    const fx = Number(doc.fxScale || 1).toFixed(2);
+    const spd = Number(doc.animSpeed || 1).toFixed(2);
+    return `/overlay-engine/?export=1&ratio=${ratioCode}&fx=${fx}&spd=${spd}&r=${replayNonce}&doc=${encoded}`;
+  }, [engine?.reachable, isVertical, is43, doc, replayNonce]);
 
-  // 清理悬停小窗和主画布的轮询定时器
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current) window.clearInterval(hoverTimerRef.current);
@@ -433,7 +649,6 @@ export default function VideoStudio({ projectId }: Props) {
     }
   }, [hoverEffect]);
 
-  // 等待同源 Overlay Studio 懒加载 ExportView 挂载好 __startExport 再驱动帧时钟
   const bootHoverPreview = () => {
     if (hoverTimerRef.current) {
       window.clearInterval(hoverTimerRef.current);
@@ -501,7 +716,6 @@ export default function VideoStudio({ projectId }: Props) {
     }, 60);
   };
 
-  // 当播放时间变化时，直接通过同源 iframe 调用 Overlay Studio 原生时间控制器 __setExportT
   useEffect(() => {
     const win = overlayIframeRef.current?.contentWindow as any;
     if (iframeReady && win && typeof win.__setExportT === 'function') {
@@ -511,39 +725,39 @@ export default function VideoStudio({ projectId }: Props) {
     }
   }, [currentTime, iframeReady]);
 
-  const updateSelectedCard = (patch: Partial<OverlayCard>) => {
-    if (!selectedCard) return;
-    mutateDoc({
-      ...doc,
-      cards: doc.cards.map((c) => (c.id === selectedCard.id ? { ...c, ...patch } : c)),
-    });
-  };
-
-  const ignoreWarningRule = (cardId: string, rule: string) => {
-    mutateDoc({
-      ...doc,
-      cards: doc.cards.map((c) => {
-        if (c.id !== cardId) return c;
-        const cur = Array.isArray(c.lintOff) ? c.lintOff : [];
-        return { ...c, lintOff: Array.from(new Set([...cur, rule])) };
-      }),
-    });
-    showToast(`已显式忽略 ${cardId} 的 ${rule} 警告（保存后留痕）`);
-  };
-
-  const totalDur = Math.max(10, (activeProj?.duration_ms || 15000) / 1000, ...doc.cards.map((c) => c.end));
   const activeSubtitle = (doc.srt || []).find((s) => currentTime >= s.start && currentTime <= s.end);
+  const layoutKey = selectedEffectMeta?.layout_mode === 'side' ? 'side' : 'position';
 
   return (
-    <div className="h-full flex flex-col gap-2.5 overflow-hidden">
-      {/* 顶部工具栏 */}
-      <div className="bg-[#0b1120] border border-slate-800 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2.5 min-w-0">
+    <div className="h-full flex flex-col gap-2 overflow-hidden">
+      {/* 隐藏的视频上传 input，供左侧「导入视频」与顶部共用 */}
+      <input
+        ref={videoUploadInputRef}
+        type="file"
+        accept=".mp4,.mov,.webm"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f || !activeProj) return;
+          try {
+            await api.uploadReferenceVideo(activeProj.id, f);
+            await openProject(activeProj.id);
+            showToast('✅ 参考视频已绑定（预览与运镜同步）');
+          } catch (err: any) {
+            showToast('上传失败：' + err.message);
+          }
+          e.target.value = '';
+        }}
+      />
+
+      {/* 顶部工具栏（复刻 Overlay Studio 顶栏 + 工作台核心流程） */}
+      <div className="bg-[#0b1120] border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
           <Clapperboard className="w-4 h-4 text-cyan-400 shrink-0" />
           <select
             value={activeProj?.id || ''}
             onChange={(e) => e.target.value && openProject(Number(e.target.value))}
-            className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 max-w-[220px]"
+            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 max-w-[190px]"
           >
             {projects.length === 0 && <option value="">暂无视频工程</option>}
             {projects.map((p) => (
@@ -554,9 +768,9 @@ export default function VideoStudio({ projectId }: Props) {
           </select>
           <button
             onClick={() => setNewProjModal(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
+            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
           >
-            <Plus className="w-3.5 h-3.5" /> 新建工程
+            <Plus className="w-3.5 h-3.5" /> 新建
           </button>
           {engine && (
             <span
@@ -568,61 +782,95 @@ export default function VideoStudio({ projectId }: Props) {
               title={engine.license}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${engine.reachable ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-              Overlay Studio {engine.engine_version} {engine.reachable ? '回环就绪' : '未启动'}
+              Overlay {engine.engine_version}
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
+            onClick={() => setGlobalModal(true)}
+            disabled={!activeProj}
+            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
+          >
+            <Sliders className="w-3.5 h-3.5 text-cyan-400" /> 全局设置
+          </button>
+          <button
+            onClick={handleReplay}
+            disabled={!activeProj}
+            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-300" /> 重播动画
+          </button>
+          <button
+            onClick={() => setShowSafeZone((s) => !s)}
+            className={`px-2 py-1 rounded-lg border text-xs flex items-center gap-1 ${
+              showSafeZone
+                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-200'
+                : 'bg-slate-900 border-slate-700 text-slate-400'
+            }`}
+            title="显示/隐藏人物安全区参考线"
+          >
+            <Eye className="w-3.5 h-3.5" /> 安全区
+          </button>
+          {activeProj && (
+            <select
+              value={activeProj.aspect_ratio}
+              onChange={async (e) => {
+                const ratio = e.target.value;
+                await api.patchVideoProject(activeProj.id, { aspect_ratio: ratio });
+                setActiveProj({ ...activeProj, aspect_ratio: ratio });
+                setDoc({ ...doc, ratio: ratio === '9:16' ? 'v' : ratio === '4:3' ? '4:3' : 'h' });
+              }}
+              className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-cyan-300"
+            >
+              <option value="16:9">16:9 横屏</option>
+              <option value="9:16">9:16 竖屏</option>
+              <option value="4:3">4:3 传统</option>
+            </select>
+          )}
+          <button
             onClick={() => setSrtModal(true)}
             disabled={!activeProj}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
+            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
           >
-            <FileText className="w-3.5 h-3.5 text-cyan-400" /> 导入 SRT / 文案
+            <FileText className="w-3.5 h-3.5 text-cyan-400" /> 导入SRT
           </button>
           <button
             onClick={() => handleCompile(true)}
             disabled={!activeProj || busy === 'compile'}
-            className="px-2.5 py-1.5 rounded-lg bg-cyan-600/25 hover:bg-cyan-600/40 border border-cyan-500/50 text-xs text-cyan-200 flex items-center gap-1 disabled:opacity-40"
+            className="px-2 py-1 rounded-lg bg-cyan-600/25 hover:bg-cyan-600/40 border border-cyan-500/50 text-xs text-cyan-200 flex items-center gap-1 disabled:opacity-40"
           >
             {busy === 'compile' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            AI 智能编排
-          </button>
-          <button
-            onClick={handleLint}
-            disabled={!activeProj}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-amber-300 flex items-center gap-1 disabled:opacity-40"
-          >
-            <ShieldAlert className="w-3.5 h-3.5" /> 质量检查
+            AI编排
           </button>
           <button
             onClick={handleSaveVersion}
             disabled={!activeProj || busy === 'save'}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
+            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
           >
-            <Save className="w-3.5 h-3.5" /> 保存版本
+            <Save className="w-3.5 h-3.5" /> 保存工程
           </button>
           <button
             onClick={() => handleExport('timeline', true)}
             disabled={!activeProj || busy === 'export' || !engine?.reachable}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-40"
+            className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-40"
           >
-            <Download className="w-3.5 h-3.5" /> 导出透明视频
+            <Download className="w-3.5 h-3.5" /> 导出全片
           </button>
           {engine?.reachable && (
             <div className="flex rounded-lg overflow-hidden border border-slate-700 text-[11px]">
               <button
                 onClick={() => setViewMode('workbench')}
-                className={`px-2 py-1.5 ${viewMode === 'workbench' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+                className={`px-2 py-1 ${viewMode === 'workbench' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400'}`}
               >
-                工作台模式
+                工作台
               </button>
               <button
                 onClick={() => setViewMode('native')}
-                className={`px-2 py-1.5 ${viewMode === 'native' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+                className={`px-2 py-1 ${viewMode === 'native' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400'}`}
               >
-                原生 Overlay 编辑器
+                原生界面
               </button>
             </div>
           )}
@@ -631,17 +879,17 @@ export default function VideoStudio({ projectId }: Props) {
               href="/overlay-engine/"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-400 hover:text-cyan-300 flex items-center gap-1"
-              title="在新标签页打开独立 Overlay Studio 原生预览器（保留原版权与授权声明）"
+              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300"
+              title="在新标签页打开原生 Overlay Studio"
             >
-              独立窗口 <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
         </div>
       </div>
 
       {toast && (
-        <div className="px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-500/35 text-cyan-200 text-xs">
+        <div className="px-3 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/35 text-cyan-200 text-xs">
           {toast}
         </div>
       )}
@@ -649,658 +897,975 @@ export default function VideoStudio({ projectId }: Props) {
       {/* 三栏主工作区 或 原生完整编辑器 */}
       {viewMode === 'native' && engine?.reachable ? (
         <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-          <iframe
-            src="/overlay-engine/"
-            title="Overlay Studio 原生完整编辑器"
-            className="w-full flex-1 border-0 bg-[#060a12]"
-          />
+          <iframe src="/overlay-engine/" title="Overlay Studio 原生完整编辑器" className="w-full flex-1 border-0 bg-[#060a12]" />
         </div>
       ) : (
-      <div className="flex-1 flex gap-2.5 min-h-0 overflow-hidden">
-        {/* 左栏：25 种动效模板库（两列真实缩略图 + 悬停动态小窗预览） */}
-        <div className="w-76 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden relative">
-          <div className="p-2.5 border-b border-slate-800 bg-[#0f172a] space-y-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
-              <span className="flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-cyan-400" /> 动效模板库 ({effects.length})
-              </span>
-              <span className="text-[10px] text-slate-400 font-normal">悬停预览 · 点击添加</span>
-            </div>
-            <input
-              value={effectSearch}
-              onChange={(e) => setEffectSearch(e.target.value)}
-              placeholder="搜索 25 种动效卡..."
-              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-            />
-            <div className="flex flex-wrap gap-1">
-              {groups.map((g) => (
+        <div className="flex-1 flex gap-2.5 min-h-0 overflow-hidden">
+          {/* 左栏：25 种动效库 + 收藏 + 底部快捷操控（重播/导入视频/导出单卡/缩放/速度） */}
+          <div className="w-72 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden relative">
+            <div className="p-2.5 border-b border-slate-800 bg-[#0f172a] space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-cyan-400" /> 动效库 ({filteredEffects.length}/{effects.length})
+                </span>
                 <button
-                  key={g}
-                  onClick={() => setEffectGroup(g)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] transition ${
-                    effectGroup === g
-                      ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                  onClick={() => setOnlyFavEffects((v) => !v)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border ${
+                    onlyFavEffects
+                      ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
+                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {g}
+                  <Star className="w-3 h-3" /> 只看收藏
+                </button>
+              </div>
+              <input
+                value={effectSearch}
+                onChange={(e) => setEffectSearch(e.target.value)}
+                placeholder="搜卡片名字 / 用途 / 手感，如 数字..."
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              />
+              <div className="flex flex-wrap gap-1">
+                {groups.map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setEffectGroup(g)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] transition ${
+                      effectGroup === g
+                        ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-1.5 content-start">
+              {filteredEffects.map((e) => {
+                const isFav = favEffects.includes(e.id);
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => activeProj && addEffectCard(e)}
+                    onMouseEnter={(ev) => {
+                      const rect = ev.currentTarget.getBoundingClientRect();
+                      setHoverEffect({ eff: e, top: Math.max(80, Math.min(window.innerHeight - 280, rect.top - 20)) });
+                    }}
+                    onMouseLeave={() => setHoverEffect(null)}
+                    className={`text-left rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/60 transition overflow-hidden flex flex-col cursor-pointer group ${
+                      !activeProj ? 'opacity-40 pointer-events-none' : ''
+                    }`}
+                  >
+                    <div className="w-full aspect-video bg-[#070c16] border-b border-slate-800/80 overflow-hidden relative flex items-center justify-center">
+                      {e.thumb_url ? (
+                        <img
+                          src={e.thumb_url}
+                          alt={e.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-slate-600 font-mono-num">{e.id}</span>
+                      )}
+                      <button
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          toggleFav(e.id);
+                        }}
+                        className={`absolute top-1 left-1 p-0.5 rounded bg-black/60 ${isFav ? 'text-amber-400' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}
+                        title="收藏/取消收藏"
+                      >
+                        <Star className="w-3 h-3" fill={isFav ? 'currentColor' : 'none'} />
+                      </button>
+                    </div>
+                    <div className="p-1.5">
+                      <div className="text-[11px] font-medium text-slate-100 truncate">{e.name}</div>
+                      <div className="text-[9px] text-slate-400 truncate mt-0.5">{e.desc}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 左侧底部快捷操控区（100% 复刻 Overlay Studio 左下角） */}
+            <div className="p-2.5 border-t border-slate-800 bg-[#0d1424] space-y-2 text-xs shrink-0">
+              <button
+                onClick={handleReplay}
+                disabled={!activeProj}
+                className="w-full py-1.5 rounded-lg bg-slate-100 hover:bg-white text-slate-950 font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" /> 重播动画
+              </button>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => videoUploadInputRef.current?.click()}
+                  disabled={!activeProj}
+                  className="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-200 flex items-center justify-center gap-1 disabled:opacity-40"
+                >
+                  <Upload className="w-3 h-3 text-cyan-400" /> 导入视频
+                </button>
+                <button
+                  onClick={() => handleExport('single', false)}
+                  disabled={!activeProj || !selectedCard || !engine?.reachable}
+                  className="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-200 flex items-center justify-center gap-1 disabled:opacity-40"
+                >
+                  <Download className="w-3 h-3 text-amber-400" /> 导出单卡
+                </button>
+              </div>
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">特效缩放大小</span>
+                  <span className="font-mono-num text-cyan-300">{Math.round((doc.fxScale || 1) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={1.8}
+                  step={0.05}
+                  value={doc.fxScale || 1}
+                  onChange={(e) => setDoc({ ...doc, fxScale: Number(e.target.value) })}
+                  className="w-full accent-cyan-400 h-1"
+                />
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">动画速度</span>
+                  <span className="font-mono-num text-cyan-300">{Number(doc.animSpeed || 1).toFixed(2)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={2.0}
+                  step={0.05}
+                  value={doc.animSpeed || 1}
+                  onChange={(e) => setDoc({ ...doc, animSpeed: Number(e.target.value) })}
+                  className="w-full accent-cyan-400 h-1"
+                />
+              </div>
+            </div>
+
+            {/* 悬停实时动态小窗预览 */}
+            {hoverEffect && engine?.reachable && (
+              <div
+                style={{ top: `${hoverEffect.top}px` }}
+                className="fixed left-[530px] z-50 w-[384px] rounded-xl bg-[#0b1120] border border-cyan-500/60 shadow-2xl shadow-black/80 overflow-hidden pointer-events-none"
+              >
+                <div className="px-2.5 py-1.5 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between text-[11px]">
+                  <span className="font-semibold text-cyan-300">{hoverEffect.eff.name}</span>
+                  <span className="font-mono-num text-[10px] text-slate-400">{hoverEffect.eff.id} · 实时预览</span>
+                </div>
+                <div className="w-[384px] h-[216px] bg-[#070c16] relative overflow-hidden">
+                  <iframe
+                    key={hoverEffect.eff.id}
+                    ref={hoverIframeRef}
+                    src={`/overlay-engine/?export=1&ratio=h&effect=${encodeURIComponent(hoverEffect.eff.id)}&duration=6`}
+                    title={`预览 ${hoverEffect.eff.name}`}
+                    onLoad={bootHoverPreview}
+                    style={{
+                      width: '1920px',
+                      height: '1080px',
+                      transform: 'scale(0.2)',
+                      transformOrigin: 'top left',
+                      border: 0,
+                      background: 'transparent',
+                    }}
+                  />
+                </div>
+                <div className="px-2.5 py-1 text-[10px] text-slate-400 bg-[#080d18]">
+                  {hoverEffect.eff.desc}（点击卡片立即插入时间轴）
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 中栏：主舞台画布（带 SAFE 人物安全区） + 增强版多轨时间轴 */}
+          <div className="flex-1 flex flex-col gap-2 min-w-0 overflow-hidden">
+            <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col min-h-0">
+              <div className="flex-1 flex items-center justify-center bg-[#060a12] rounded-lg border border-slate-800/80 relative overflow-hidden min-h-[240px]">
+                <div
+                  ref={stageBoxRef}
+                  className={`relative bg-[#090d16] border border-slate-700/80 overflow-hidden flex items-center justify-center ${
+                    isVertical ? 'h-full aspect-[9/16]' : is43 ? 'h-full aspect-[4/3]' : 'w-full h-full max-w-[1000px] aspect-video'
+                  }`}
+                >
+                  {activeProj?.reference_video_path ? (
+                    <video
+                      ref={videoRef}
+                      src={`/api/video/projects/${activeProj.id}/reference-video`}
+                      className="w-full h-full object-contain"
+                      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    />
+                  ) : (
+                    !showSafeZone && (
+                      <div className="text-center text-slate-600 text-xs space-y-1 p-4 select-none">
+                        <Film className="w-7 h-7 mx-auto opacity-40" />
+                        <div>{doc.cards.length > 0 ? '' : activeProj ? '点击左侧 25 种动效卡即可实时渲染真实动画' : '请先新建或选择一个视频工程'}</div>
+                      </div>
+                    )
+                  )}
+
+                  {/* SAFE 人物安全区剪影参考线（完全还原截图视觉，不进入最终透明导出） */}
+                  {showSafeZone && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center select-none">
+                      <div className="h-[92%] aspect-[9/16] border border-slate-700/50 rounded-sm relative flex flex-col items-center justify-end overflow-hidden">
+                        <span className="absolute top-2 text-[10px] tracking-[0.25em] text-slate-500 font-mono-num">SAFE</span>
+                        {/* 人物剪影参考 */}
+                        <div className="w-[34%] aspect-square rounded-full bg-slate-700/20 mb-2" />
+                        <div className="w-[74%] h-[54%] rounded-t-[48%] bg-slate-700/20" />
+                        <span className="absolute bottom-2 text-[10px] text-slate-500">人物安全区</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 同源真实 Overlay Studio 透明动效渲染层 */}
+                  {overlayIframeSrc && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+                      <iframe
+                        key={overlayIframeSrc}
+                        ref={overlayIframeRef}
+                        src={overlayIframeSrc}
+                        title="Overlay Studio 实时真动效画布"
+                        allowTransparency={true}
+                        onLoad={bootMainOverlay}
+                        style={{
+                          width: `${stageW}px`,
+                          height: `${stageH}px`,
+                          transform: `scale(${stageScale})`,
+                          transformOrigin: 'center center',
+                          border: 0,
+                          background: 'transparent',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {activeSubtitle && (
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded bg-black/75 text-white text-xs text-center max-w-[90%] pointer-events-none">
+                      {activeSubtitle.text}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 播放控制与快捷键提示栏 */}
+              <div className="mt-2 flex items-center gap-2.5 text-xs">
+                <button
+                  onClick={() => {
+                    const next = !playing;
+                    setPlaying(next);
+                    if (videoRef.current) {
+                      if (next) videoRef.current.play().catch(() => {});
+                      else videoRef.current.pause();
+                    }
+                  }}
+                  className="p-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white"
+                  title="播放/暂停 (Space)"
+                >
+                  {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                </button>
+                <span className="font-mono-num text-cyan-300 text-[11px] shrink-0">
+                  当前 {fmtClock(currentTime)} / {fmtClock(totalDur)}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={totalDur}
+                  step={0.1}
+                  value={currentTime}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setCurrentTime(v);
+                    if (videoRef.current) videoRef.current.currentTime = v;
+                  }}
+                  className="flex-1 accent-orange-500"
+                />
+                <span className="text-[10px] text-slate-500 hidden xl:inline">空格 播放 · ← → ±0.5s · Delete 删卡</span>
+                <button onClick={handleUndo} disabled={!undoStack.length} className="p-1 rounded bg-slate-800 text-slate-300 disabled:opacity-30" title="撤销">
+                  <Undo2 className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={handleRedo} disabled={!redoStack.length} className="p-1 rounded bg-slate-800 text-slate-300 disabled:opacity-30" title="重做">
+                  <Redo2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 底部彩色多轨时间轴 + 红线播放头 + 渲染队列 */}
+            <div className="h-48 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col gap-1.5 overflow-y-auto text-[11px]">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="font-semibold text-slate-200">
+                  时间轴 · 卡片 {doc.cards.length} 张 · 字幕 {doc.srt?.length || 0} 条
+                </span>
+                <button onClick={handleLint} disabled={!activeProj} className="text-[11px] text-amber-300 hover:underline flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3" /> 质量检查{lintRes ? ` (${lintRes.error_count}错/${lintRes.warning_count}警)` : ''}
+                </button>
+              </div>
+
+              <div className="relative space-y-1.5">
+                {/* 红色播放头垂直线 */}
+                <div
+                  style={{ left: `calc(68px + (100% - 68px) * ${Math.min(1, currentTime / totalDur)})` }}
+                  className="absolute top-0 bottom-0 w-[2px] bg-orange-500 z-20 pointer-events-none"
+                />
+
+                {/* 轨1：参考视频 */}
+                <div className="flex items-center gap-2">
+                  <span className="w-14 text-slate-400 shrink-0">视频轨</span>
+                  <div className="flex-1 h-5 bg-slate-950 rounded border border-slate-800 px-2 flex items-center text-[10px] text-slate-400 truncate">
+                    {activeProj?.reference_video_path ? `参考视频：${activeProj.reference_video_path}` : '纯透明动效层模式（可左下角导入参考视频）'}
+                  </div>
+                </div>
+
+                {/* 轨2：动效轨（按模板分组彩色块） */}
+                <div className="flex items-center gap-2">
+                  <span className="w-14 text-cyan-400 shrink-0">动效轨</span>
+                  <div className="flex-1 h-8 bg-slate-950 rounded border border-slate-800 relative overflow-hidden">
+                    {doc.cards.map((c) => {
+                      const left = `${(c.start / totalDur) * 100}%`;
+                      const width = `${Math.max(4, ((c.end - c.start) / totalDur) * 100)}%`;
+                      const active = c.id === selectedCardId;
+                      const grp = effectById[c.kind]?.group || '';
+                      const cls = GROUP_COLORS[grp] || 'bg-indigo-500/30 border-indigo-400/50 text-indigo-100';
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setSelectedCardId(c.id);
+                            setCurrentTime(Number((c.start + 0.4).toFixed(1)));
+                            setRightTab('props');
+                          }}
+                          style={{ left, width }}
+                          className={`absolute top-1 bottom-1 rounded px-1.5 text-[10px] truncate transition border ${cls} ${
+                            active ? 'ring-2 ring-orange-400 z-10' : 'opacity-85 hover:opacity-100'
+                          }`}
+                          title={`${effectById[c.kind]?.name || c.kind} (${c.start}s - ${c.end}s)`}
+                        >
+                          {effectById[c.kind]?.name || c.kind}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 轨3：字幕轨 */}
+                <div className="flex items-center gap-2">
+                  <span className="w-14 text-emerald-400 shrink-0">字幕轨</span>
+                  <div className="flex-1 h-5 bg-slate-950 rounded border border-slate-800 relative overflow-hidden">
+                    {(doc.srt || []).map((s, idx) => (
+                      <div
+                        key={idx}
+                        style={{ left: `${(s.start / totalDur) * 100}%`, width: `${Math.max(2, ((s.end - s.start) / totalDur) * 100)}%` }}
+                        className="absolute top-0.5 bottom-0.5 bg-emerald-500/25 border border-emerald-500/40 rounded px-1 text-[9px] text-emerald-200 truncate"
+                        title={s.text}
+                      >
+                        {s.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 轨4：音效轨 */}
+                <div className="flex items-center gap-2">
+                  <span className="w-14 text-amber-400 shrink-0">音效轨</span>
+                  <div className="flex-1 h-5 bg-slate-950 rounded border border-slate-800 relative overflow-hidden">
+                    {doc.cards
+                      .filter((c) => c.params?.sfx && c.params.sfx !== 'none')
+                      .map((c) => (
+                        <div
+                          key={c.id}
+                          style={{ left: `${(c.start / totalDur) * 100}%`, width: '7%' }}
+                          className="absolute top-0.5 bottom-0.5 bg-amber-500/25 border border-amber-500/40 rounded px-1 text-[9px] text-amber-200 truncate"
+                        >
+                          🔊 {c.params.sfx}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 最近渲染任务状态条 */}
+              {renderJobs.length > 0 && (
+                <div className="mt-1 pt-1 border-t border-slate-800 space-y-1">
+                  {renderJobs.slice(0, 2).map((j) => {
+                    const probe = j.ffprobe_json ? JSON.parse(j.ffprobe_json) : null;
+                    return (
+                      <div key={j.job_uid} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-slate-900/90 border border-slate-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] ${j.state === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : j.state === 'running' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                            {j.state} {j.progress}%
+                          </span>
+                          <span className="truncate text-slate-300">{j.progress_message || j.error_message}</span>
+                          {probe?.ok && (
+                            <span className="text-[10px] text-emerald-300 font-mono-num shrink-0">
+                              Alpha:{probe.has_alpha ? 'YES' : 'NO'} · {probe.pix_fmt} · {probe.duration_sec}s
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {j.state === 'running' && (
+                            <button onClick={() => api.cancelRenderJob(j.job_uid).then(() => showToast('已发送取消指令'))} className="px-2 py-0.5 rounded bg-rose-600/30 text-rose-200 text-[10px]">
+                              取消
+                            </button>
+                          )}
+                          {j.state === 'completed' && j.output_mov_path && (
+                            <a href={`/api/video/render-jobs/${j.job_uid}/download?fmt=mov`} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[10px]">下MOV</a>
+                          )}
+                          {j.state === 'completed' && j.output_webm_path && (
+                            <a href={`/api/video/render-jobs/${j.job_uid}/download?fmt=webm`} className="px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 text-[10px]">下WebM</a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 右栏：100% 复刻 Overlay Studio 精细属性面板（预设/内容/节奏/样式/摆位） */}
+          <div className="w-80 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden">
+            <div className="p-2 border-b border-slate-800 bg-[#0f172a] flex gap-1 text-[11px]">
+              {[
+                ['props', '属性'],
+                ['lint', `检查${lintRes ? `(${lintRes.error_count})` : ''}`],
+                ['sfx', '音效'],
+                ['feedback', '偏好'],
+                ['versions', '版本'],
+              ].map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setRightTab(k as any)}
+                  className={`flex-1 py-1 rounded font-medium ${
+                    rightTab === k ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {label}
                 </button>
               ))}
             </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 content-start">
-            {filteredEffects.map((e) => (
-              <button
-                key={e.id}
-                onClick={() => activeProj && addEffectCard(e)}
-                onMouseEnter={(ev) => {
-                  const rect = ev.currentTarget.getBoundingClientRect();
-                  setHoverEffect({ eff: e, top: Math.max(80, Math.min(window.innerHeight - 280, rect.top - 20)) });
-                }}
-                onMouseLeave={() => setHoverEffect(null)}
-                disabled={!activeProj}
-                className="text-left rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/60 transition overflow-hidden flex flex-col disabled:opacity-40 group"
-              >
-                <div className="w-full aspect-video bg-[#070c16] border-b border-slate-800/80 overflow-hidden relative flex items-center justify-center">
-                  {e.thumb_url ? (
-                    <img
-                      src={e.thumb_url}
-                      alt={e.name}
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                    />
-                  ) : (
-                    <span className="text-[10px] text-slate-600 font-mono-num">{e.id}</span>
-                  )}
-                  <span className="absolute top-1 right-1 px-1 py-0.2 rounded bg-black/70 text-[9px] text-cyan-300 opacity-0 group-hover:opacity-100 transition">
-                    +添加
-                  </span>
-                </div>
-                <div className="p-1.5">
-                  <div className="text-[11px] font-medium text-slate-100 truncate">{e.name}</div>
-                  <div className="text-[9px] text-slate-400 truncate mt-0.5">{e.desc}</div>
-                </div>
-              </button>
-            ))}
-          </div>
 
-          {/* 悬停实时动态小窗预览（同源真实 Overlay Studio 动画渲染） */}
-          {hoverEffect && engine?.reachable && (
-            <div
-              style={{ top: `${hoverEffect.top}px` }}
-              className="fixed left-[545px] z-50 w-[384px] rounded-xl bg-[#0b1120] border border-cyan-500/60 shadow-2xl shadow-black/80 overflow-hidden pointer-events-none"
-            >
-              <div className="px-2.5 py-1.5 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-cyan-300">{hoverEffect.eff.name}</span>
-                <span className="font-mono-num text-[10px] text-slate-400">{hoverEffect.eff.id} · 实时预览</span>
-              </div>
-              <div className="w-[384px] h-[216px] bg-[#070c16] relative overflow-hidden">
-                <iframe
-                  key={hoverEffect.eff.id}
-                  ref={hoverIframeRef}
-                  src={`/overlay-engine/?export=1&ratio=h&effect=${encodeURIComponent(hoverEffect.eff.id)}&duration=6`}
-                  title={`预览 ${hoverEffect.eff.name}`}
-                  onLoad={bootHoverPreview}
-                  style={{
-                    width: '1920px',
-                    height: '1080px',
-                    transform: 'scale(0.2)',
-                    transformOrigin: 'top left',
-                    border: 0,
-                    background: 'transparent',
-                  }}
-                />
-              </div>
-              <div className="px-2.5 py-1 text-[10px] text-slate-400 bg-[#080d18]">
-                {hoverEffect.eff.desc}（点击卡片立即插入时间轴）
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 中栏：预览画布 + 4 轨时间轴 */}
-        <div className="flex-1 flex flex-col gap-2.5 min-w-0 overflow-hidden">
-          {/* 预览画布 */}
-          <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl p-3 flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-300 font-medium">实时参考预览</span>
-                {activeProj && (
-                  <select
-                    value={activeProj.aspect_ratio}
-                    onChange={async (e) => {
-                      const ratio = e.target.value;
-                      await api.patchVideoProject(activeProj.id, { aspect_ratio: ratio });
-                      setActiveProj({ ...activeProj, aspect_ratio: ratio });
-                      setDoc({ ...doc, ratio: ratio === '9:16' ? 'v' : 'h' });
-                    }}
-                    className="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-[11px] text-cyan-300"
-                  >
-                    <option value="16:9">16:9 横屏</option>
-                    <option value="9:16">9:16 竖屏</option>
-                  </select>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {activeProj && (
-                  <label className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-300 cursor-pointer flex items-center gap-1">
-                    <Upload className="w-3 h-3 text-cyan-400" /> 上传本地 H.264 参考视频
-                    <input
-                      type="file"
-                      accept=".mp4,.mov,.webm"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (!f || !activeProj) return;
-                        try {
-                          await api.uploadReferenceVideo(activeProj.id, f);
-                          await openProject(activeProj.id);
-                          showToast('✅ 参考视频已绑定（预览与运镜同步）');
-                        } catch (err: any) {
-                          showToast('上传失败：' + err.message);
-                        }
-                      }}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 flex items-center justify-center bg-[#060a12] rounded-lg border border-slate-800/80 relative overflow-hidden min-h-[220px]">
-              <div
-                ref={stageBoxRef}
-                className={`relative bg-slate-950 border border-slate-700/80 overflow-hidden flex items-center justify-center ${
-                  isVertical ? 'h-full aspect-[9/16]' : 'w-full h-full max-w-[960px] aspect-video'
-                }`}
-              >
-                {activeProj?.reference_video_path ? (
-                  <video
-                    ref={videoRef}
-                    src={`/api/video/projects/${activeProj.id}/reference-video`}
-                    className="w-full h-full object-contain"
-                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                  />
-                ) : (
-                  <div className="text-center text-slate-600 text-xs space-y-1 p-4 select-none">
-                    <Film className="w-7 h-7 mx-auto opacity-40" />
-                    <div>{doc.cards.length > 0 ? '' : activeProj ? '点击左侧 25 种动效卡即可实时渲染真实动画' : '请先新建或选择一个视频工程'}</div>
-                  </div>
-                )}
-
-                {/* 真正的 Overlay Studio 同源透明动效渲染层（非文字占位，零源码复制） */}
-                {overlayIframeSrc && (
-                  <div
-                    className="absolute inset-0 pointer-events-none overflow-hidden"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <iframe
-                      key={overlayIframeSrc}
-                      ref={overlayIframeRef}
-                      src={overlayIframeSrc}
-                      title="Overlay Studio 实时真动效画布"
-                      allowTransparency={true}
-                      onLoad={bootMainOverlay}
-                      style={{
-                        width: `${stageW}px`,
-                        height: `${stageH}px`,
-                        transform: `scale(${stageScale})`,
-                        transformOrigin: 'center center',
-                        border: 0,
-                        background: 'transparent',
-                        flexShrink: 0,
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* 字幕实时叠加 */}
-                {activeSubtitle && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded bg-black/75 text-white text-xs text-center max-w-[90%] pointer-events-none">
-                    {activeSubtitle.text}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 播放控制条 */}
-            <div className="mt-2 flex items-center gap-3 text-xs">
-              <button
-                onClick={() => {
-                  const next = !playing;
-                  setPlaying(next);
-                  if (videoRef.current) {
-                    if (next) videoRef.current.play().catch(() => {});
-                    else videoRef.current.pause();
-                  }
-                }}
-                className="p-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white"
-              >
-                {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={totalDur}
-                step={0.1}
-                value={currentTime}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setCurrentTime(v);
-                  if (videoRef.current) videoRef.current.currentTime = v;
-                }}
-                className="flex-1 accent-cyan-400"
-              />
-              <span className="font-mono-num text-cyan-300 w-24 text-right">
-                {currentTime.toFixed(1)}s / {totalDur.toFixed(1)}s
-              </span>
-              <button onClick={handleUndo} disabled={!undoStack.length} className="p-1 rounded bg-slate-800 text-slate-300 disabled:opacity-30" title="撤销">
-                <Undo2 className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={handleRedo} disabled={!redoStack.length} className="p-1 rounded bg-slate-800 text-slate-300 disabled:opacity-30" title="重做">
-                <Redo2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* 底部 4 轨时间轴 + 渲染队列 */}
-          <div className="h-52 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col gap-1.5 overflow-y-auto text-[11px]">
-            <div className="flex items-center justify-between text-slate-400">
-              <span className="font-semibold text-slate-200">多轨时间轴（参考视频 / 动效 / 字幕 / 音效）</span>
-              <span className="text-[10px]">点击动效块即可在右侧编辑参数与时间码</span>
-            </div>
-
-            {/* 轨1：参考视频 */}
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-slate-400 shrink-0">视频轨</span>
-              <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-800 px-2 flex items-center text-slate-400">
-                {activeProj?.reference_video_path ? `参考视频：${activeProj.reference_video_path}` : '未加载参考视频（纯透明动效层模式）'}
-              </div>
-            </div>
-
-            {/* 轨2：动效轨 */}
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-cyan-400 shrink-0">动效轨 ({doc.cards.length})</span>
-              <div className="flex-1 h-8 bg-slate-950 rounded border border-slate-800 relative overflow-hidden">
-                {doc.cards.map((c) => {
-                  const left = `${(c.start / totalDur) * 100}%`;
-                  const width = `${Math.max(4, ((c.end - c.start) / totalDur) * 100)}%`;
-                  const active = c.id === selectedCardId;
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        setSelectedCardId(c.id);
-                        setCurrentTime(c.start);
-                        setRightTab('props');
-                      }}
-                      style={{ left, width }}
-                      className={`absolute top-1 bottom-1 rounded px-1.5 text-[10px] truncate transition border ${
-                        active
-                          ? 'bg-cyan-500/35 border-cyan-300 text-white z-10'
-                          : 'bg-indigo-500/25 border-indigo-400/40 text-indigo-200 hover:bg-indigo-500/40'
-                      }`}
-                      title={`${c.kind} (${c.start}s - ${c.end}s)`}
-                    >
-                      {c.kind}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 轨3：字幕轨 */}
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-emerald-400 shrink-0">字幕轨 ({doc.srt?.length || 0})</span>
-              <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-800 relative overflow-hidden">
-                {(doc.srt || []).map((s, idx) => (
-                  <div
-                    key={idx}
-                    style={{ left: `${(s.start / totalDur) * 100}%`, width: `${Math.max(2, ((s.end - s.start) / totalDur) * 100)}%` }}
-                    className="absolute top-1 bottom-1 bg-emerald-500/25 border border-emerald-500/40 rounded px-1 text-[9px] text-emerald-200 truncate"
-                    title={s.text}
-                  >
-                    {s.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 轨4：音效轨 */}
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-amber-400 shrink-0">音效轨</span>
-              <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-800 relative overflow-hidden">
-                {doc.cards
-                  .filter((c) => c.params?.sfx)
-                  .map((c) => (
-                    <div
-                      key={c.id}
-                      style={{ left: `${(c.start / totalDur) * 100}%`, width: '6%' }}
-                      className="absolute top-1 bottom-1 bg-amber-500/25 border border-amber-500/40 rounded px-1 text-[9px] text-amber-200 truncate"
-                    >
-                      🔊 {c.params.sfx}
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            {/* 最近渲染任务状态条 */}
-            {renderJobs.length > 0 && (
-              <div className="mt-1 pt-1.5 border-t border-slate-800 space-y-1">
-                {renderJobs.slice(0, 2).map((j) => {
-                  const probe = j.ffprobe_json ? JSON.parse(j.ffprobe_json) : null;
-                  return (
-                    <div key={j.job_uid} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-slate-900/90 border border-slate-800">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                          j.state === 'completed' ? 'bg-emerald-500/20 text-emerald-300' :
-                          j.state === 'running' ? 'bg-cyan-500/20 text-cyan-300' :
-                          'bg-rose-500/20 text-rose-300'
-                        }`}>
-                          {j.state} {j.progress}%
-                        </span>
-                        <span className="truncate text-slate-300">{j.progress_message || j.error_message}</span>
-                        {probe?.ok && (
-                          <span className="text-[10px] text-emerald-300 font-mono-num shrink-0">
-                            Alpha:{probe.has_alpha ? 'YES' : 'NO'} · {probe.pix_fmt} · {probe.duration_sec}s
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {j.state === 'running' && (
-                          <button
-                            onClick={() => api.cancelRenderJob(j.job_uid).then(() => showToast('已发送取消指令'))}
-                            className="px-2 py-0.5 rounded bg-rose-600/30 text-rose-200 text-[10px]"
-                          >
-                            取消
-                          </button>
-                        )}
-                        {j.state === 'completed' && j.output_mov_path && (
-                          <a href={`/api/video/render-jobs/${j.job_uid}/download?fmt=mov`} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[10px]">
-                            下 MOV
-                          </a>
-                        )}
-                        {j.state === 'completed' && j.output_webm_path && (
-                          <a href={`/api/video/render-jobs/${j.job_uid}/download?fmt=webm`} className="px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 text-[10px]">
-                            下 WebM
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 右栏：属性 / 质量检查 / 音效 / 偏好学习 / 版本 */}
-        <div className="w-76 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-slate-800 bg-[#0f172a] flex gap-1 text-[11px]">
-            {[
-              ['props', '属性'],
-              ['lint', `检查${lintRes ? `(${lintRes.error_count})` : ''}`],
-              ['sfx', '音效'],
-              ['feedback', '偏好'],
-              ['versions', '版本'],
-            ].map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setRightTab(k as any)}
-                className={`flex-1 py-1 rounded font-medium ${
-                  rightTab === k ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3 text-xs space-y-3">
-            {rightTab === 'props' && (
-              selectedCard ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-cyan-300">{selectedCard.kind}</div>
-                      <div className="text-[10px] text-slate-500 font-mono-num">{selectedCard.id}</div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        mutateDoc({ ...doc, cards: doc.cards.filter((c) => c.id !== selectedCard.id) });
-                        setSelectedCardId(null);
-                      }}
-                      className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
-                      title="删除此卡片"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-400">开始时间 (秒)</span>
-                      <input
-                        type="number"
-                        step={0.1}
-                        value={selectedCard.start}
-                        onChange={(e) => updateSelectedCard({ start: Number(e.target.value) })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono-num"
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-400">结束时间 (秒)</span>
-                      <input
-                        type="number"
-                        step={0.1}
-                        value={selectedCard.end}
-                        onChange={(e) => updateSelectedCard({ end: Number(e.target.value) })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono-num"
-                      />
-                    </label>
-                  </div>
-
-                  <label className="block space-y-1">
-                    <span className="text-[10px] text-slate-400">绑定音效（A09）</span>
-                    <select
-                      value={selectedCard.params?.sfx || ''}
-                      onChange={(e) => updateSelectedCard({ params: { ...selectedCard.params, sfx: e.target.value || undefined } })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1"
-                    >
-                      <option value="">无音效</option>
-                      {(caps?.default_sfx || []).map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {s.id} · {s.usage}
-                        </option>
-                      ))}
-                      {(caps?.custom_sfx || []).map((s: any) => (
-                        <option key={s.id} value={s.filename}>
-                          [自定义] {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <div className="text-[11px] font-semibold text-slate-300">卡片参数编辑（A07）</div>
-                    {Object.entries(selectedCard.params || {})
-                      .filter(([k]) => !['sfx', 'source_srt_index'].includes(k))
-                      .map(([k, v]) => (
-                        <label key={k} className="block space-y-1">
-                          <span className="text-[10px] text-slate-400 font-mono-num">{k}</span>
-                          <input
-                            value={typeof v === 'object' ? JSON.stringify(v) : String(v ?? '')}
-                            onChange={(e) =>
-                              updateSelectedCard({ params: { ...selectedCard.params, [k]: e.target.value } })
-                            }
-                            className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs"
-                          />
-                        </label>
-                      ))}
-                  </div>
-
-                  <button
-                    onClick={() => handleExport('single', false)}
-                    disabled={!engine?.reachable}
-                    className="w-full py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] border border-slate-700 disabled:opacity-40"
-                  >
-                    仅导出当前单卡透明 MOV
-                  </button>
-                </>
-              ) : (
-                <div className="text-slate-500 text-center py-8">在时间轴选中一张动效卡，或从左侧模板库点击添加</div>
-              )
-            )}
-
-            {rightTab === 'lint' && (
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200">编排质量检查（A13）</span>
-                  <button onClick={handleLint} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[11px]">
-                    重新检查
-                  </button>
-                </div>
-                {!lintRes ? (
-                  <div className="text-slate-500">点击上方「重新检查」运行规则校验</div>
-                ) : (
+            <div className="flex-1 overflow-y-auto p-3 text-xs space-y-3">
+              {rightTab === 'props' && (
+                selectedCard ? (
                   <>
-                    <div className={`p-2 rounded border ${lintRes.passed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
-                      {lintRes.passed ? (
-                        <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> 0 项硬错误，允许导出</span>
+                    {/* 卡片标题栏 */}
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div>
+                        <div className="font-semibold text-slate-100 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-orange-500" />
+                          {selectedEffectMeta?.name || selectedCard.kind}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono-num">{selectedCard.kind} · {selectedCard.id}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          mutateDoc({ ...doc, cards: doc.cards.filter((c) => c.id !== selectedCard.id) });
+                          setSelectedCardId(null);
+                        }}
+                        className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
+                        title="删除此卡片 (Delete)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* 我的样式预设 */}
+                    <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-300 font-medium flex items-center gap-1">
+                          <Bookmark className="w-3 h-3 text-amber-400" /> 我的样式预设
+                        </span>
+                        <button onClick={saveCurrentStylePreset} className="text-[10px] text-cyan-400 hover:underline">
+                          + 存当前样式
+                        </button>
+                      </div>
+                      {presets.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {presets.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => applyStylePreset(p)}
+                              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-600/30 border border-slate-700 text-[10px] text-slate-200"
+                            >
+                              {p.name}
+                            </button>
+                          ))}
+                        </div>
                       ) : (
-                        <span className="flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {lintRes.error_count} 项硬错误（已阻止导出）</span>
+                        <div className="text-[10px] text-slate-500">调好底色/强调色/玻璃后可一键存为预设复用</div>
                       )}
                     </div>
-                    {(lintRes.errors || []).map((err: any, i: number) => (
-                      <div key={i} className="p-2 rounded bg-rose-950/40 border border-rose-500/30 text-rose-200 text-[11px]">
-                        <div className="font-mono-num text-[10px] text-rose-400">{err.rule} {err.card_id ? `· ${err.card_id}` : ''}</div>
-                        <div>{err.message}</div>
+
+                    {/* 内容 CONTENT（严格按上游 25 卡原生 controls 动态生成） */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-1">
+                        <span>内容</span>
+                        <span className="font-mono-num">CONTENT</span>
+                      </div>
+                      {(selectedEffectMeta?.controls || []).map((ctrl: any) => (
+                        <label key={ctrl.key} className="block space-y-1">
+                          <span className="text-[11px] text-slate-300">{ctrl.label}</span>
+                          {ctrl.type === 'range' ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min={ctrl.min ?? 0}
+                                max={ctrl.max ?? 1000}
+                                step={ctrl.step ?? 10}
+                                value={selectedCard.params?.[ctrl.key] ?? ctrl.min ?? 0}
+                                onChange={(e) => updateSelectedParam(ctrl.key, Number(e.target.value))}
+                                className="flex-1 accent-cyan-400 h-1"
+                              />
+                              <span className="font-mono-num text-[10px] text-cyan-300 w-12 text-right">
+                                {selectedCard.params?.[ctrl.key] ?? '默认'}
+                              </span>
+                            </div>
+                          ) : ctrl.type === 'number' ? (
+                            <input
+                              type="number"
+                              value={selectedCard.params?.[ctrl.key] ?? ''}
+                              placeholder="留空用默认"
+                              onChange={(e) => updateSelectedParam(ctrl.key, e.target.value === '' ? undefined : Number(e.target.value))}
+                              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs font-mono-num text-slate-100"
+                            />
+                          ) : (
+                            <input
+                              value={selectedCard.params?.[ctrl.key] ?? ''}
+                              placeholder="留空则使用官方默认演示文本"
+                              onChange={(e) => updateSelectedParam(ctrl.key, e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"
+                            />
+                          )}
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* 节奏 TIMING */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-1">
+                        <span>节奏</span>
+                        <span className="font-mono-num">TIMING</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="space-y-1">
+                          <span className="text-[10px] text-slate-400">开始时间 (s)</span>
+                          <input
+                            type="number"
+                            step={0.1}
+                            value={selectedCard.start}
+                            onChange={(e) => updateSelectedCard({ start: Number(e.target.value) })}
+                            className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono-num"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] text-slate-400">结束时间 (s)</span>
+                          <input
+                            type="number"
+                            step={0.1}
+                            value={selectedCard.end}
+                            onChange={(e) => updateSelectedCard({ end: Number(e.target.value) })}
+                            className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono-num"
+                          />
+                        </label>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="text-slate-400">动画速度 (此卡)</span>
+                          <span className="font-mono-num text-cyan-300">{Number(selectedCard.params?.speed || 1).toFixed(2)}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={2.0}
+                          step={0.05}
+                          value={selectedCard.params?.speed || 1}
+                          onChange={(e) => updateSelectedParam('speed', Number(e.target.value))}
+                          className="w-full accent-cyan-400 h-1"
+                        />
+                      </div>
+                      <label className="block space-y-1">
+                        <span className="text-[10px] text-slate-400">音效（出现时响，导出自动混入）</span>
+                        <select
+                          value={selectedCard.params?.sfx ?? ''}
+                          onChange={(e) => updateSelectedParam('sfx', e.target.value || undefined)}
+                          className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs"
+                        >
+                          <option value="">🔊 自动（按特效类型）</option>
+                          <option value="none">🔇 无音效</option>
+                          {(caps?.default_sfx || []).map((s: any) => (
+                            <option key={s.id} value={s.id}>
+                              {s.id} · {s.usage}
+                            </option>
+                          ))}
+                          {(caps?.custom_sfx || []).map((s: any) => (
+                            <option key={s.id} value={s.filename}>
+                              [自定义] {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {/* 样式 STYLE（100% 复刻截图右侧样式区） */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-1">
+                        <span>样式</span>
+                        <span className="font-mono-num">STYLE</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-slate-400">底色（此卡独立生效）</div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {[['light', '☀ 亮底'], ['dark', '🌙 暗底']].map(([v, label]) => (
+                            <button
+                              key={v}
+                              onClick={() => updateSelectedParam('theme', v)}
+                              className={`py-1.5 rounded text-xs border ${
+                                (selectedCard.params?.theme || doc.theme || 'dark') === v
+                                  ? 'bg-orange-600 border-orange-500 text-white font-medium'
+                                  : 'bg-slate-900 border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-slate-400">关键词强调色</div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {ACCENT_OPTIONS.map((a) => (
+                            <button
+                              key={a.id}
+                              onClick={() => updateSelectedParam('accent', a.id)}
+                              className={`py-1 px-1.5 rounded text-[11px] border flex items-center justify-center gap-1 ${
+                                selectedCard.params?.accent === a.id
+                                  ? 'bg-orange-600/90 border-orange-400 text-white'
+                                  : 'bg-slate-900 border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              <span className="w-2 h-2 rounded-full" style={{ background: a.swatch }} />
+                              {a.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-slate-400">玻璃底色</div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {GLASS_OPTIONS.map((g) => (
+                            <button
+                              key={g.id}
+                              onClick={() => updateSelectedParam('glass', g.id)}
+                              className={`py-1 rounded text-[11px] border ${
+                                (selectedCard.params?.glass || '') === g.id
+                                  ? 'bg-orange-600 border-orange-500 text-white'
+                                  : 'bg-slate-900 border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              {g.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <span>底色透明度（玻璃底色打开时生效）</span>
+                          <span className="font-mono-num text-cyan-300">{Number(selectedCard.params?.glassAlpha ?? 0.6).toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={selectedCard.params?.glassAlpha ?? 0.6}
+                          onChange={(e) => updateSelectedParam('glassAlpha', Number(e.target.value))}
+                          className="w-full accent-cyan-400 h-1"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-slate-400">阴影</div>
+                        <div className="grid grid-cols-4 gap-1">
+                          {SHADOW_OPTIONS.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => updateSelectedParam('shadow', s.id)}
+                              className={`py-1 rounded text-[11px] border ${
+                                (selectedCard.params?.shadow || '') === s.id
+                                  ? 'bg-orange-600 border-orange-500 text-white'
+                                  : 'bg-slate-900 border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 摆位与大小 LAYOUT（100% 复刻截图右下角） */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-1">
+                        <span>摆位与大小</span>
+                        <span className="font-mono-num">LAYOUT</span>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1">
+                        {POSITION_OPTIONS.map((pos) => (
+                          <button
+                            key={pos.id}
+                            onClick={() => updateSelectedParam(layoutKey, pos.id)}
+                            className={`py-1 rounded text-[10px] border ${
+                              (selectedCard.params?.[layoutKey] || 'center') === pos.id
+                                ? 'bg-orange-600 border-orange-500 text-white'
+                                : 'bg-slate-900 border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            {pos.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <span>单卡缩放</span>
+                          <span className="font-mono-num text-cyan-300">{Math.round(Number(selectedCard.params?.scale || 1) * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={1.8}
+                          step={0.05}
+                          value={selectedCard.params?.scale || 1}
+                          onChange={(e) => updateSelectedParam('scale', Number(e.target.value))}
+                          className="w-full accent-cyan-400 h-1"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <span>水平微调 (offsetX)</span>
+                          <span className="font-mono-num text-cyan-300">{selectedCard.params?.offsetX || 0}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-400}
+                          max={400}
+                          step={5}
+                          value={selectedCard.params?.offsetX || 0}
+                          onChange={(e) => updateSelectedParam('offsetX', Number(e.target.value))}
+                          className="w-full accent-cyan-400 h-1"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <span>垂直微调 (offsetY)</span>
+                          <span className="font-mono-num text-cyan-300">{selectedCard.params?.offsetY || 0}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-300}
+                          max={300}
+                          step={5}
+                          value={selectedCard.params?.offsetY || 0}
+                          onChange={(e) => updateSelectedParam('offsetY', Number(e.target.value))}
+                          className="w-full accent-cyan-400 h-1"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 底部醒目橙色主按钮：加到当前时间点 */}
+                    <button
+                      onClick={() => selectedEffectMeta && addEffectCard(selectedEffectMeta, currentTime, selectedCard.params)}
+                      className="w-full py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs"
+                    >
+                      + 复制加到 {fmtClock(currentTime)}，时长 4 秒
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-slate-500 text-center py-8">在左侧动效库点击任意卡片，或在时间轴选中已有卡片进行精细调参</div>
+                )
+              )}
+
+              {rightTab === 'lint' && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-200">编排质量检查（A13）</span>
+                    <button onClick={handleLint} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[11px]">重新检查</button>
+                  </div>
+                  {!lintRes ? (
+                    <div className="text-slate-500">点击上方「重新检查」运行规则校验</div>
+                  ) : (
+                    <>
+                      <div className={`p-2 rounded border ${lintRes.passed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
+                        {lintRes.passed ? (
+                          <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> 0 项硬错误，允许导出</span>
+                        ) : (
+                          <span className="flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {lintRes.error_count} 项硬错误（已阻止导出）</span>
+                        )}
+                      </div>
+                      {(lintRes.errors || []).map((err: any, i: number) => (
+                        <div key={i} className="p-2 rounded bg-rose-950/40 border border-rose-500/30 text-rose-200 text-[11px]">
+                          <div className="font-mono-num text-[10px] text-rose-400">{err.rule} {err.card_id ? `· ${err.card_id}` : ''}</div>
+                          <div>{err.message}</div>
+                        </div>
+                      ))}
+                      {(lintRes.warnings || []).map((w: any, i: number) => (
+                        <div key={i} className="p-2 rounded bg-amber-950/30 border border-amber-500/30 text-amber-200 text-[11px] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono-num text-[10px] text-amber-400"><AlertTriangle className="w-3 h-3 inline mr-1" />{w.rule}</span>
+                            {w.card_id && (
+                              <button onClick={() => ignoreWarningRule(w.card_id, w.rule)} className="px-1.5 py-0.5 rounded bg-amber-500/20 text-[10px]">
+                                显式忽略
+                              </button>
+                            )}
+                          </div>
+                          <div>{w.message}</div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {rightTab === 'sfx' && (
+                <div className="space-y-3">
+                  <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-amber-400" /> 自定义授权音效库（A10）
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
+                    <input value={sfxName} onChange={(e) => setSfxName(e.target.value)} placeholder="音效名称..." className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1" />
+                    <input value={sfxLicense} onChange={(e) => setSfxLicense(e.target.value)} placeholder="授权说明（必填，如 CC0）" className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1" />
+                    <input type="file" accept=".mp3,.wav,.ogg,.m4a" onChange={(e) => setSfxFile(e.target.files?.[0] || null)} className="text-[10px] text-slate-400 w-full" />
+                    <button onClick={handleUploadSfx} className="w-full py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-[11px]">
+                      上传并登记授权台账
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[11px] text-slate-400">内置 15 个默认音效（授权已核验）</div>
+                    {(caps?.default_sfx || []).map((s: any) => (
+                      <div key={s.id} className="p-1.5 rounded bg-slate-900/70 border border-slate-800/80 flex justify-between">
+                        <span className="text-slate-200 font-mono-num">{s.id}</span>
+                        <span className="text-[10px] text-slate-400 truncate max-w-[140px]">{s.license}</span>
                       </div>
                     ))}
-                    {(lintRes.warnings || []).map((w: any, i: number) => (
-                      <div key={i} className="p-2 rounded bg-amber-950/30 border border-amber-500/30 text-amber-200 text-[11px] space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono-num text-[10px] text-amber-400"><AlertTriangle className="w-3 h-3 inline mr-1" />{w.rule}</span>
-                          {w.card_id && (
-                            <button
-                              onClick={() => ignoreWarningRule(w.card_id, w.rule)}
-                              className="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/35 text-[10px]"
-                            >
-                              显式忽略
-                            </button>
+                  </div>
+                </div>
+              )}
+
+              {rightTab === 'feedback' && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-200">人工修改偏好学习（A16）</span>
+                    <button onClick={handleProposeFeedback} disabled={!activeProj} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[11px] disabled:opacity-40">
+                      提取本次差异
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-slate-400">仅人工批准的规则影响后续 AI 编排，可随时撤销，绝不用于模型训练。</div>
+                  {feedbackRules.map((r) => (
+                    <div key={r.id} className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1.5">
+                      <div className="text-slate-200">{r.proposed_rule}</div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className={r.status === 'approved' ? 'text-emerald-400' : r.status === 'revoked' ? 'text-slate-500' : 'text-amber-300'}>状态：{r.status}</span>
+                        <div className="flex gap-1">
+                          {r.status !== 'approved' && (
+                            <button onClick={() => api.patchVideoFeedbackRule(r.id, { status: 'approved' }).then(() => api.listVideoFeedbackRules(projectId).then(setFeedbackRules))} className="px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-200">批准</button>
+                          )}
+                          {r.status === 'approved' && (
+                            <button onClick={() => api.patchVideoFeedbackRule(r.id, { status: 'revoked' }).then(() => api.listVideoFeedbackRules(projectId).then(setFeedbackRules))} className="px-1.5 py-0.5 rounded bg-rose-600/30 text-rose-200">撤销</button>
                           )}
                         </div>
-                        <div>{w.message}</div>
                       </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-
-            {rightTab === 'sfx' && (
-              <div className="space-y-3">
-                <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-                  <Volume2 className="w-3.5 h-3.5 text-amber-400" /> 自定义授权音效库（A10）
-                </div>
-                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-                  <input value={sfxName} onChange={(e) => setSfxName(e.target.value)} placeholder="音效名称..." className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1" />
-                  <input value={sfxLicense} onChange={(e) => setSfxLicense(e.target.value)} placeholder="授权说明（必填，如 CC0）" className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1" />
-                  <input type="file" accept=".mp3,.wav,.ogg,.m4a" onChange={(e) => setSfxFile(e.target.files?.[0] || null)} className="text-[10px] text-slate-400 w-full" />
-                  <button onClick={handleUploadSfx} className="w-full py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-[11px]">
-                    上传并登记授权台账
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[11px] text-slate-400">内置 15 个默认音效（授权已核验）</div>
-                  {(caps?.default_sfx || []).map((s: any) => (
-                    <div key={s.id} className="p-1.5 rounded bg-slate-900/70 border border-slate-800/80 flex justify-between">
-                      <span className="text-slate-200 font-mono-num">{s.id}</span>
-                      <span className="text-[10px] text-slate-400 truncate max-w-[140px]">{s.license}</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {rightTab === 'feedback' && (
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200">人工修改偏好学习（A16）</span>
-                  <button onClick={handleProposeFeedback} disabled={!activeProj} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[11px] disabled:opacity-40">
-                    提取本次差异
-                  </button>
-                </div>
-                <div className="text-[10px] text-slate-400">仅人工批准的规则影响后续 AI 编排，可随时撤销，绝不用于模型训练。</div>
-                {feedbackRules.map((r) => (
-                  <div key={r.id} className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1.5">
-                    <div className="text-slate-200">{r.proposed_rule}</div>
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className={r.status === 'approved' ? 'text-emerald-400' : r.status === 'revoked' ? 'text-slate-500' : 'text-amber-300'}>
-                        状态：{r.status}
-                      </span>
-                      <div className="flex gap-1">
-                        {r.status !== 'approved' && (
-                          <button
-                            onClick={() => api.patchVideoFeedbackRule(r.id, { status: 'approved' }).then(() => api.listVideoFeedbackRules(projectId).then(setFeedbackRules))}
-                            className="px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-200"
-                          >
-                            批准生效
-                          </button>
-                        )}
-                        {r.status === 'approved' && (
-                          <button
-                            onClick={() => api.patchVideoFeedbackRule(r.id, { status: 'revoked' }).then(() => api.listVideoFeedbackRules(projectId).then(setFeedbackRules))}
-                            className="px-1.5 py-0.5 rounded bg-rose-600/30 text-rose-200"
-                          >
-                            撤销
-                          </button>
-                        )}
+              {rightTab === 'versions' && (
+                <div className="space-y-2">
+                  <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5 text-cyan-400" /> 不可变版本历史（A14）
+                  </div>
+                  {versions.map((v) => (
+                    <div key={v.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-slate-200 font-medium">v{v.version_no} · {v.source_type}</div>
+                        <div className="text-[10px] text-slate-400 truncate">{v.note} ({v.checksum})</div>
                       </div>
+                      <button
+                        onClick={() => activeProj && api.restoreVideoVersion(activeProj.id, v.id).then(() => { openProject(activeProj.id); showToast(`✅ 已恢复到 v${v.version_no}`); })}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-600 text-[10px] text-slate-200 shrink-0"
+                      >
+                        恢复
+                      </button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {rightTab === 'versions' && (
-              <div className="space-y-2">
-                <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-                  <History className="w-3.5 h-3.5 text-cyan-400" /> 不可变版本历史（A14）
+                  ))}
                 </div>
-                {versions.map((v) => (
-                  <div key={v.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-slate-200 font-medium">v{v.version_no} · {v.source_type}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{v.note} ({v.checksum})</div>
-                    </div>
-                    <button
-                      onClick={() =>
-                        activeProj &&
-                        api.restoreVideoVersion(activeProj.id, v.id).then(() => {
-                          openProject(activeProj.id);
-                          showToast(`✅ 已恢复到 v${v.version_no}`);
-                        })
-                      }
-                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-600 text-[10px] text-slate-200 shrink-0"
-                    >
-                      恢复
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* 许可与版权保留声明 */}
-          <div className="p-2 border-t border-slate-800 bg-[#080d18] text-[10px] text-slate-500">
-            动效渲染引擎：Overlay Studio v1.4.0（Copyright © 2026 Jessie Zhou · 内部使用/自改授权，不对外作为软件分发）。
+            <div className="p-2 border-t border-slate-800 bg-[#080d18] text-[10px] text-slate-500">
+              动效渲染引擎：Overlay Studio v1.4.0（Copyright © 2026 Jessie Zhou · 内部使用/自改授权）。
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* 全局设置弹窗（复刻 Overlay Studio 全局设置） */}
+      {globalModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="w-[420px] bg-[#0f172a] border border-slate-700 rounded-xl p-4 space-y-3 text-xs">
+            <div className="text-sm font-bold text-slate-100">全局设置（整片生效）</div>
+            <div className="space-y-1">
+              <div className="text-slate-400">全局默认底色</div>
+              <div className="grid grid-cols-2 gap-2">
+                {[['dark', '🌙 暗底'], ['light', '☀ 亮底']].map(([v, label]) => (
+                  <button
+                    key={v}
+                    onClick={() => setDoc({ ...doc, theme: v as any })}
+                    className={`py-1.5 rounded border ${(doc.theme || 'dark') === v ? 'bg-orange-600 border-orange-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center justify-between py-1">
+              <span className="text-slate-200">文字可读性光晕 (glow)</span>
+              <input type="checkbox" checked={!!doc.glow} onChange={(e) => setDoc({ ...doc, glow: e.target.checked })} />
+            </label>
+            <label className="flex items-center justify-between py-1">
+              <span className="text-slate-200">卡片落定微动呼吸感 (breath)</span>
+              <input type="checkbox" checked={!!doc.breath} onChange={(e) => setDoc({ ...doc, breath: e.target.checked })} />
+            </label>
+            <label className="flex items-center justify-between py-1">
+              <span className="text-slate-200">导出帧率 (FPS)</span>
+              <select
+                value={doc.exportFps || 30}
+                onChange={(e) => setDoc({ ...doc, exportFps: Number(e.target.value) })}
+                className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-cyan-300"
+              >
+                <option value={29.97}>29.97 fps (NTSC)</option>
+                <option value={30}>30 fps</option>
+                <option value={50}>50 fps</option>
+                <option value={60}>60 fps</option>
+              </select>
+            </label>
+            <label className="flex items-center justify-between py-1">
+              <span className="text-slate-200">全局主文字覆盖色 (留空默认)</span>
+              <div className="flex items-center gap-2">
+                <input type="color" value={doc.inkColor || '#ffffff'} onChange={(e) => setDoc({ ...doc, inkColor: e.target.value })} />
+                {doc.inkColor && (
+                  <button onClick={() => setDoc({ ...doc, inkColor: undefined })} className="text-[10px] text-rose-400">清空</button>
+                )}
+              </div>
+            </label>
+            <div className="flex justify-end">
+              <button onClick={() => setGlobalModal(false)} className="px-4 py-1.5 rounded bg-cyan-600 text-white">完成</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 新建视频工程弹窗 */}
@@ -1308,67 +1873,38 @@ export default function VideoStudio({ projectId }: Props) {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="w-96 bg-[#0f172a] border border-slate-700 rounded-xl p-4 space-y-3">
             <div className="text-sm font-bold text-slate-100">新建视频动效工程</div>
-            <input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="输入视频工程标题..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100"
-              autoFocus
-            />
-            <select
-              value={newRatio}
-              onChange={(e) => setNewRatio(e.target.value as any)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100"
-            >
+            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="输入视频工程标题..." className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" autoFocus />
+            <select value={newRatio} onChange={(e) => setNewRatio(e.target.value as any)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
               <option value="16:9">16:9 横屏 (1920×1080)</option>
               <option value="9:16">9:16 竖屏 (1080×1920)</option>
+              <option value="4:3">4:3 传统 (1440×1080)</option>
             </select>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setNewProjModal(false)} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-300">
-                取消
-              </button>
-              <button onClick={createProject} className="px-3 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-xs text-white">
-                创建
-              </button>
+              <button onClick={() => setNewProjModal(false)} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-300">取消</button>
+              <button onClick={createProject} className="px-3 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-xs text-white">创建</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 导入 SRT / 从文案提取工坊导入弹窗 */}
+      {/* 导入 SRT 弹窗 */}
       {srtModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="w-[540px] bg-[#0f172a] border border-slate-700 rounded-xl p-4 space-y-3">
             <div className="text-sm font-bold text-slate-100">导入 SRT 字幕（A01）</div>
             <div className="space-y-1">
               <div className="text-[11px] text-slate-400">方式一：直接从「文案提取工坊」已有素材导入真实时间码</div>
-              <select
-                value={selectedContentId}
-                onChange={(e) => setSelectedContentId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100"
-              >
+              <select value={selectedContentId} onChange={(e) => setSelectedContentId(e.target.value ? Number(e.target.value) : '')} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100">
                 <option value="">-- 选择已提取文案的素材 --</option>
-                {contents.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    #{c.id} [{c.platform}] {c.title?.slice(0, 48)}
-                  </option>
-                ))}
+                {contents.map((c) => <option key={c.id} value={c.id}>#{c.id} [{c.platform}] {c.title?.slice(0, 48)}</option>)}
               </select>
             </div>
             <div className="space-y-1">
               <div className="text-[11px] text-slate-400">方式二：粘贴中英文 SRT 字幕全文（优先于方式一）</div>
-              <textarea
-                value={srtInput}
-                onChange={(e) => setSrtInput(e.target.value)}
-                rows={7}
-                placeholder={'1\n00:00:00,000 --> 00:00:03,500\n今天我们用真实数据拆解一个关键现象\n\n2\n00:00:03,600 --> 00:00:07,200\n数据显示平均播放倍数达到 12.4x'}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs font-mono-num text-slate-200"
-              />
+              <textarea value={srtInput} onChange={(e) => setSrtInput(e.target.value)} rows={7} placeholder={'1\n00:00:00,000 --> 00:00:03,500\n今天我们用真实数据拆解一个关键现象'} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs font-mono-num text-slate-200" />
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setSrtModal(false)} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-300">
-                取消
-              </button>
+              <button onClick={() => setSrtModal(false)} className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-300">取消</button>
               <button onClick={handleImportSrt} disabled={busy === 'srt'} className="px-3 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-xs text-white">
                 {busy === 'srt' ? '解析中...' : '确认导入'}
               </button>

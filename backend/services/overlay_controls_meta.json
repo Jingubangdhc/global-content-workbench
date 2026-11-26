@@ -1,0 +1,872 @@
+{
+  "blur-text": {
+    "controls": [
+      {
+        "key": "text",
+        "label": "词块(| 分隔,*关键词*)",
+        "type": "text"
+      },
+      {
+        "key": "staggerMs",
+        "label": "每块间隔",
+        "type": "range",
+        "min": 150.0,
+        "max": 1200.0,
+        "step": 30.0
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "caption-track": {
+    "controls": [
+      {
+        "key": "lines",
+        "label": "字幕表(起始|结束|中文|英文,一行一条)",
+        "type": "textarea"
+      },
+      {
+        "key": "font",
+        "label": "字幕字体(assets/fonts 家族名,空=跟全局)",
+        "type": "text"
+      },
+      {
+        "key": "showEn",
+        "label": "英文小字行",
+        "type": "toggle"
+      },
+      {
+        "key": "strokeOn",
+        "label": "描边(开/关)",
+        "type": "toggle"
+      },
+      {
+        "key": "strokeW",
+        "label": "描边宽度（描边打开时生效）",
+        "type": "range",
+        "min": 1.0,
+        "max": 8.0,
+        "step": 0.5
+      },
+      {
+        "key": "strokeColor",
+        "label": "描边颜色(取色器带吸管)（描边打开时生效）",
+        "type": "color"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "chapter-bar": {
+    "controls": [
+      {
+        "key": "chapters",
+        "label": "章节表(名称 起始秒,| 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "showProgress",
+        "label": "显示进度",
+        "type": "toggle"
+      },
+      {
+        "key": "progMode",
+        "label": "进度形态",
+        "type": "select"
+      },
+      {
+        "key": "progAccent",
+        "label": "进度色(默认跟随强调色)",
+        "type": "select"
+      },
+      {
+        "key": "progAlpha",
+        "label": "进度色透明度",
+        "type": "range",
+        "min": 0.1,
+        "max": 1.0,
+        "step": 0.05
+      },
+      {
+        "key": "hideAt",
+        "label": "隐藏时段(绝对秒,如 119.11-139.064;多段用 | 分隔)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "checklist": {
+    "controls": [
+      {
+        "key": "stepMs",
+        "label": "每条间隔(卡点用)",
+        "type": "range",
+        "min": 100.0,
+        "max": 8000.0,
+        "step": 100.0
+      },
+      {
+        "key": "title",
+        "label": "小标题",
+        "type": "text"
+      },
+      {
+        "key": "items",
+        "label": "步骤(用 | 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "checked",
+        "label": "已完成到第几步",
+        "type": "range",
+        "min": 0.0,
+        "max": 8.0,
+        "step": 1.0
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "entity-chips": {
+    "controls": [
+      {
+        "key": "chips",
+        "label": "名牌(一行一块:light/dark|名称|身份或EN,最多 3 块)",
+        "type": "textarea"
+      },
+      {
+        "key": "note",
+        "label": "侧注(上行|下行,写代码/头衔类小字)",
+        "type": "text"
+      },
+      {
+        "key": "stepMs",
+        "label": "逐块滑入间隔",
+        "type": "range",
+        "min": 0.0,
+        "max": 1500.0,
+        "step": 100.0
+      },
+      {
+        "key": "vsText",
+        "label": "两块之间的圆徽章字(精修版,留空不显示)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "focus-card": {
+    "controls": [
+      {
+        "key": "bg",
+        "label": "底色",
+        "type": "select"
+      },
+      {
+        "key": "bgLightness",
+        "label": "主题背景深浅(0 深 / 100 浅;浅底请配深字)（背景选主题色时生效）",
+        "type": "range",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0
+      },
+      {
+        "key": "items",
+        "label": "要点(| 分隔,空 = 留白)",
+        "type": "text"
+      },
+      {
+        "key": "camSrc",
+        "label": "口播视频(烤进导出)",
+        "type": "text"
+      },
+      {
+        "key": "stepMs",
+        "label": "每条间隔(卡点用)",
+        "type": "range",
+        "min": 200.0,
+        "max": 8000.0,
+        "step": 100.0
+      },
+      {
+        "key": "showRing",
+        "label": "显示口播落位框",
+        "type": "toggle"
+      },
+      {
+        "key": "camDX",
+        "label": "口播框水平移动",
+        "type": "range",
+        "min": -1100.0,
+        "max": 1100.0,
+        "step": 10.0
+      },
+      {
+        "key": "camDY",
+        "label": "口播框垂直移动",
+        "type": "range",
+        "min": -400.0,
+        "max": 600.0,
+        "step": 10.0
+      },
+      {
+        "key": "camW",
+        "label": "口播框宽",
+        "type": "range",
+        "min": 300.0,
+        "max": 1200.0,
+        "step": 10.0
+      },
+      {
+        "key": "camH",
+        "label": "口播框高",
+        "type": "range",
+        "min": 300.0,
+        "max": 1000.0,
+        "step": 10.0
+      },
+      {
+        "key": "camSize",
+        "label": "口播框大小(精修版生效)",
+        "type": "range",
+        "min": 60.0,
+        "max": 160.0,
+        "step": 1.0
+      },
+      {
+        "key": "eyebrow",
+        "label": "眉题(精修版,留空不显示)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "side"
+  },
+  "growth-curve": {
+    "controls": [
+      {
+        "key": "kicker",
+        "label": "顶部 kicker(英文等宽)",
+        "type": "text"
+      },
+      {
+        "key": "kickerZh",
+        "label": "kicker 中文小注",
+        "type": "text"
+      },
+      {
+        "key": "points",
+        "label": "数据点(标签 数值,| 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "unit",
+        "label": "峰值单位(张/条/万)",
+        "type": "text"
+      },
+      {
+        "key": "drawMs",
+        "label": "曲线画完时长(卡点用)",
+        "type": "range",
+        "min": 600.0,
+        "max": 5000.0,
+        "step": 100.0
+      },
+      {
+        "key": "caption",
+        "label": "右下小注(数据口径/出处)",
+        "type": "text"
+      },
+      {
+        "key": "focus",
+        "label": "大字标哪个点(精修版)",
+        "type": "select"
+      },
+      {
+        "key": "delta",
+        "label": "大字旁显示首尾倍数(精修版)",
+        "type": "toggle"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "donut-split": {
+    "controls": [
+      {
+        "key": "kickerEn",
+        "label": "英文小标",
+        "type": "text"
+      },
+      {
+        "key": "kickerZh",
+        "label": "中文小标",
+        "type": "text"
+      },
+      {
+        "key": "title",
+        "label": "图表标题",
+        "type": "text"
+      },
+      {
+        "key": "items",
+        "label": "占比项(名称 数值,| 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text"
+      },
+      {
+        "key": "centerLabel",
+        "label": "圆心文字",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "growth-bars": {
+    "controls": [
+      {
+        "key": "title",
+        "label": "标题",
+        "type": "text"
+      },
+      {
+        "key": "note",
+        "label": "副标题说明",
+        "type": "text"
+      },
+      {
+        "key": "aLabel",
+        "label": "对比A标签",
+        "type": "text"
+      },
+      {
+        "key": "aValue",
+        "label": "对比A数值",
+        "type": "number"
+      },
+      {
+        "key": "bLabel",
+        "label": "对比B标签",
+        "type": "text"
+      },
+      {
+        "key": "bValue",
+        "label": "对比B数值",
+        "type": "number"
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text"
+      },
+      {
+        "key": "sticker",
+        "label": "角标文字",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "radar-profile": {
+    "controls": [
+      {
+        "key": "kickerEn",
+        "label": "英文小标",
+        "type": "text"
+      },
+      {
+        "key": "kickerZh",
+        "label": "中文小标",
+        "type": "text"
+      },
+      {
+        "key": "title",
+        "label": "标题",
+        "type": "text"
+      },
+      {
+        "key": "axes",
+        "label": "维度轴(| 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "nameA",
+        "label": "对象A名称",
+        "type": "text"
+      },
+      {
+        "key": "valuesA",
+        "label": "对象A分值(, 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "nameB",
+        "label": "对象B名称",
+        "type": "text"
+      },
+      {
+        "key": "valuesB",
+        "label": "对象B分值(, 分隔)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "waffle-fill": {
+    "controls": [
+      {
+        "key": "kickerEn",
+        "label": "英文小标",
+        "type": "text"
+      },
+      {
+        "key": "kickerZh",
+        "label": "中文小标",
+        "type": "text"
+      },
+      {
+        "key": "title",
+        "label": "标题",
+        "type": "text"
+      },
+      {
+        "key": "items",
+        "label": "占比项(名称 百分比,| 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "waterfall-bridge": {
+    "controls": [
+      {
+        "key": "kickerEn",
+        "label": "英文小标",
+        "type": "text"
+      },
+      {
+        "key": "kickerZh",
+        "label": "中文小标",
+        "type": "text"
+      },
+      {
+        "key": "title",
+        "label": "标题",
+        "type": "text"
+      },
+      {
+        "key": "start",
+        "label": "起点数值",
+        "type": "number"
+      },
+      {
+        "key": "steps",
+        "label": "增减步骤(名称 数值,| 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "endLabel",
+        "label": "终点标签",
+        "type": "text"
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "odometer": {
+    "controls": [
+      {
+        "key": "kicker",
+        "label": "小标签(可空)",
+        "type": "text"
+      },
+      {
+        "key": "value",
+        "label": "数值(整数)",
+        "type": "range",
+        "min": 0.0,
+        "max": 99999.0,
+        "step": 1.0
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text"
+      },
+      {
+        "key": "label",
+        "label": "说明(可空)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "pin-board": {
+    "controls": [
+      {
+        "key": "title",
+        "label": "章节标题(可空)",
+        "type": "text"
+      },
+      {
+        "key": "subtitle",
+        "label": "强调副题(可空)",
+        "type": "text"
+      },
+      {
+        "key": "items",
+        "label": "要点(| 分隔,逐条落钉)",
+        "type": "text"
+      },
+      {
+        "key": "times",
+        "label": "每条落钉秒(| 分隔,踩台词开口;空 = 按下面匀速落)",
+        "type": "text"
+      },
+      {
+        "key": "stepMs",
+        "label": "每条落钉间隔(没填 times 时用)",
+        "type": "range",
+        "min": 1000.0,
+        "max": 15000.0,
+        "step": 250.0
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "punch-pill": {
+    "controls": [
+      {
+        "key": "text",
+        "label": "金句文字",
+        "type": "text"
+      },
+      {
+        "key": "icon",
+        "label": "圆章图标(emoji 或一两个字,空=对话气泡)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "rank-bars": {
+    "controls": [
+      {
+        "key": "title",
+        "label": "小标题",
+        "type": "text"
+      },
+      {
+        "key": "rows",
+        "label": "数据(名称,数值 用 | 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "suffix",
+        "label": "后缀单位",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "ring-metric": {
+    "controls": [
+      {
+        "key": "kicker",
+        "label": "小标签",
+        "type": "text"
+      },
+      {
+        "key": "value",
+        "label": "数值",
+        "type": "range",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.1
+      },
+      {
+        "key": "max",
+        "label": "满值(算比例)",
+        "type": "range",
+        "min": 1.0,
+        "max": 1000.0,
+        "step": 1.0
+      },
+      {
+        "key": "decimals",
+        "label": "小数位",
+        "type": "range",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text"
+      },
+      {
+        "key": "label",
+        "label": "说明文字",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "stat-proof": {
+    "controls": [
+      {
+        "key": "kicker",
+        "label": "顶部 kicker(英文等宽)",
+        "type": "text"
+      },
+      {
+        "key": "kickerZh",
+        "label": "kicker 中文小注",
+        "type": "text"
+      },
+      {
+        "key": "value",
+        "label": "目标数字(可带小数)",
+        "type": "text"
+      },
+      {
+        "key": "prefix",
+        "label": "数字前缀(+/¥)",
+        "type": "text"
+      },
+      {
+        "key": "suffix",
+        "label": "数字后缀(+/%)",
+        "type": "text"
+      },
+      {
+        "key": "footEn",
+        "label": "注脚(英文等宽)",
+        "type": "text"
+      },
+      {
+        "key": "footZh",
+        "label": "注脚(中文)",
+        "type": "text"
+      },
+      {
+        "key": "countMs",
+        "label": "计数时长(卡点用)",
+        "type": "range",
+        "min": 400.0,
+        "max": 5000.0,
+        "step": 100.0
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "step-timeline": {
+    "controls": [
+      {
+        "key": "title",
+        "label": "标题(*关键词*高亮)",
+        "type": "text"
+      },
+      {
+        "key": "steps",
+        "label": "章节(用 | 分隔)",
+        "type": "text"
+      },
+      {
+        "key": "revealed",
+        "label": "已讲到第几章",
+        "type": "range",
+        "min": 0.0,
+        "max": 6.0,
+        "step": 1.0
+      },
+      {
+        "key": "tagZh",
+        "label": "眉标小字(精修版,可空)",
+        "type": "text"
+      },
+      {
+        "key": "nowZh",
+        "label": "当前章标签(精修版,可空)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "term-card": {
+    "controls": [
+      {
+        "key": "en",
+        "label": "英文/拼音(可空)",
+        "type": "text"
+      },
+      {
+        "key": "term",
+        "label": "术语",
+        "type": "text"
+      },
+      {
+        "key": "def",
+        "label": "一句话定义",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "terminal-3d": {
+    "controls": [
+      {
+        "key": "file",
+        "label": "标题栏文件名",
+        "type": "text"
+      },
+      {
+        "key": "lines",
+        "label": "命令行(用 | 分隔;$提示符 -参数 \\",
+        "type": "text"
+      },
+      {
+        "key": "cps",
+        "label": "打字速度(字/秒)",
+        "type": "range",
+        "min": 8.0,
+        "max": 60.0,
+        "step": 2.0
+      },
+      {
+        "key": "lineTimes",
+        "label": "逐行开打秒(|分隔,数量须与行数相同;空=连续打字)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "type-shift": {
+    "controls": [
+      {
+        "key": "lines",
+        "label": "行(| 分隔;*开头=大标,—开头=小字)",
+        "type": "text"
+      },
+      {
+        "key": "shiftAtMs",
+        "label": "何时重排",
+        "type": "range",
+        "min": 800.0,
+        "max": 4000.0,
+        "step": 100.0
+      },
+      {
+        "key": "draftTag",
+        "label": "草稿角标(精修版,留空不显示)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "ui-callout": {
+    "controls": [
+      {
+        "key": "label",
+        "label": "标签文字",
+        "type": "text"
+      },
+      {
+        "key": "ringW",
+        "label": "圈宽",
+        "type": "range",
+        "min": 80.0,
+        "max": 800.0,
+        "step": 10.0
+      },
+      {
+        "key": "ringH",
+        "label": "圈高",
+        "type": "range",
+        "min": 60.0,
+        "max": 600.0,
+        "step": 10.0
+      },
+      {
+        "key": "stepTag",
+        "label": "步骤眉标(精修版)（标签以 ①/1. 开头时生效）",
+        "type": "select"
+      },
+      {
+        "key": "hlWords",
+        "label": "高亮词,用|分隔,留空=自动高亮英文(精修版)",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "side"
+  },
+  "versus-card": {
+    "controls": [
+      {
+        "key": "aKicker",
+        "label": "左卡小标",
+        "type": "text"
+      },
+      {
+        "key": "aTitle",
+        "label": "左卡标题",
+        "type": "text"
+      },
+      {
+        "key": "aSub",
+        "label": "左卡说明",
+        "type": "text"
+      },
+      {
+        "key": "aAccent",
+        "label": "强调色",
+        "type": "select"
+      },
+      {
+        "key": "bKicker",
+        "label": "右卡小标",
+        "type": "text"
+      },
+      {
+        "key": "bTitle",
+        "label": "右卡标题",
+        "type": "text"
+      },
+      {
+        "key": "bSub",
+        "label": "右卡说明",
+        "type": "text"
+      },
+      {
+        "key": "winner",
+        "label": "强调哪边",
+        "type": "select"
+      }
+    ],
+    "layout_mode": "position"
+  },
+  "quote-lockup": {
+    "controls": [
+      {
+        "key": "quote",
+        "label": "金句(用 | 分行)",
+        "type": "text"
+      },
+      {
+        "key": "author",
+        "label": "署名",
+        "type": "text"
+      }
+    ],
+    "layout_mode": "side"
+  }
+}

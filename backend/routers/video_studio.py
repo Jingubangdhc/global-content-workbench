@@ -45,16 +45,20 @@ def _audit(conn, event_type: str, entity_type: str, entity_id: str, status: str,
 
 @router.get("/capabilities")
 def api_video_capabilities():
-    """返回独立 Overlay Studio 引擎健康状态、25 张动效卡目录、15 个默认音效授权清单。"""
+    """返回独立 Overlay Studio 引擎健康状态、25 张动效卡完整原生控件目录、15 个默认音效授权清单。"""
     health = check_overlay_engine_health()
     conn = get_conn()
     custom_sfx = [dict(r) for r in conn.execute("SELECT * FROM video_custom_sfx ORDER BY id DESC").fetchall()]
     conn.close()
     thumbs_dir = VIDEO_STORAGE_DIR / "effect_thumbs"
+    meta_file = Path(__file__).resolve().parent.parent / "services" / "overlay_controls_meta.json"
+    controls_meta = json.loads(meta_file.read_text(encoding="utf-8")) if meta_file.exists() else {}
     effects_with_thumb = [
         {
             **e,
             "thumb_url": f"/api/video/thumbs/{e['id']}.png" if (thumbs_dir / f"{e['id']}.png").exists() else None,
+            "controls": (controls_meta.get(e["id"]) or {}).get("controls", []),
+            "layout_mode": (controls_meta.get(e["id"]) or {}).get("layout_mode", "position"),
         }
         for e in EFFECT_CATALOG
     ]
@@ -541,6 +545,7 @@ class RenderJobCreate(BaseModel):
     video_project_id: int
     mode: str = "timeline"  # timeline / single
     effect_id: Optional[str] = None
+    single_params: Optional[dict[str, Any]] = None
     include_webm: bool = True
     fps: float = 30
     duration_sec: Optional[float] = None
@@ -625,6 +630,7 @@ def api_create_render_job(body: RenderJobCreate):
         on_progress=_on_progress,
         on_complete=_on_complete,
         on_fail=_on_fail,
+        single_params=body.single_params,
     )
 
     return {"ok": True, "id": jid, "job_uid": job_uid, "state": "running"}

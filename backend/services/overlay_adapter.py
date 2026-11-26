@@ -555,6 +555,7 @@ def execute_overlay_render_job(
     on_progress,
     on_complete,
     on_fail,
+    single_params: Optional[dict[str, Any]] = None,
 ) -> None:
     """A12/A15：后台线程调用独立 Overlay Studio 的 scripts/export-frames.mjs 执行真实透明导出。"""
     def _worker():
@@ -574,11 +575,13 @@ def execute_overlay_render_job(
                 "base": OVERLAY_ENGINE_BASE_URL,
                 "outputs": outputs,
                 "ratio": ratio_code,
+                "scale": float(doc.get("fxScale") or 1),
+                "speed": float(doc.get("animSpeed") or 1),
                 "outputDir": str(job_dir),
             }
             if mode == "single":
                 payload["effectId"] = effect_id or "quote-lockup"
-                payload["params"] = EFFECT_BY_ID.get(payload["effectId"], {}).get("defaults", {})
+                payload["params"] = single_params if isinstance(single_params, dict) else {}
             else:
                 doc_copy = {**doc, "ratio": ratio_code}
                 payload["doc"] = doc_copy
