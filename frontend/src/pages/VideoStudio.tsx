@@ -208,9 +208,13 @@ export default function VideoStudio({ projectId }: Props) {
   const [replayNonce, setReplayNonce] = useState(0);
 
   const [currentTime, setCurrentTime] = useState(0);
+  const currentTimeRef = useRef(0);
   const [playing, setPlaying] = useState(false);
   const [viewMode, setViewMode] = useState<'editor' | 'library' | 'native'>('editor');
   const [stageScale, setStageScale] = useState(0.35);
+  const [dragDelta, setDragDelta] = useState<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ clientX: number; clientY: number; origX: number; origY: number } | null>(null);
+  const [debouncedDoc, setDebouncedDoc] = useState<OverlayDoc>(doc);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoUploadInputRef = useRef<HTMLInputElement | null>(null);
   const stageBoxRef = useRef<HTMLDivElement | null>(null);
@@ -324,18 +328,48 @@ export default function VideoStudio({ projectId }: Props) {
     return () => clearInterval(timer);
   }, [activeJobUid]);
 
-  // 播放时钟同步
+  // 保持 currentTimeRef 同步，并对 doc 做 180ms 防抖避免连续拖滑杆时频繁重载 iframe
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedDoc(doc), 180);
+    return () => window.clearTimeout(t);
+  }, [doc]);
+
+  // 60fps requestAnimationFrame 丝滑播放引擎（直接驱动 iframe 内时钟，UI 进度条每 80ms 节流刷新一次）
   const totalDur = Math.max(10, (activeProj?.duration_ms || 15000) / 1000, ...doc.cards.map((c) => c.end));
   useEffect(() => {
     if (!playing) return;
-    const timer = setInterval(() => {
+    let rafId = 0;
+    let lastTs = performance.now();
+    let lastUiSync = lastTs;
+    let t = currentTimeRef.current;
+
+    const step = (now: number) => {
+      const dt = Math.min(0.1, (now - lastTs) / 1000);
+      lastTs = now;
       if (videoRef.current && !videoRef.current.paused) {
-        setCurrentTime(videoRef.current.currentTime);
+        t = videoRef.current.currentTime;
       } else {
-        setCurrentTime((t) => (t + 0.1 >= totalDur ? 0 : Number((t + 0.1).toFixed(2))));
+        t = t + dt >= totalDur ? 0 : t + dt;
       }
-    }, 100);
-    return () => clearInterval(timer);
+      currentTimeRef.current = t;
+      const win = overlayIframeRef.current?.contentWindow as any;
+      if (win && typeof win.__setExportT === 'function') {
+        try {
+          win.__setExportT(t);
+        } catch {}
+      }
+      if (now - lastUiSync >= 80) {
+        lastUiSync = now;
+        setCurrentTime(Number(t.toFixed(2)));
+      }
+      rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
   }, [playing, totalDur]);
 
   const mutateDoc = (next: OverlayDoc) => {
@@ -714,17 +748,17 @@ export default function VideoStudio({ projectId }: Props) {
   }, [stageW, stageH, viewMode]);
 
   const overlayIframeSrc = useMemo(() => {
-    if (!engine?.reachable || doc.cards.length === 0) return '';
+    if (!engine?.reachable || debouncedDoc.cards.length === 0) return '';
     const ratioCode = isVertical ? 'v' : is43 ? '4:3' : 'h';
     const payload: Record<string, any> = {
       version: 1,
       ratio: ratioCode,
-      theme: doc.theme || 'dark',
-      layerOrder: doc.layerOrder,
-      glow: !!doc.glow,
-      breath: !!doc.breath,
-      inkColor: doc.inkColor || undefined,
-      cards: doc.cards.map((c) => ({
+      theme: debouncedDoc.theme || 'dark',
+      layerOrder: debouncedDoc.layerOrder,
+      glow: !!debouncedDoc.glow,
+      breath: !!debouncedDoc.breath,
+      inkColor: debouncedDoc.inkColor || undefined,
+      cards: debouncedDoc.cards.map((c) => ({
         id: c.id,
         kind: c.kind,
         start: c.start,
@@ -733,34 +767,38 @@ export default function VideoStudio({ projectId }: Props) {
       })),
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
-    const fx = Number(doc.fxScale || 1).toFixed(2);
-    const spd = Number(doc.animSpeed || 1).toFixed(2);
+    const fx = Number(debouncedDoc.fxScale || 1).toFixed(2);
+    const spd = Number(debouncedDoc.animSpeed || 1).toFixed(2);
     return `/overlay-engine/?export=1&ratio=${ratioCode}&fx=${fx}&spd=${spd}&r=${replayNonce}&doc=${encoded}`;
-  }, [engine?.reachable, isVertical, is43, doc, replayNonce]);
+  }, [engine?.reachable, isVertical, is43, debouncedDoc, replayNonce]);
 
   useEffect(() => {
     return () => {
-      if (hoverTimerRef.current) window.clearInterval(hoverTimerRef.current);
+      if (hoverTimerRef.current) window.cancelAnimationFrame(hoverTimerRef.current);
       if (mainWaitTimerRef.current) window.clearInterval(mainWaitTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (!hoverEffect && hoverTimerRef.current) {
-      window.clearInterval(hoverTimerRef.current);
+      window.cancelAnimationFrame(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
   }, [hoverEffect]);
 
   const bootHoverPreview = () => {
     if (hoverTimerRef.current) {
-      window.clearInterval(hoverTimerRef.current);
+      window.cancelAnimationFrame(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
     let waited = 0;
     let t = 0.2;
     let started = false;
-    hoverTimerRef.current = window.setInterval(() => {
+    let lastTs = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - lastTs) / 1000);
+      lastTs = now;
       const win = hoverIframeRef.current?.contentWindow as any;
       if (!win) return;
       if (!started) {
@@ -771,24 +809,20 @@ export default function VideoStudio({ projectId }: Props) {
             started = true;
           } catch {}
         } else {
-          waited += 80;
-          if (waited > 6000 && hoverTimerRef.current) {
-            window.clearInterval(hoverTimerRef.current);
-            hoverTimerRef.current = null;
-          }
+          waited += dt * 1000;
+          if (waited > 6000) return;
         }
-        return;
-      }
-      try {
-        t = t >= 4.2 ? 0.1 : Number((t + 0.1).toFixed(2));
-        win.__setExportT(t);
-      } catch {
-        if (hoverTimerRef.current) {
-          window.clearInterval(hoverTimerRef.current);
-          hoverTimerRef.current = null;
+      } else {
+        try {
+          t = t >= 4.2 ? 0.1 : t + dt;
+          win.__setExportT(t);
+        } catch {
+          return;
         }
       }
-    }, 80);
+      hoverTimerRef.current = window.requestAnimationFrame(tick);
+    };
+    hoverTimerRef.current = window.requestAnimationFrame(tick);
   };
 
   const bootMainOverlay = () => {
@@ -1330,9 +1364,44 @@ export default function VideoStudio({ projectId }: Props) {
                     </div>
                   )}
 
-                  {/* 同源真实 Overlay Studio 透明动效渲染层 */}
+                  {/* 同源真实 Overlay Studio 透明动效渲染层（支持画布内直接鼠标拖拽挪动选中卡片） */}
                   {overlayIframeSrc && (
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+                    <div
+                      className={`absolute inset-0 overflow-hidden flex items-center justify-center ${
+                        selectedCard ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
+                      }`}
+                      onPointerDown={(e) => {
+                        if (!selectedCard) return;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        dragStartRef.current = {
+                          clientX: e.clientX,
+                          clientY: e.clientY,
+                          origX: Number(selectedCard.params?.offsetX || 0),
+                          origY: Number(selectedCard.params?.offsetY || 0),
+                        };
+                        setDragDelta({ x: 0, y: 0 });
+                      }}
+                      onPointerMove={(e) => {
+                        if (!dragStartRef.current) return;
+                        const dx = e.clientX - dragStartRef.current.clientX;
+                        const dy = e.clientY - dragStartRef.current.clientY;
+                        setDragDelta({ x: dx, y: dy });
+                      }}
+                      onPointerUp={(e) => {
+                        if (!dragStartRef.current || !selectedCard) return;
+                        const dxStage = Math.round((e.clientX - dragStartRef.current.clientX) / Math.max(0.1, stageScale));
+                        const dyStage = Math.round((e.clientY - dragStartRef.current.clientY) / Math.max(0.1, stageScale));
+                        const nextX = Math.max(-600, Math.min(600, dragStartRef.current.origX + dxStage));
+                        const nextY = Math.max(-450, Math.min(450, dragStartRef.current.origY + dyStage));
+                        dragStartRef.current = null;
+                        setDragDelta(null);
+                        if (dxStage !== 0 || dyStage !== 0) {
+                          updateSelectedCard({
+                            params: { ...(selectedCard.params || {}), offsetX: nextX, offsetY: nextY },
+                          });
+                        }
+                      }}
+                    >
                       <iframe
                         key={overlayIframeSrc}
                         ref={overlayIframeRef}
@@ -1343,13 +1412,20 @@ export default function VideoStudio({ projectId }: Props) {
                         style={{
                           width: `${stageW}px`,
                           height: `${stageH}px`,
-                          transform: `scale(${stageScale})`,
+                          transform: `translate(${dragDelta?.x || 0}px, ${dragDelta?.y || 0}px) scale(${stageScale})`,
                           transformOrigin: 'center center',
                           border: 0,
                           background: 'transparent',
                           flexShrink: 0,
+                          pointerEvents: 'none',
                         }}
                       />
+                      {dragDelta && dragStartRef.current && (
+                        <div className="absolute top-2 left-2 px-2 py-1 rounded bg-black/80 border border-cyan-500/50 text-[11px] font-mono-num text-cyan-300 pointer-events-none">
+                          X: {dragStartRef.current.origX + Math.round(dragDelta.x / Math.max(0.1, stageScale))}px · Y:{' '}
+                          {dragStartRef.current.origY + Math.round(dragDelta.y / Math.max(0.1, stageScale))}px
+                        </div>
+                      )}
                     </div>
                   )}
 
