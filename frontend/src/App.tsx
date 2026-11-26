@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Calculator,
+  Clapperboard,
   Compass,
   DollarSign,
   FileText,
@@ -25,8 +26,9 @@ import ResourceDirectory from './pages/ResourceDirectory';
 import RevenueRadar from './pages/RevenueRadar';
 import SearchHub from './pages/SearchHub';
 import TranscriptStudio from './pages/TranscriptStudio';
+import VideoStudio from './pages/VideoStudio';
 
-type PageKey = 'search' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'revenue' | 'directory';
+type PageKey = 'search' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'video' | 'revenue' | 'directory';
 
 export default function App() {
   const [boot, setBoot] = useState<any>(null);
@@ -96,6 +98,9 @@ export default function App() {
     { key: 'tracker', label: '爆款博主追踪', sub: '贴主页直看视频与倍数', icon: Flame },
     { key: 'contents', label: '素材与作者库', sub: '收录 + 变现指纹', icon: Inbox },
     { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 二创', icon: FileText },
+    ...(boot?.settings?.feature_video_studio !== '0'
+      ? [{ key: 'video' as PageKey, label: '智能视频制作', sub: '25卡动效 + 透明层导出', icon: Clapperboard }]
+      : []),
     { key: 'revenue', label: '赛道收益雷达', sub: '11大变现 + 决策卡', icon: DollarSign },
     { key: 'directory', label: '网址导航总库', sub: '166站全量筛选', icon: Compass },
   ];
@@ -279,6 +284,7 @@ export default function App() {
             templates={templates}
           />
         )}
+        {page === 'video' && <VideoStudio projectId={projectId} />}
         {page === 'revenue' && (
           <RevenueRadar initialXray={xrayTarget} onOpenCalc={() => setCalcOpen(true)} />
         )}

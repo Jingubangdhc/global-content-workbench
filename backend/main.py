@@ -30,6 +30,7 @@ from backend.config import TMP_AUDIO_DIR, get_env_config, save_env_keys
 from backend.db import get_conn, init_db, normalize_url
 from backend.exporters.export import build_docx_bytes, build_markdown, build_sop_excel_bytes
 from backend.extractors.analysis import fetch_youtube_heatmap_highlights, run_anchored_breakdown
+from backend.routers.video_studio import router as video_studio_router
 from backend.extractors.transcript import (
     _detect_whisper_device,
     extract_transcript_pipeline,
@@ -47,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(video_studio_router)
 
 
 @app.on_event("startup")

@@ -201,6 +201,106 @@ CREATE TABLE IF NOT EXISTS comments (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(content_id, platform_comment_id)
 );
+
+-- ==================== G1: 智能视频制作（A01–A16）增量表 ====================
+CREATE TABLE IF NOT EXISTS video_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    topic_id INTEGER,
+    content_id INTEGER REFERENCES contents(id) ON DELETE SET NULL,
+    transcript_id INTEGER REFERENCES transcripts(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    aspect_ratio TEXT DEFAULT '16:9',
+    fps REAL DEFAULT 30,
+    duration_ms INTEGER DEFAULT 0,
+    theme TEXT DEFAULT 'dark',
+    reference_video_path TEXT,
+    srt_text TEXT,
+    srt_json TEXT,
+    current_version_id INTEGER,
+    draft_overlay_json TEXT,
+    lint_summary_json TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS video_render_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_project_id INTEGER NOT NULL REFERENCES video_projects(id) ON DELETE CASCADE,
+    version_no INTEGER NOT NULL,
+    schema_version TEXT DEFAULT '1.0',
+    source_type TEXT DEFAULT 'manual_edit',
+    overlay_json TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(video_project_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS render_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_uid TEXT NOT NULL UNIQUE,
+    video_project_id INTEGER NOT NULL REFERENCES video_projects(id) ON DELETE CASCADE,
+    version_id INTEGER REFERENCES video_render_versions(id) ON DELETE SET NULL,
+    mode TEXT DEFAULT 'timeline',
+    effect_id TEXT,
+    format TEXT DEFAULT 'mov',
+    aspect_ratio TEXT DEFAULT '16:9',
+    fps REAL DEFAULT 30,
+    duration_sec REAL DEFAULT 6,
+    engine_version TEXT DEFAULT 'overlay-studio@1.4.0',
+    state TEXT DEFAULT 'queued',
+    progress INTEGER DEFAULT 0,
+    progress_message TEXT,
+    output_mov_path TEXT,
+    output_webm_path TEXT,
+    ffprobe_json TEXT,
+    error_message TEXT,
+    started_at TEXT,
+    ended_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS editor_feedback_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    video_project_id INTEGER REFERENCES video_projects(id) ON DELETE SET NULL,
+    original_version_id INTEGER,
+    edited_version_id INTEGER,
+    diff_json TEXT NOT NULL,
+    proposed_rule TEXT NOT NULL,
+    rule_category TEXT DEFAULT 'style',
+    status TEXT DEFAULT 'pending',
+    approved_by TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS video_custom_sfx (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    local_rel_path TEXT NOT NULL,
+    file_hash TEXT,
+    license_note TEXT NOT NULL,
+    source_note TEXT,
+    duration_ms INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS integration_audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    module TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    status TEXT,
+    summary TEXT,
+    payload_json TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -311,11 +411,27 @@ def init_db() -> dict:
     if "translated_zh" not in cm_cols:
         conn.execute("ALTER TABLE comments ADD COLUMN translated_zh TEXT")
 
-    # 默认设置
+    ma_cols = {r["name"] for r in conn.execute("PRAGMA table_info(media_assets)").fetchall()}
+    for col_name, col_type in [
+        ("project_id", "INTEGER"),
+        ("local_rel_path", "TEXT"),
+        ("file_hash", "TEXT"),
+        ("mime_type", "TEXT"),
+        ("duration_ms", "INTEGER"),
+        ("provenance_json", "TEXT"),
+    ]:
+        if col_name not in ma_cols:
+            conn.execute(f"ALTER TABLE media_assets ADD COLUMN {col_name} {col_type}")
+
+    # 默认设置（含 Feature Flags：默认关闭，经用户逐门批准后开启）
     defaults = {
         "cookie_browser": "none",  # none / chrome / edge
         "low_follower_threshold": "50000",
         "theme": "terminal_dark",
+        "feature_video_studio": "1",
+        "feature_publish_hub": "0",
+        "feature_performance_hub": "0",
+        "feature_obsidian_check": "0",
     }
     for k, v in defaults.items():
         conn.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES (?, ?)", (k, v))

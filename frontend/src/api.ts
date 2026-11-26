@@ -244,6 +244,50 @@ export const api = {
   translateComments: (cid: number) => req(`/api/comments/${cid}/translate`, { method: 'POST' }),
   togglePainComment: (commentId: number, val: number) =>
     req(`/api/comments/${commentId}/pain?is_pain_point=${val}`, { method: 'PATCH' }),
+
+  // G1 智能视频制作（A01–A16）
+  videoCapabilities: () => req('/api/video/capabilities'),
+  listVideoProjects: (projectId?: number) =>
+    req(`/api/video/projects${projectId ? `?project_id=${projectId}` : ''}`),
+  createVideoProject: (body: any) =>
+    req('/api/video/projects', { method: 'POST', body: JSON.stringify(body) }),
+  getVideoProject: (vid: number) => req(`/api/video/projects/${vid}`),
+  patchVideoProject: (vid: number, body: any) =>
+    req(`/api/video/projects/${vid}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delVideoProject: (vid: number) => req(`/api/video/projects/${vid}`, { method: 'DELETE' }),
+  importVideoSrt: (vid: number, body: { srt_text?: string; content_id?: number }) =>
+    req(`/api/video/projects/${vid}/import-srt`, { method: 'POST', body: JSON.stringify(body) }),
+  uploadReferenceVideo: async (vid: number, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`/api/video/projects/${vid}/upload-video`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  compileVideoOverlay: (vid: number, use_llm = true) =>
+    req(`/api/video/projects/${vid}/compile`, { method: 'POST', body: JSON.stringify({ use_llm }) }),
+  lintVideoOverlay: (vid: number, doc?: any) =>
+    req(`/api/video/projects/${vid}/lint`, { method: 'POST', body: JSON.stringify({ doc }) }),
+  saveVideoVersion: (vid: number, doc: any, note = '手动保存版本') =>
+    req(`/api/video/projects/${vid}/versions`, { method: 'PUT', body: JSON.stringify({ doc, note }) }),
+  restoreVideoVersion: (vid: number, verId: number) =>
+    req(`/api/video/projects/${vid}/versions/${verId}/restore`, { method: 'POST' }),
+  createVideoFeedback: (vid: number, body: any = {}) =>
+    req(`/api/video/projects/${vid}/feedback`, { method: 'POST', body: JSON.stringify(body) }),
+  listVideoFeedbackRules: (projectId?: number) =>
+    req(`/api/video/feedback-rules${projectId ? `?project_id=${projectId}` : ''}`),
+  patchVideoFeedbackRule: (rid: number, body: { status: string; proposed_rule?: string }) =>
+    req(`/api/video/feedback-rules/${rid}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  uploadCustomSfx: async (fd: FormData) => {
+    const res = await fetch('/api/video/sfx/upload', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  createRenderJob: (body: any) =>
+    req('/api/video/render-jobs', { method: 'POST', body: JSON.stringify(body) }),
+  getRenderJob: (jobUid: string) => req(`/api/video/render-jobs/${jobUid}`),
+  cancelRenderJob: (jobUid: string) =>
+    req(`/api/video/render-jobs/${jobUid}/cancel`, { method: 'POST' }),
 };
 
 export function fmtNum(n?: number | null): string {
