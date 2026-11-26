@@ -770,13 +770,20 @@ export default function VideoStudio({ projectId }: Props) {
       glow: !!debouncedDoc.glow,
       breath: !!debouncedDoc.breath,
       inkColor: debouncedDoc.inkColor || undefined,
-      cards: debouncedDoc.cards.map((c) => ({
-        id: c.id,
-        kind: c.kind,
-        start: c.start,
-        end: c.end,
-        params: c.params || {},
-      })),
+      cards: debouncedDoc.cards.map((c) => {
+        const cleanParams = { ...(c.params || {}) };
+        // 防御清洗：terminal-3d / type-shift 期望 lines 为字符串，避免数组触发 lines.split is not a function
+        if ((c.kind === 'terminal-3d' || c.kind === 'type-shift') && cleanParams.lines !== undefined && typeof cleanParams.lines !== 'string') {
+          delete cleanParams.lines;
+        }
+        return {
+          id: c.id,
+          kind: c.kind,
+          start: c.start,
+          end: c.end,
+          params: cleanParams,
+        };
+      }),
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
     const fx = Number(debouncedDoc.fxScale || 1).toFixed(2);
@@ -1708,12 +1715,19 @@ export default function VideoStudio({ projectId }: Props) {
                       </button>
                     </div>
 
-                    {/* 更换特效（保留时间与通用样式，25卡互换） */}
+                    {/* 更换特效（仅保留通用样式/节奏/布局字段，清除旧卡异构内容字段防止崩溃） */}
                     <label className="block space-y-1">
-                      <span className="text-[10px] text-slate-400">更换特效（保留时间和可复用样式）</span>
+                      <span className="text-[10px] text-slate-400">更换特效（保留时间与通用样式）</span>
                       <select
                         value={selectedCard.kind}
-                        onChange={(e) => updateSelectedCard({ kind: e.target.value })}
+                        onChange={(e) => {
+                          const keepKeys = ['theme', 'accent', 'glass', 'glassAlpha', 'shadow', 'scale', 'speed', 'side', 'position', 'offsetX', 'offsetY', 'sfx', 'dimAt', 'breath'];
+                          const nextParams: Record<string, any> = {};
+                          for (const k of keepKeys) {
+                            if (selectedCard.params?.[k] !== undefined) nextParams[k] = selectedCard.params[k];
+                          }
+                          updateSelectedCard({ kind: e.target.value, params: nextParams });
+                        }}
                         className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300"
                       >
                         {effects.map((eff) => (
