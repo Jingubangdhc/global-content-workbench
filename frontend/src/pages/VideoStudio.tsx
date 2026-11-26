@@ -70,7 +70,12 @@ export default function VideoStudio({ projectId }: Props) {
 
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [viewMode, setViewMode] = useState<'workbench' | 'native'>('workbench');
+  const [stageScale, setStageScale] = useState(0.35);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const stageBoxRef = useRef<HTMLDivElement | null>(null);
+  const overlayIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [iframeReady, setIframeReady] = useState(false);
 
   const [newProjModal, setNewProjModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -354,18 +359,69 @@ export default function VideoStudio({ projectId }: Props) {
 
   const addEffectCard = (eff: any) => {
     const start = Number(currentTime.toFixed(1));
-    const end = Number((start + 3.5).toFixed(1));
+    const end = Number((start + 4.0).toFixed(1));
     const cid = `card-${Date.now().toString(36).slice(-4)}`;
+    // 传空对象让上游 Overlay Studio 自动填充该卡完整官方默认参数，确保真实动效立即可见
     const newCard: OverlayCard = {
       id: cid,
       kind: eff.id,
       start,
       end,
-      params: { ...eff.defaults, sfx: 'pop' },
+      params: {},
     };
     mutateDoc({ ...doc, cards: [...doc.cards, newCard] });
     setSelectedCardId(cid);
+    setCurrentTime(Number((start + 0.5).toFixed(1)));
   };
+
+  // 自适应计算真实 1920x1080 / 1080x1920 透明渲染画布的缩放比例
+  const isVertical = activeProj?.aspect_ratio === '9:16';
+  const stageW = isVertical ? 1080 : 1920;
+  const stageH = isVertical ? 1920 : 1080;
+
+  useEffect(() => {
+    const el = stageBoxRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setStageScale(Math.min(rect.width / stageW, rect.height / stageH));
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [stageW, stageH, viewMode]);
+
+  // 构造同源真实渲染 iframe URL（仅包含已激活工程的当前编排 JSON）
+  const overlayIframeSrc = useMemo(() => {
+    if (!engine?.reachable || doc.cards.length === 0) return '';
+    const payload = {
+      version: 1,
+      ratio: isVertical ? 'v' : 'h',
+      theme: doc.theme || 'dark',
+      cards: doc.cards.map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        start: c.start,
+        end: c.end,
+        params: c.params || {},
+      })),
+    };
+    const encoded = encodeURIComponent(JSON.stringify(payload));
+    return `/overlay-engine/?export=1&ratio=${isVertical ? 'v' : 'h'}&doc=${encoded}`;
+  }, [engine?.reachable, isVertical, doc]);
+
+  // 当播放时间变化时，直接通过同源 iframe 调用 Overlay Studio 原生时间控制器 __setExportT
+  useEffect(() => {
+    const win = overlayIframeRef.current?.contentWindow as any;
+    if (iframeReady && win && typeof win.__setExportT === 'function') {
+      try {
+        win.__setExportT(currentTime);
+      } catch {}
+    }
+  }, [currentTime, iframeReady]);
 
   const updateSelectedCard = (patch: Partial<OverlayCard>) => {
     if (!selectedCard) return;
@@ -388,7 +444,6 @@ export default function VideoStudio({ projectId }: Props) {
   };
 
   const totalDur = Math.max(10, (activeProj?.duration_ms || 15000) / 1000, ...doc.cards.map((c) => c.end));
-  const visibleCards = doc.cards.filter((c) => currentTime >= c.start && currentTime <= c.end);
   const activeSubtitle = (doc.srt || []).find((s) => currentTime >= s.start && currentTime <= s.end);
   const engine = caps?.engine;
 
@@ -469,14 +524,30 @@ export default function VideoStudio({ projectId }: Props) {
             <Download className="w-3.5 h-3.5" /> 导出透明视频
           </button>
           {engine?.reachable && (
+            <div className="flex rounded-lg overflow-hidden border border-slate-700 text-[11px]">
+              <button
+                onClick={() => setViewMode('workbench')}
+                className={`px-2 py-1.5 ${viewMode === 'workbench' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+              >
+                工作台模式
+              </button>
+              <button
+                onClick={() => setViewMode('native')}
+                className={`px-2 py-1.5 ${viewMode === 'native' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+              >
+                原生 Overlay 编辑器
+              </button>
+            </div>
+          )}
+          {engine?.reachable && (
             <a
-              href={engine.loopback_url}
+              href="/overlay-engine/"
               target="_blank"
               rel="noopener noreferrer"
               className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-400 hover:text-cyan-300 flex items-center gap-1"
-              title="打开独立 Overlay Studio 原生预览器（保留原版权与授权声明）"
+              title="在新标签页打开独立 Overlay Studio 原生预览器（保留原版权与授权声明）"
             >
-              原引擎 <ExternalLink className="w-3 h-3" />
+              独立窗口 <ExternalLink className="w-3 h-3" />
             </a>
           )}
         </div>
@@ -488,7 +559,16 @@ export default function VideoStudio({ projectId }: Props) {
         </div>
       )}
 
-      {/* 三栏主工作区 */}
+      {/* 三栏主工作区 或 原生完整编辑器 */}
+      {viewMode === 'native' && engine?.reachable ? (
+        <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+          <iframe
+            src="/overlay-engine/"
+            title="Overlay Studio 原生完整编辑器"
+            className="w-full flex-1 border-0 bg-[#060a12]"
+          />
+        </div>
+      ) : (
       <div className="flex-1 flex gap-2.5 min-h-0 overflow-hidden">
         {/* 左栏：25 种动效模板库 */}
         <div className="w-64 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden">
@@ -586,10 +666,11 @@ export default function VideoStudio({ projectId }: Props) {
               </div>
             </div>
 
-            <div className="flex-1 flex items-center justify-center bg-[#060a12] rounded-lg border border-slate-800/80 relative overflow-hidden min-h-[180px]">
+            <div className="flex-1 flex items-center justify-center bg-[#060a12] rounded-lg border border-slate-800/80 relative overflow-hidden min-h-[220px]">
               <div
+                ref={stageBoxRef}
                 className={`relative bg-slate-950 border border-slate-700/80 overflow-hidden flex items-center justify-center ${
-                  activeProj?.aspect_ratio === '9:16' ? 'h-full aspect-[9/16]' : 'w-full max-w-[680px] aspect-video'
+                  isVertical ? 'h-full aspect-[9/16]' : 'w-full h-full max-w-[960px] aspect-video'
                 }`}
               >
                 {activeProj?.reference_video_path ? (
@@ -600,33 +681,59 @@ export default function VideoStudio({ projectId }: Props) {
                     onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                   />
                 ) : (
-                  <div className="text-center text-slate-500 text-xs space-y-1 p-4">
-                    <Film className="w-8 h-8 mx-auto text-slate-600" />
-                    <div>{activeProj ? '透明动效叠加层预览（可上传本地参考视频）' : '请先新建或选择一个视频工程'}</div>
+                  <div className="text-center text-slate-600 text-xs space-y-1 p-4 select-none">
+                    <Film className="w-7 h-7 mx-auto opacity-40" />
+                    <div>{doc.cards.length > 0 ? '' : activeProj ? '点击左侧 25 种动效卡即可实时渲染真实动画' : '请先新建或选择一个视频工程'}</div>
                   </div>
                 )}
 
-                {/* 当前时刻激活的动效卡实时叠加示意 */}
-                <div className="absolute inset-0 pointer-events-none p-3 flex flex-col justify-between">
-                  <div className="flex flex-wrap gap-1.5">
-                    {visibleCards.map((c) => (
-                      <div
-                        key={c.id}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-900/85 border border-cyan-400/50 backdrop-blur text-[11px] text-cyan-100 shadow-lg"
-                      >
-                        <span className="text-cyan-400 font-mono-num mr-1.5">[{c.kind}]</span>
-                        <span>
-                          {c.params?.quote || c.params?.text || c.params?.title || c.params?.label || c.params?.value || c.id}
-                        </span>
-                      </div>
-                    ))}
+                {/* 真正的 Overlay Studio 同源透明动效渲染层（非文字占位，零源码复制） */}
+                {overlayIframeSrc && (
+                  <div
+                    className="absolute inset-0 pointer-events-none overflow-hidden"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <iframe
+                      key={overlayIframeSrc}
+                      ref={overlayIframeRef}
+                      src={overlayIframeSrc}
+                      title="Overlay Studio 实时真动效画布"
+                      allowTransparency={true}
+                      onLoad={() => {
+                        const win = overlayIframeRef.current?.contentWindow as any;
+                        if (win) {
+                          setTimeout(() => {
+                            try {
+                              win.__startExport?.();
+                              win.__setExportT?.(currentTime);
+                              setIframeReady(true);
+                            } catch {}
+                          }, 80);
+                        }
+                      }}
+                      style={{
+                        width: `${stageW}px`,
+                        height: `${stageH}px`,
+                        transform: `scale(${stageScale})`,
+                        transformOrigin: 'center center',
+                        border: 0,
+                        background: 'transparent',
+                        flexShrink: 0,
+                      }}
+                    />
                   </div>
-                  {activeSubtitle && (
-                    <div className="mx-auto px-3 py-1 rounded bg-black/75 text-white text-xs text-center max-w-[90%]">
-                      {activeSubtitle.text}
-                    </div>
-                  )}
-                </div>
+                )}
+
+                {/* 字幕实时叠加 */}
+                {activeSubtitle && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded bg-black/75 text-white text-xs text-center max-w-[90%] pointer-events-none">
+                    {activeSubtitle.text}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1065,6 +1172,7 @@ export default function VideoStudio({ projectId }: Props) {
           </div>
         </div>
       </div>
+      )}
 
       {/* 新建视频工程弹窗 */}
       {newProjModal && (

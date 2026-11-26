@@ -9,6 +9,11 @@ export default defineConfig({
     proxy: {
       '/api': 'http://127.0.0.1:8000',
       '/quick-collect': 'http://127.0.0.1:8000',
+      '/overlay-engine': {
+        target: 'http://127.0.0.1:5177',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })

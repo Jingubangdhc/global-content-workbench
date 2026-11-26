@@ -22,7 +22,7 @@ from typing import Any, Optional
 from backend.config import DATA_DIR, get_env_config
 
 OVERLAY_ENGINE_ROOT = DATA_DIR.parent / "engines" / "overlay-studio" / "motion-playground"
-OVERLAY_ENGINE_BASE_URL = os.getenv("OVERLAY_ENGINE_URL", "http://127.0.0.1:5177")
+OVERLAY_ENGINE_BASE_URL = os.getenv("OVERLAY_ENGINE_URL", "http://127.0.0.1:5177/overlay-engine")
 VIDEO_STORAGE_DIR = DATA_DIR / "video_studio"
 VIDEO_EXPORTS_DIR = VIDEO_STORAGE_DIR / "exports"
 VIDEO_UPLOADS_DIR = VIDEO_STORAGE_DIR / "uploads"
