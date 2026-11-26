@@ -771,10 +771,28 @@ export default function VideoStudio({ projectId }: Props) {
       breath: !!debouncedDoc.breath,
       inkColor: debouncedDoc.inkColor || undefined,
       cards: debouncedDoc.cards.map((c) => {
-        const cleanParams = { ...(c.params || {}) };
-        // 防御清洗：terminal-3d / type-shift 期望 lines 为字符串，避免数组触发 lines.split is not a function
-        if ((c.kind === 'terminal-3d' || c.kind === 'type-shift') && cleanParams.lines !== undefined && typeof cleanParams.lines !== 'string') {
-          delete cleanParams.lines;
+        const cleanParams: Record<string, any> = { ...(c.params || {}) };
+        // 通用消毒：将上游期望 `|` / `\n` 字符串却误传为数组的字段安全转换，彻底杜绝 .split is not a function
+        const pipeFields = ['chips', 'items', 'steps', 'points', 'rows', 'chapters', 'axes', 'text', 'quote', 'title', 'label', 'def', 'note'];
+        for (const f of pipeFields) {
+          const v = cleanParams[f];
+          if (v === undefined || v === null) continue;
+          if (Array.isArray(v)) {
+            if (v.every((x) => typeof x === 'string' || typeof x === 'number')) {
+              cleanParams[f] = v.join('|');
+            } else {
+              delete cleanParams[f];
+            }
+          } else if (typeof v === 'object') {
+            delete cleanParams[f];
+          }
+        }
+        if (c.kind !== 'caption-track' && cleanParams.lines !== undefined && typeof cleanParams.lines !== 'string') {
+          if (Array.isArray(cleanParams.lines) && cleanParams.lines.every((x: any) => typeof x === 'string')) {
+            cleanParams.lines = cleanParams.lines.join('\n');
+          } else {
+            delete cleanParams.lines;
+          }
         }
         return {
           id: c.id,
@@ -1434,7 +1452,6 @@ export default function VideoStudio({ projectId }: Props) {
                         ref={overlayIframeRef}
                         src={overlayIframeSrc}
                         title="Overlay Studio 实时真动效画布"
-                        allowTransparency={true}
                         onLoad={bootMainOverlay}
                         style={{
                           width: `${stageW}px`,

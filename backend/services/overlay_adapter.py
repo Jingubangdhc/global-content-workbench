@@ -284,7 +284,20 @@ def compile_overlay_from_srt(
                 if kind in DATA_CHART_EFFECT_IDS and src_line and not _has_numeric_evidence(src_line["text"]):
                     llm_meta["warnings"].append(f"台词 #{srt_idx} 不含数字证据，已将 {kind} 降级为 quote-lockup")
                     kind = "quote-lockup"
-                merged_params = {**EFFECT_BY_ID[kind]["defaults"], **(c.get("params") or {})}
+                merged_params = {}
+                for pk, pv in (c.get("params") or {}).items():
+                    if pk in ("chips", "items", "steps", "points", "rows", "chapters", "axes", "text", "quote"):
+                        if isinstance(pv, list) and all(isinstance(x, (str, int, float)) for x in pv):
+                            merged_params[pk] = "|".join(str(x) for x in pv)
+                        elif isinstance(pv, (str, int, float)):
+                            merged_params[pk] = str(pv)
+                    elif pk == "lines" and kind != "caption-track":
+                        if isinstance(pv, list) and all(isinstance(x, str) for x in pv):
+                            merged_params[pk] = "\n".join(pv)
+                        elif isinstance(pv, str):
+                            merged_params[pk] = pv
+                    else:
+                        merged_params[pk] = pv
                 if c.get("sfx"):
                     merged_params["sfx"] = c["sfx"]
                 if srt_idx is not None:
