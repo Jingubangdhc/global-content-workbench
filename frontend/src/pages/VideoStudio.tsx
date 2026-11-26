@@ -68,6 +68,8 @@ export default function VideoStudio({ projectId }: Props) {
   const [effectGroup, setEffectGroup] = useState('全部');
   const [hoverEffect, setHoverEffect] = useState<{ eff: any; top: number } | null>(null);
   const hoverIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const mainWaitTimerRef = useRef<number | null>(null);
   const [rightTab, setRightTab] = useState<'props' | 'lint' | 'sfx' | 'feedback' | 'versions'>('props');
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -416,6 +418,89 @@ export default function VideoStudio({ projectId }: Props) {
     return `/overlay-engine/?export=1&ratio=${isVertical ? 'v' : 'h'}&doc=${encoded}`;
   }, [engine?.reachable, isVertical, doc]);
 
+  // 清理悬停小窗和主画布的轮询定时器
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) window.clearInterval(hoverTimerRef.current);
+      if (mainWaitTimerRef.current) window.clearInterval(mainWaitTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hoverEffect && hoverTimerRef.current) {
+      window.clearInterval(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, [hoverEffect]);
+
+  // 等待同源 Overlay Studio 懒加载 ExportView 挂载好 __startExport 再驱动帧时钟
+  const bootHoverPreview = () => {
+    if (hoverTimerRef.current) {
+      window.clearInterval(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    let waited = 0;
+    let t = 0.2;
+    let started = false;
+    hoverTimerRef.current = window.setInterval(() => {
+      const win = hoverIframeRef.current?.contentWindow as any;
+      if (!win) return;
+      if (!started) {
+        if (typeof win.__startExport === 'function' && typeof win.__setExportT === 'function') {
+          try {
+            win.__startExport();
+            win.__setExportT(t);
+            started = true;
+          } catch {}
+        } else {
+          waited += 80;
+          if (waited > 6000 && hoverTimerRef.current) {
+            window.clearInterval(hoverTimerRef.current);
+            hoverTimerRef.current = null;
+          }
+        }
+        return;
+      }
+      try {
+        t = t >= 4.2 ? 0.1 : Number((t + 0.1).toFixed(2));
+        win.__setExportT(t);
+      } catch {
+        if (hoverTimerRef.current) {
+          window.clearInterval(hoverTimerRef.current);
+          hoverTimerRef.current = null;
+        }
+      }
+    }, 80);
+  };
+
+  const bootMainOverlay = () => {
+    if (mainWaitTimerRef.current) {
+      window.clearInterval(mainWaitTimerRef.current);
+      mainWaitTimerRef.current = null;
+    }
+    let waited = 0;
+    mainWaitTimerRef.current = window.setInterval(() => {
+      const win = overlayIframeRef.current?.contentWindow as any;
+      if (win && typeof win.__startExport === 'function' && typeof win.__setExportT === 'function') {
+        try {
+          win.__startExport();
+          win.__setExportT(currentTime);
+          setIframeReady(true);
+        } catch {}
+        if (mainWaitTimerRef.current) {
+          window.clearInterval(mainWaitTimerRef.current);
+          mainWaitTimerRef.current = null;
+        }
+        return;
+      }
+      waited += 60;
+      if (waited > 6000 && mainWaitTimerRef.current) {
+        window.clearInterval(mainWaitTimerRef.current);
+        mainWaitTimerRef.current = null;
+      }
+    }, 60);
+  };
+
   // 当播放时间变化时，直接通过同源 iframe 调用 Overlay Studio 原生时间控制器 __setExportT
   useEffect(() => {
     const win = overlayIframeRef.current?.contentWindow as any;
@@ -655,29 +740,7 @@ export default function VideoStudio({ projectId }: Props) {
                   ref={hoverIframeRef}
                   src={`/overlay-engine/?export=1&ratio=h&effect=${encodeURIComponent(hoverEffect.eff.id)}&duration=6`}
                   title={`预览 ${hoverEffect.eff.name}`}
-                  onLoad={() => {
-                    const win = hoverIframeRef.current?.contentWindow as any;
-                    if (!win) return;
-                    setTimeout(() => {
-                      try {
-                        win.__startExport?.();
-                        let t = 0.05;
-                        win.__setExportT?.(t);
-                        const iv = setInterval(() => {
-                          try {
-                            if (!hoverIframeRef.current || !win.__setExportT) {
-                              clearInterval(iv);
-                              return;
-                            }
-                            t = t >= 4.2 ? 0.05 : Number((t + 0.1).toFixed(2));
-                            win.__setExportT(t);
-                          } catch {
-                            clearInterval(iv);
-                          }
-                        }, 100);
-                      } catch {}
-                    }, 60);
-                  }}
+                  onLoad={bootHoverPreview}
                   style={{
                     width: '1920px',
                     height: '1080px',
@@ -780,18 +843,7 @@ export default function VideoStudio({ projectId }: Props) {
                       src={overlayIframeSrc}
                       title="Overlay Studio 实时真动效画布"
                       allowTransparency={true}
-                      onLoad={() => {
-                        const win = overlayIframeRef.current?.contentWindow as any;
-                        if (win) {
-                          setTimeout(() => {
-                            try {
-                              win.__startExport?.();
-                              win.__setExportT?.(currentTime);
-                              setIframeReady(true);
-                            } catch {}
-                          }, 80);
-                        }
-                      }}
+                      onLoad={bootMainOverlay}
                       style={{
                         width: `${stageW}px`,
                         height: `${stageH}px`,
