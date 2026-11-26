@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Bookmark,
   CheckCircle2,
+  ChevronsDown,
+  ChevronsUp,
   Clapperboard,
   Download,
   ExternalLink,
   Eye,
+  FileJson,
   FileText,
   Film,
   History,
@@ -26,7 +31,10 @@ import {
   Undo2,
   Upload,
   Volume2,
+  VolumeX,
   XCircle,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { api } from '../api';
 import type { ContentItem } from '../api';
@@ -48,6 +56,7 @@ interface OverlayDoc {
   version: 1;
   ratio?: 'h' | 'v' | '4:3';
   theme?: 'dark' | 'light';
+  layerOrder?: 'manual';
   glow?: boolean;
   breath?: boolean;
   inkColor?: string;
@@ -57,6 +66,20 @@ interface OverlayDoc {
   srt?: { start: number; end: number; text: string }[];
   cards: OverlayCard[];
 }
+
+const FEEL_TAGS: Record<string, string[]> = {
+  滚动计数: ['odometer', 'stat-proof', 'ring-metric'],
+  逐条落位: ['checklist', 'step-timeline', 'pin-board', 'entity-chips'],
+  堆叠累积: ['waterfall-bridge', 'waffle-fill', 'growth-bars'],
+  生长描画: ['growth-curve', 'rank-bars', 'donut-split', 'radar-profile'],
+  对撞并置: ['versus-card'],
+  翻转轮换: ['type-shift', 'chapter-bar'],
+  聚散飞行: ['blur-text', 'quote-lockup'],
+  扫过点亮: ['punch-pill', 'caption-track'],
+  '3D 浮屏': ['terminal-3d'],
+  取景重构: ['focus-card', 'ui-callout'],
+  玻璃虚化: ['term-card', 'stat-proof', 'quote-lockup'],
+};
 
 interface StylePreset {
   id: string;
@@ -142,7 +165,23 @@ export default function VideoStudio({ projectId }: Props) {
 
   const [effectSearch, setEffectSearch] = useState('');
   const [effectGroup, setEffectGroup] = useState('全部');
+  const [feelTag, setFeelTag] = useState<string | null>(null);
   const [onlyFavEffects, setOnlyFavEffects] = useState(false);
+  const [editorLeftTab, setEditorLeftTab] = useState<'cards' | 'srt'>('cards');
+  const [muted, setMuted] = useState(false);
+  const [tlZoom, setTlZoom] = useState(1);
+  const [showSafeBorder, setShowSafeBorder] = useState(true);
+  const [showAvatarGuide, setShowAvatarGuide] = useState(true);
+  const [exportModal, setExportModal] = useState<null | { mode: 'timeline' | 'single' }>(null);
+  const [exportOpts, setExportOpts] = useState({
+    fps: 30,
+    includeWebm: true,
+    compatibilityMode: false,
+    fastPng: false,
+    exportMode: 'sequence' as 'sequence' | 'stream',
+    singleDuration: 6,
+  });
+  const jsonImportRef = useRef<HTMLInputElement | null>(null);
   const [favEffects, setFavEffects] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('gcw_fav_effects') || '["stat-proof","growth-curve","quote-lockup","blur-text","versus-card"]');
@@ -170,7 +209,7 @@ export default function VideoStudio({ projectId }: Props) {
 
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [viewMode, setViewMode] = useState<'workbench' | 'native'>('workbench');
+  const [viewMode, setViewMode] = useState<'editor' | 'library' | 'native'>('editor');
   const [stageScale, setStageScale] = useState(0.35);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoUploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -321,12 +360,15 @@ export default function VideoStudio({ projectId }: Props) {
     setDoc(next);
   };
 
-  // 键盘快捷键：Space 播放/暂停、←/→ 微调 ±0.5s、Delete 删除选中卡
+  // 键盘快捷键：Space 播放/暂停、←/→ 微调 ±0.5s、↑/↓ 切换卡片、Ctrl+Z 撤销、Delete 删除选中卡
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.code === 'Space') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.code === 'Space') {
         e.preventDefault();
         setPlaying((p) => {
           const next = !p;
@@ -342,6 +384,15 @@ export default function VideoStudio({ projectId }: Props) {
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
         setCurrentTime((t) => Math.min(totalDur, Number((t + 0.5).toFixed(1))));
+      } else if ((e.code === 'ArrowUp' || e.code === 'ArrowDown') && doc.cards.length > 0) {
+        e.preventDefault();
+        const idx = doc.cards.findIndex((c) => c.id === selectedCardId);
+        const nextIdx = e.code === 'ArrowUp' ? Math.max(0, idx - 1) : Math.min(doc.cards.length - 1, idx + 1);
+        const nextCard = doc.cards[nextIdx];
+        if (nextCard) {
+          setSelectedCardId(nextCard.id);
+          setCurrentTime(Number((nextCard.start + 0.4).toFixed(1)));
+        }
       } else if ((e.code === 'Delete' || e.code === 'Backspace') && selectedCardId) {
         e.preventDefault();
         mutateDoc({ ...doc, cards: doc.cards.filter((c) => c.id !== selectedCardId) });
@@ -350,7 +401,7 @@ export default function VideoStudio({ projectId }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedCardId, doc, totalDur]);
+  }, [selectedCardId, doc, totalDur, undoStack]);
 
   const createProject = async () => {
     if (!newTitle.trim()) return;
@@ -431,9 +482,10 @@ export default function VideoStudio({ projectId }: Props) {
     showToast(r.passed ? '✅ 质量检查通过（0 项硬错误）' : `⚠️ 发现 ${r.error_count} 项硬错误，已阻止导出`);
   };
 
-  const handleExport = async (mode: 'timeline' | 'single', includeWebm = true) => {
+  const handleExport = async (mode: 'timeline' | 'single', opts = exportOpts) => {
     if (!activeProj) return;
     setBusy('export');
+    setExportModal(null);
     try {
       await api.patchVideoProject(activeProj.id, { draft_overlay_json: JSON.stringify(doc) });
       const r = await api.createRenderJob({
@@ -441,20 +493,69 @@ export default function VideoStudio({ projectId }: Props) {
         mode,
         effect_id: mode === 'single' ? selectedCard?.kind || 'quote-lockup' : undefined,
         single_params: mode === 'single' ? selectedCard?.params || {} : undefined,
-        include_webm: includeWebm,
-        fps: doc.exportFps || activeProj.fps || 30,
+        include_webm: opts.includeWebm,
+        fps: opts.fps || doc.exportFps || activeProj.fps || 30,
         duration_sec:
           mode === 'single'
-            ? Math.max(2, Number(((selectedCard?.end || 4) - (selectedCard?.start || 0)).toFixed(1)))
-            : Math.max(4, Math.min(60, totalDur)),
+            ? Math.max(1, Number(opts.singleDuration || 6))
+            : Math.max(4, Math.min(120, totalDur)),
+        compatibility_mode: opts.compatibilityMode,
+        fast_png: opts.fastPng,
+        export_mode: opts.exportMode,
       });
       setActiveJobUid(r.job_uid);
-      showToast(mode === 'single' ? '🎬 已发起单卡透明 MOV 导出...' : '🎬 已发起全片透明 MOV + WebM 导出...');
+      showToast(mode === 'single' ? '🎬 已发起单卡透明 MOV 导出...' : '🎬 已发起整条时间轴透明视频导出...');
     } catch (e: any) {
       showToast('导出受阻：' + e.message);
     } finally {
       setBusy('');
     }
+  };
+
+  const handleLoadDemo = async () => {
+    setBusy('demo');
+    try {
+      const demo = await api.videoDemo();
+      let proj = activeProj;
+      if (!proj) {
+        proj = await api.createVideoProject({ project_id: projectId, title: 'Overlay Studio 官方多轨示例', aspect_ratio: '16:9' });
+        await loadAll(proj.id);
+      }
+      const nextDoc: OverlayDoc = { fxScale: 1, animSpeed: 1, exportFps: 30, ...demo.doc };
+      mutateDoc(nextDoc);
+      setSelectedCardId(nextDoc.cards?.[0]?.id || null);
+      setCurrentTime(1.5);
+      setViewMode('editor');
+      showToast(`🎬 已载入官方多轨示例（${nextDoc.cards?.length || 0} 张动效卡 / ${demo.line_count} 句字幕）`);
+    } catch (e: any) {
+      showToast('载入示例失败：' + e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleExportJsonFile = () => {
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeProj?.title || 'overlay'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 已导出 overlay.json 编排文件');
+  };
+
+  const moveCardLayer = (dir: 'up' | 'down' | 'top' | 'bottom') => {
+    if (!selectedCard) return;
+    const idx = doc.cards.findIndex((c) => c.id === selectedCard.id);
+    if (idx < 0) return;
+    const arr = [...doc.cards];
+    const [item] = arr.splice(idx, 1);
+    if (dir === 'up') arr.splice(Math.min(arr.length, idx + 1), 0, item);
+    else if (dir === 'down') arr.splice(Math.max(0, idx - 1), 0, item);
+    else if (dir === 'top') arr.push(item);
+    else arr.unshift(item);
+    mutateDoc({ ...doc, layerOrder: 'manual', cards: arr });
   };
 
   const handleReplay = () => {
@@ -508,6 +609,7 @@ export default function VideoStudio({ projectId }: Props) {
     () =>
       effects.filter((e) => {
         if (onlyFavEffects && !favEffects.includes(e.id)) return false;
+        if (feelTag && !(FEEL_TAGS[feelTag] || []).includes(e.id)) return false;
         if (effectGroup !== '全部' && e.group !== effectGroup) return false;
         if (effectSearch.trim()) {
           const q = effectSearch.toLowerCase();
@@ -515,7 +617,7 @@ export default function VideoStudio({ projectId }: Props) {
         }
         return true;
       }),
-    [effects, effectGroup, effectSearch, onlyFavEffects, favEffects]
+    [effects, effectGroup, effectSearch, onlyFavEffects, favEffects, feelTag]
   );
 
   const selectedCard = useMemo(() => doc.cards.find((c) => c.id === selectedCardId) || null, [doc.cards, selectedCardId]);
@@ -618,6 +720,7 @@ export default function VideoStudio({ projectId }: Props) {
       version: 1,
       ratio: ratioCode,
       theme: doc.theme || 'dark',
+      layerOrder: doc.layerOrder,
       glow: !!doc.glow,
       breath: !!doc.breath,
       inkColor: doc.inkColor || undefined,
@@ -750,41 +853,77 @@ export default function VideoStudio({ projectId }: Props) {
         }}
       />
 
-      {/* 顶部工具栏（复刻 Overlay Studio 顶栏 + 工作台核心流程） */}
+      {/* 隐藏的工程 JSON 导入 input */}
+      <input
+        ref={jsonImportRef}
+        type="file"
+        accept=".json"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          try {
+            const parsed = JSON.parse(await f.text());
+            if (!Array.isArray(parsed.cards)) throw new Error('JSON 缺少 cards 数组');
+            mutateDoc({ version: 1, fxScale: 1, animSpeed: 1, exportFps: 30, ...parsed });
+            setSelectedCardId(parsed.cards[0]?.id || null);
+            showToast(`✅ 已导入工程 JSON（${parsed.cards.length} 张动效卡）`);
+          } catch (err: any) {
+            showToast('导入 JSON 失败：' + err.message);
+          }
+          e.target.value = '';
+        }}
+      />
+
+      {/* 顶部工具栏（100% 对标 5188：编辑台 / 效果库 / 全局设置 / 示例 / 播放归零声音 / 导出弹窗） */}
       <div className="bg-[#0b1120] border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <Clapperboard className="w-4 h-4 text-cyan-400 shrink-0" />
+          <div className="flex rounded-lg overflow-hidden border border-slate-700 text-[11px] shrink-0">
+            <button
+              onClick={() => setViewMode('editor')}
+              className={`px-2.5 py-1 font-medium ${viewMode === 'editor' ? 'bg-orange-600 text-white' : 'bg-slate-900 text-slate-300 hover:text-white'}`}
+            >
+              编辑台
+            </button>
+            <button
+              onClick={() => setViewMode('library')}
+              className={`px-2.5 py-1 font-medium ${viewMode === 'library' ? 'bg-orange-600 text-white' : 'bg-slate-900 text-slate-300 hover:text-white'}`}
+            >
+              效果库
+            </button>
+            {engine?.reachable && (
+              <button
+                onClick={() => setViewMode('native')}
+                className={`px-2 py-1 ${viewMode === 'native' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+              >
+                原生界面
+              </button>
+            )}
+          </div>
           <select
             value={activeProj?.id || ''}
             onChange={(e) => e.target.value && openProject(Number(e.target.value))}
-            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 max-w-[190px]"
+            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 max-w-[160px]"
           >
-            {projects.length === 0 && <option value="">暂无视频工程</option>}
+            {projects.length === 0 && <option value="">暂无工程</option>}
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.title} ({p.aspect_ratio})
+                {p.title}
               </option>
             ))}
           </select>
-          <button
-            onClick={() => setNewProjModal(true)}
-            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
-          >
+          <button onClick={() => setNewProjModal(true)} className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1">
             <Plus className="w-3.5 h-3.5" /> 新建
           </button>
-          {engine && (
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] border flex items-center gap-1 ${
-                engine.reachable
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-              }`}
-              title={engine.license}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${engine.reachable ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-              Overlay {engine.engine_version}
-            </span>
-          )}
+          <button
+            onClick={handleLoadDemo}
+            disabled={busy === 'demo'}
+            className="px-2 py-1 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/40 border border-indigo-500/40 text-xs text-indigo-200 flex items-center gap-1"
+            title="一键载入官方 28s / 17 卡多轨示例"
+          >
+            🎬 示例
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -795,21 +934,41 @@ export default function VideoStudio({ projectId }: Props) {
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" /> 全局设置
           </button>
-          <button
-            onClick={handleReplay}
-            disabled={!activeProj}
-            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-300" /> 重播动画
-          </button>
+          {viewMode === 'editor' ? (
+            <>
+              <button
+                onClick={() => {
+                  setCurrentTime(0);
+                  if (videoRef.current) videoRef.current.currentTime = 0;
+                }}
+                className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-300"
+                title="播放头归零"
+              >
+                归零
+              </button>
+              <button
+                onClick={() => {
+                  setMuted((m) => {
+                    if (videoRef.current) videoRef.current.muted = !m;
+                    return !m;
+                  });
+                }}
+                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300"
+                title={muted ? '取消静音' : '静音参考视频'}
+              >
+                {muted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+              </button>
+            </>
+          ) : (
+            <button onClick={handleReplay} disabled={!activeProj} className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40">
+              <RotateCcw className="w-3.5 h-3.5 text-amber-300" /> 重放动画
+            </button>
+          )}
           <button
             onClick={() => setShowSafeZone((s) => !s)}
             className={`px-2 py-1 rounded-lg border text-xs flex items-center gap-1 ${
-              showSafeZone
-                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-200'
-                : 'bg-slate-900 border-slate-700 text-slate-400'
+              showSafeZone ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-200' : 'bg-slate-900 border-slate-700 text-slate-400'
             }`}
-            title="显示/隐藏人物安全区参考线"
           >
             <Eye className="w-3.5 h-3.5" /> 安全区
           </button>
@@ -824,64 +983,29 @@ export default function VideoStudio({ projectId }: Props) {
               }}
               className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-cyan-300"
             >
-              <option value="16:9">16:9 横屏</option>
-              <option value="9:16">9:16 竖屏</option>
-              <option value="4:3">4:3 传统</option>
+              <option value="16:9">16:9 横版</option>
+              <option value="9:16">9:16 竖版</option>
+              <option value="4:3">4:3 横版</option>
             </select>
           )}
-          <button
-            onClick={() => setSrtModal(true)}
-            disabled={!activeProj}
-            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
-          >
-            <FileText className="w-3.5 h-3.5 text-cyan-400" /> 导入SRT
+          <button onClick={() => setSrtModal(true)} disabled={!activeProj} className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40">
+            <FileText className="w-3.5 h-3.5 text-cyan-400" /> SRT
           </button>
-          <button
-            onClick={() => handleCompile(true)}
-            disabled={!activeProj || busy === 'compile'}
-            className="px-2 py-1 rounded-lg bg-cyan-600/25 hover:bg-cyan-600/40 border border-cyan-500/50 text-xs text-cyan-200 flex items-center gap-1 disabled:opacity-40"
-          >
-            {busy === 'compile' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            AI编排
+          <button onClick={() => handleCompile(true)} disabled={!activeProj || busy === 'compile'} className="px-2 py-1 rounded-lg bg-cyan-600/25 hover:bg-cyan-600/40 border border-cyan-500/50 text-xs text-cyan-200 flex items-center gap-1 disabled:opacity-40">
+            {busy === 'compile' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} AI编排
           </button>
-          <button
-            onClick={handleSaveVersion}
-            disabled={!activeProj || busy === 'save'}
-            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40"
-          >
+          <button onClick={handleSaveVersion} disabled={!activeProj || busy === 'save'} className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 flex items-center gap-1 disabled:opacity-40">
             <Save className="w-3.5 h-3.5" /> 保存工程
           </button>
           <button
-            onClick={() => handleExport('timeline', true)}
+            onClick={() => setExportModal({ mode: viewMode === 'library' ? 'single' : 'timeline' })}
             disabled={!activeProj || busy === 'export' || !engine?.reachable}
             className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-40"
           >
-            <Download className="w-3.5 h-3.5" /> 导出全片
+            <Download className="w-3.5 h-3.5" /> {viewMode === 'library' ? '导出单卡' : '导出透明 MOV'}
           </button>
           {engine?.reachable && (
-            <div className="flex rounded-lg overflow-hidden border border-slate-700 text-[11px]">
-              <button
-                onClick={() => setViewMode('workbench')}
-                className={`px-2 py-1 ${viewMode === 'workbench' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400'}`}
-              >
-                工作台
-              </button>
-              <button
-                onClick={() => setViewMode('native')}
-                className={`px-2 py-1 ${viewMode === 'native' ? 'bg-cyan-600/30 text-cyan-200' : 'bg-slate-900 text-slate-400'}`}
-              >
-                原生界面
-              </button>
-            </div>
-          )}
-          {engine?.reachable && (
-            <a
-              href="/overlay-engine/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300"
-              title="在新标签页打开原生 Overlay Studio"
-            >
+            <a href="/overlay-engine/" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300" title="独立窗口打开原生 Overlay Studio">
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
@@ -901,96 +1025,206 @@ export default function VideoStudio({ projectId }: Props) {
         </div>
       ) : (
         <div className="flex-1 flex gap-2.5 min-h-0 overflow-hidden">
-          {/* 左栏：25 种动效库 + 收藏 + 底部快捷操控（重播/导入视频/导出单卡/缩放/速度） */}
+          {/* 左栏：编辑台（卡片/字幕稿双页签 + JSON 导入导出） 或 效果库（25卡缩略图 + 11手感标签 + 收藏） */}
           <div className="w-72 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden relative">
-            <div className="p-2.5 border-b border-slate-800 bg-[#0f172a] space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
-                <span className="flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-cyan-400" /> 动效库 ({filteredEffects.length}/{effects.length})
-                </span>
-                <button
-                  onClick={() => setOnlyFavEffects((v) => !v)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border ${
-                    onlyFavEffects
-                      ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Star className="w-3 h-3" /> 只看收藏
+            {viewMode === 'editor' ? (
+              <>
+                <div className="p-2 border-b border-slate-800 bg-[#0f172a] flex items-center justify-between gap-1">
+                  <div className="flex gap-1 text-xs flex-1">
+                    <button
+                      onClick={() => setEditorLeftTab('cards')}
+                      className={`flex-1 py-1 rounded font-medium ${editorLeftTab === 'cards' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      卡片 ({doc.cards.length})
+                    </button>
+                    <button
+                      onClick={() => setEditorLeftTab('srt')}
+                      className={`flex-1 py-1 rounded font-medium ${editorLeftTab === 'srt' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      字幕稿 ({doc.srt?.length || 0})
+                    </button>
+                  </div>
+                  {editorLeftTab === 'cards' && doc.cards.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('清空当前时间轴全部卡片？')) {
+                          mutateDoc({ ...doc, cards: [] });
+                          setSelectedCardId(null);
+                        }
+                      }}
+                      className="px-1.5 py-1 rounded bg-slate-900 hover:bg-rose-500/20 text-[10px] text-slate-400 hover:text-rose-300"
+                    >
+                      清空
+                    </button>
+                  )}
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {editorLeftTab === 'cards' ? (
+                    <>
+                      <button
+                        onClick={() => setViewMode('library')}
+                        className="w-full py-1.5 mb-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/35 border border-cyan-500/40 text-cyan-200 text-xs flex items-center justify-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> 去效果库挑选 25 种动效卡
+                      </button>
+                      {doc.cards.map((c, idx) => (
+                        <div
+                          key={c.id}
+                          onClick={() => {
+                            setSelectedCardId(c.id);
+                            setCurrentTime(Number((c.start + 0.4).toFixed(1)));
+                            setRightTab('props');
+                          }}
+                          className={`p-2 rounded-lg border cursor-pointer transition text-xs ${
+                            c.id === selectedCardId
+                              ? 'bg-orange-500/15 border-orange-500/60 text-white'
+                              : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium truncate">
+                              #{idx + 1} {effectById[c.kind]?.name || c.kind}
+                            </span>
+                            <span className="font-mono-num text-[10px] text-slate-400 shrink-0">
+                              {c.start}s–{c.end}s
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate mt-0.5 font-mono-num">{c.kind}</div>
+                        </div>
+                      ))}
+                      {doc.cards.length === 0 && (
+                        <div className="text-center text-[11px] text-slate-500 py-8">
+                          时间轴暂无卡片，可点击顶栏「🎬 示例」或切去「效果库」添加
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setSrtModal(true)}
+                        disabled={!activeProj}
+                        className="w-full py-1.5 mb-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-cyan-300"
+                      >
+                        {doc.srt?.length ? '换 SRT / 重新导入字幕' : '导入 SRT / 从文案工坊导入'}
+                      </button>
+                      {(doc.srt || []).map((s, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setCurrentTime(s.start)}
+                          className="p-2 rounded bg-slate-900/70 hover:bg-slate-800 border border-slate-800 cursor-pointer text-[11px]"
+                        >
+                          <div className="font-mono-num text-[10px] text-cyan-400">
+                            {fmtClock(s.start)} → {fmtClock(s.end)}
+                          </div>
+                          <div className="text-slate-200 mt-0.5">{s.text}</div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-2.5 border-b border-slate-800 bg-[#0f172a] space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-cyan-400" /> 效果库 ({filteredEffects.length}/{effects.length})
+                    </span>
+                    <button
+                      onClick={() => setOnlyFavEffects((v) => !v)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border ${
+                        onlyFavEffects ? 'bg-amber-500/20 border-amber-400/50 text-amber-300' : 'bg-slate-900 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      <Star className="w-3 h-3" /> 收藏
+                    </button>
+                  </div>
+                  <input
+                    value={effectSearch}
+                    onChange={(e) => setEffectSearch(e.target.value)}
+                    placeholder="搜卡片名字 / 用途 / 手感，如 数字..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                  />
+                  {/* 11 个手感过滤标签（100% 复刻 5188 效果库） */}
+                  <div className="flex flex-wrap gap-1">
+                    {Object.keys(FEEL_TAGS).map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => setFeelTag(feelTag === tag ? null : tag)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] border ${
+                          feelTag === tag ? 'bg-orange-600 border-orange-400 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={effectGroup}
+                    onChange={(e) => setEffectGroup(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200"
+                  >
+                    {groups.map((g) => (
+                      <option key={g} value={g}>
+                        浏览范围：{g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-1.5 content-start">
+                  {filteredEffects.map((e) => {
+                    const isFav = favEffects.includes(e.id);
+                    return (
+                      <div
+                        key={e.id}
+                        onClick={() => activeProj && addEffectCard(e)}
+                        onMouseEnter={(ev) => {
+                          const rect = ev.currentTarget.getBoundingClientRect();
+                          setHoverEffect({ eff: e, top: Math.max(80, Math.min(window.innerHeight - 280, rect.top - 20)) });
+                        }}
+                        onMouseLeave={() => setHoverEffect(null)}
+                        className={`text-left rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/60 transition overflow-hidden flex flex-col cursor-pointer group ${
+                          !activeProj ? 'opacity-40 pointer-events-none' : ''
+                        }`}
+                      >
+                        <div className="w-full aspect-video bg-[#070c16] border-b border-slate-800/80 overflow-hidden relative flex items-center justify-center">
+                          {e.thumb_url ? (
+                            <img src={e.thumb_url} alt={e.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                          ) : (
+                            <span className="text-[10px] text-slate-600 font-mono-num">{e.id}</span>
+                          )}
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              toggleFav(e.id);
+                            }}
+                            className={`absolute top-1 left-1 p-0.5 rounded bg-black/60 ${isFav ? 'text-amber-400' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}
+                          >
+                            <Star className="w-3 h-3" fill={isFav ? 'currentColor' : 'none'} />
+                          </button>
+                        </div>
+                        <div className="p-1.5">
+                          <div className="text-[11px] font-medium text-slate-100 truncate">{e.name}</div>
+                          <div className="text-[9px] text-slate-400 truncate mt-0.5">{e.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* 左侧底部快捷操控区（含 JSON 导入导出 + 重播 + 导入视频 + 导出单卡 + 缩放/速度） */}
+            <div className="p-2.5 border-t border-slate-800 bg-[#0d1424] space-y-2 text-xs shrink-0">
+              <div className="grid grid-cols-2 gap-1.5">
+                <button onClick={() => jsonImportRef.current?.click()} className="py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 flex items-center justify-center gap-1">
+                  <FileJson className="w-3 h-3 text-cyan-400" /> 打开JSON
+                </button>
+                <button onClick={handleExportJsonFile} className="py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 flex items-center justify-center gap-1">
+                  <Download className="w-3 h-3 text-emerald-400" /> 导出JSON
                 </button>
               </div>
-              <input
-                value={effectSearch}
-                onChange={(e) => setEffectSearch(e.target.value)}
-                placeholder="搜卡片名字 / 用途 / 手感，如 数字..."
-                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-              />
-              <div className="flex flex-wrap gap-1">
-                {groups.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setEffectGroup(g)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] transition ${
-                      effectGroup === g
-                        ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-1.5 content-start">
-              {filteredEffects.map((e) => {
-                const isFav = favEffects.includes(e.id);
-                return (
-                  <div
-                    key={e.id}
-                    onClick={() => activeProj && addEffectCard(e)}
-                    onMouseEnter={(ev) => {
-                      const rect = ev.currentTarget.getBoundingClientRect();
-                      setHoverEffect({ eff: e, top: Math.max(80, Math.min(window.innerHeight - 280, rect.top - 20)) });
-                    }}
-                    onMouseLeave={() => setHoverEffect(null)}
-                    className={`text-left rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/60 transition overflow-hidden flex flex-col cursor-pointer group ${
-                      !activeProj ? 'opacity-40 pointer-events-none' : ''
-                    }`}
-                  >
-                    <div className="w-full aspect-video bg-[#070c16] border-b border-slate-800/80 overflow-hidden relative flex items-center justify-center">
-                      {e.thumb_url ? (
-                        <img
-                          src={e.thumb_url}
-                          alt={e.name}
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                        />
-                      ) : (
-                        <span className="text-[10px] text-slate-600 font-mono-num">{e.id}</span>
-                      )}
-                      <button
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          toggleFav(e.id);
-                        }}
-                        className={`absolute top-1 left-1 p-0.5 rounded bg-black/60 ${isFav ? 'text-amber-400' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}
-                        title="收藏/取消收藏"
-                      >
-                        <Star className="w-3 h-3" fill={isFav ? 'currentColor' : 'none'} />
-                      </button>
-                    </div>
-                    <div className="p-1.5">
-                      <div className="text-[11px] font-medium text-slate-100 truncate">{e.name}</div>
-                      <div className="text-[9px] text-slate-400 truncate mt-0.5">{e.desc}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* 左侧底部快捷操控区（100% 复刻 Overlay Studio 左下角） */}
-            <div className="p-2.5 border-t border-slate-800 bg-[#0d1424] space-y-2 text-xs shrink-0">
               <button
                 onClick={handleReplay}
                 disabled={!activeProj}
@@ -999,48 +1233,24 @@ export default function VideoStudio({ projectId }: Props) {
                 <Play className="w-3.5 h-3.5 fill-current" /> 重播动画
               </button>
               <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  onClick={() => videoUploadInputRef.current?.click()}
-                  disabled={!activeProj}
-                  className="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-200 flex items-center justify-center gap-1 disabled:opacity-40"
-                >
+                <button onClick={() => videoUploadInputRef.current?.click()} disabled={!activeProj} className="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-200 flex items-center justify-center gap-1 disabled:opacity-40">
                   <Upload className="w-3 h-3 text-cyan-400" /> 导入视频
                 </button>
-                <button
-                  onClick={() => handleExport('single', false)}
-                  disabled={!activeProj || !selectedCard || !engine?.reachable}
-                  className="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-200 flex items-center justify-center gap-1 disabled:opacity-40"
-                >
+                <button onClick={() => setExportModal({ mode: 'single' })} disabled={!activeProj || !selectedCard || !engine?.reachable} className="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-200 flex items-center justify-center gap-1 disabled:opacity-40">
                   <Download className="w-3 h-3 text-amber-400" /> 导出单卡
                 </button>
               </div>
-              <div className="space-y-1.5 pt-1">
+              <div className="space-y-1 pt-0.5">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">特效缩放大小</span>
+                  <span className="text-slate-400">特效整体大小</span>
                   <span className="font-mono-num text-cyan-300">{Math.round((doc.fxScale || 1) * 100)}%</span>
                 </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={1.8}
-                  step={0.05}
-                  value={doc.fxScale || 1}
-                  onChange={(e) => setDoc({ ...doc, fxScale: Number(e.target.value) })}
-                  className="w-full accent-cyan-400 h-1"
-                />
+                <input type="range" min={0.5} max={1.8} step={0.05} value={doc.fxScale || 1} onChange={(e) => setDoc({ ...doc, fxScale: Number(e.target.value) })} className="w-full accent-cyan-400 h-1" />
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-slate-400">动画速度</span>
                   <span className="font-mono-num text-cyan-300">{Number(doc.animSpeed || 1).toFixed(2)}x</span>
                 </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={2.0}
-                  step={0.05}
-                  value={doc.animSpeed || 1}
-                  onChange={(e) => setDoc({ ...doc, animSpeed: Number(e.target.value) })}
-                  className="w-full accent-cyan-400 h-1"
-                />
+                <input type="range" min={0.5} max={2.0} step={0.05} value={doc.animSpeed || 1} onChange={(e) => setDoc({ ...doc, animSpeed: Number(e.target.value) })} className="w-full accent-cyan-400 h-1" />
               </div>
             </div>
 
@@ -1104,15 +1314,18 @@ export default function VideoStudio({ projectId }: Props) {
                     )
                   )}
 
-                  {/* SAFE 人物安全区剪影参考线（完全还原截图视觉，不进入最终透明导出） */}
-                  {showSafeZone && (
+                  {/* SAFE 人物安全区剪影参考线（独立受安全区边框与人物占位双开关控制） */}
+                  {showSafeZone && (showSafeBorder || showAvatarGuide) && (
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center select-none">
-                      <div className="h-[92%] aspect-[9/16] border border-slate-700/50 rounded-sm relative flex flex-col items-center justify-end overflow-hidden">
-                        <span className="absolute top-2 text-[10px] tracking-[0.25em] text-slate-500 font-mono-num">SAFE</span>
-                        {/* 人物剪影参考 */}
-                        <div className="w-[34%] aspect-square rounded-full bg-slate-700/20 mb-2" />
-                        <div className="w-[74%] h-[54%] rounded-t-[48%] bg-slate-700/20" />
-                        <span className="absolute bottom-2 text-[10px] text-slate-500">人物安全区</span>
+                      <div className={`h-[92%] aspect-[9/16] rounded-sm relative flex flex-col items-center justify-end overflow-hidden ${showSafeBorder ? 'border border-slate-700/50' : ''}`}>
+                        {showSafeBorder && <span className="absolute top-2 text-[10px] tracking-[0.25em] text-slate-500 font-mono-num">SAFE</span>}
+                        {showAvatarGuide && (
+                          <>
+                            <div className="w-[34%] aspect-square rounded-full bg-slate-700/20 mb-2" />
+                            <div className="w-[74%] h-[54%] rounded-t-[48%] bg-slate-700/20" />
+                            <span className="absolute bottom-2 text-[10px] text-slate-500">人物安全区</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1190,18 +1403,30 @@ export default function VideoStudio({ projectId }: Props) {
               </div>
             </div>
 
-            {/* 底部彩色多轨时间轴 + 红线播放头 + 渲染队列 */}
+            {/* 底部彩色多轨时间轴 + 缩放控制 + 拖拽调时 + 渲染队列 */}
             <div className="h-48 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col gap-1.5 overflow-y-auto text-[11px]">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="font-semibold text-slate-200">
-                  时间轴 · 卡片 {doc.cards.length} 张 · 字幕 {doc.srt?.length || 0} 条
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-200">
+                    时间轴 · 卡片 {doc.cards.length} 张 · 当前同屏 {doc.cards.filter((c) => currentTime >= c.start && currentTime <= c.end).length} 张
+                  </span>
+                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[10px]">
+                    <button onClick={() => setTlZoom((z) => Math.max(1, Number((z - 0.5).toFixed(1))))} className="hover:text-cyan-300" title="缩小时间轴">
+                      <ZoomOut className="w-3 h-3" />
+                    </button>
+                    <span className="font-mono-num text-cyan-300 px-1">{tlZoom}×</span>
+                    <button onClick={() => setTlZoom((z) => Math.min(4, Number((z + 0.5).toFixed(1))))} className="hover:text-cyan-300" title="放大时间轴">
+                      <ZoomIn className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
                 <button onClick={handleLint} disabled={!activeProj} className="text-[11px] text-amber-300 hover:underline flex items-center gap-1">
                   <ShieldAlert className="w-3 h-3" /> 质量检查{lintRes ? ` (${lintRes.error_count}错/${lintRes.warning_count}警)` : ''}
                 </button>
               </div>
 
-              <div className="relative space-y-1.5">
+              <div className="overflow-x-auto pb-1">
+              <div className="relative space-y-1.5" style={{ width: `${tlZoom * 100}%`, minWidth: '100%' }}>
                 {/* 红色播放头垂直线 */}
                 <div
                   style={{ left: `calc(68px + (100% - 68px) * ${Math.min(1, currentTime / totalDur)})` }}
@@ -1229,16 +1454,30 @@ export default function VideoStudio({ projectId }: Props) {
                       return (
                         <button
                           key={c.id}
+                          draggable
+                          onDragEnd={(ev) => {
+                            const track = ev.currentTarget.parentElement;
+                            if (!track) return;
+                            const rect = track.getBoundingClientRect();
+                            const ratio = Math.max(0, Math.min(0.95, (ev.clientX - rect.left) / rect.width));
+                            const dur = Math.max(1, c.end - c.start);
+                            const nextStart = Number((ratio * totalDur).toFixed(1));
+                            mutateDoc({
+                              ...doc,
+                              cards: doc.cards.map((x) => (x.id === c.id ? { ...x, start: nextStart, end: Number((nextStart + dur).toFixed(1)) } : x)),
+                            });
+                            setCurrentTime(Number((nextStart + 0.4).toFixed(1)));
+                          }}
                           onClick={() => {
                             setSelectedCardId(c.id);
                             setCurrentTime(Number((c.start + 0.4).toFixed(1)));
                             setRightTab('props');
                           }}
                           style={{ left, width }}
-                          className={`absolute top-1 bottom-1 rounded px-1.5 text-[10px] truncate transition border ${cls} ${
+                          className={`absolute top-1 bottom-1 rounded px-1.5 text-[10px] truncate transition border cursor-grab active:cursor-grabbing ${cls} ${
                             active ? 'ring-2 ring-orange-400 z-10' : 'opacity-85 hover:opacity-100'
                           }`}
-                          title={`${effectById[c.kind]?.name || c.kind} (${c.start}s - ${c.end}s)`}
+                          title={`${effectById[c.kind]?.name || c.kind} (${c.start}s - ${c.end}s) · 可左右拖拽移动`}
                         >
                           {effectById[c.kind]?.name || c.kind}
                         </button>
@@ -1281,6 +1520,7 @@ export default function VideoStudio({ projectId }: Props) {
                       ))}
                   </div>
                 </div>
+              </div>
               </div>
 
               {/* 最近渲染任务状态条 */}
@@ -1368,6 +1608,22 @@ export default function VideoStudio({ projectId }: Props) {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
+                    {/* 更换特效（保留时间与通用样式，25卡互换） */}
+                    <label className="block space-y-1">
+                      <span className="text-[10px] text-slate-400">更换特效（保留时间和可复用样式）</span>
+                      <select
+                        value={selectedCard.kind}
+                        onChange={(e) => updateSelectedCard({ kind: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300"
+                      >
+                        {effects.map((eff) => (
+                          <option key={eff.id} value={eff.id}>
+                            [{eff.group}] {eff.name} ({eff.id})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
                     {/* 我的样式预设 */}
                     <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
@@ -1468,6 +1724,25 @@ export default function VideoStudio({ projectId }: Props) {
                           />
                         </label>
                       </div>
+                      <label className="block space-y-1">
+                        <span className="text-[10px] text-slate-400">讲过变浅时刻 (秒，空 = 不变浅)</span>
+                        <input
+                          type="number"
+                          step={0.5}
+                          placeholder="例如 12.5（讲完后压暗让位不退场）"
+                          value={selectedCard.params?.dimAt ?? ''}
+                          onChange={(e) => updateSelectedParam('dimAt', e.target.value === '' ? undefined : Number(e.target.value))}
+                          className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono-num text-xs"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between py-0.5 text-[11px] text-slate-300">
+                        <span>呼吸感（此卡独立落定微动）</span>
+                        <input
+                          type="checkbox"
+                          checked={!!selectedCard.params?.breath}
+                          onChange={(e) => updateSelectedParam('breath', e.target.checked || undefined)}
+                        />
+                      </label>
                       <div>
                         <div className="flex items-center justify-between text-[11px] mb-1">
                           <span className="text-slate-400">动画速度 (此卡)</span>
@@ -1675,6 +1950,20 @@ export default function VideoStudio({ projectId }: Props) {
                       </div>
                     </div>
 
+                    {/* 叠放 · LAYER（100% 复刻 5188 编辑台层序控制） */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-1">
+                        <span>叠放顺序（当前第 {doc.cards.findIndex((c) => c.id === selectedCard.id) + 1}/{doc.cards.length} 层）</span>
+                        <span className="font-mono-num">LAYER</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button onClick={() => moveCardLayer('up')} className="py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200 flex items-center justify-center gap-0.5"><ArrowUp className="w-3 h-3" />上移</button>
+                        <button onClick={() => moveCardLayer('down')} className="py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200 flex items-center justify-center gap-0.5"><ArrowDown className="w-3 h-3" />下移</button>
+                        <button onClick={() => moveCardLayer('top')} className="py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200 flex items-center justify-center gap-0.5"><ChevronsUp className="w-3 h-3" />置顶</button>
+                        <button onClick={() => moveCardLayer('bottom')} className="py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200 flex items-center justify-center gap-0.5"><ChevronsDown className="w-3 h-3" />置底</button>
+                      </div>
+                    </div>
+
                     {/* 底部醒目橙色主按钮：加到当前时间点 */}
                     <button
                       onClick={() => selectedEffectMeta && addEffectCard(selectedEffectMeta, currentTime, selectedCard.params)}
@@ -1861,8 +2150,83 @@ export default function VideoStudio({ projectId }: Props) {
                 )}
               </div>
             </label>
+            <label className="flex items-center justify-between py-1">
+              <span className="text-slate-200">安全区参考线（仅编辑可见）</span>
+              <input type="checkbox" checked={showSafeBorder} onChange={(e) => setShowSafeBorder(e.target.checked)} />
+            </label>
+            <label className="flex items-center justify-between py-1">
+              <span className="text-slate-200">人物安全区剪影占位（仅编辑可见）</span>
+              <input type="checkbox" checked={showAvatarGuide} onChange={(e) => setShowAvatarGuide(e.target.checked)} />
+            </label>
             <div className="flex justify-end">
               <button onClick={() => setGlobalModal(false)} className="px-4 py-1.5 rounded bg-cyan-600 text-white">完成</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 完整导出配置弹窗（100% 复刻 5188 导出整条时间轴 / 导出单卡选项） */}
+      {exportModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="w-[440px] bg-[#0f172a] border border-slate-700 rounded-xl p-4 space-y-3 text-xs">
+            <div className="text-sm font-bold text-slate-100">
+              {exportModal.mode === 'single' ? `导出单卡透明视频（${selectedCard?.kind || '未选卡'}）` : '导出整条时间轴（透明 MOV）'}
+            </div>
+            {exportModal.mode === 'single' && (
+              <label className="flex items-center justify-between">
+                <span className="text-slate-300">导出时长 (秒)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={0.5}
+                  value={exportOpts.singleDuration}
+                  onChange={(e) => setExportOpts({ ...exportOpts, singleDuration: Number(e.target.value) })}
+                  className="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono-num text-right text-cyan-300"
+                />
+              </label>
+            )}
+            <label className="flex items-center justify-between">
+              <span className="text-slate-300">输出帧率 (FPS)</span>
+              <select
+                value={exportOpts.fps}
+                onChange={(e) => setExportOpts({ ...exportOpts, fps: Number(e.target.value) })}
+                className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-cyan-300"
+              >
+                <option value={29.97}>29.97 fps (NTSC)</option>
+                <option value={30}>30 fps</option>
+                <option value={50}>50 fps</option>
+                <option value={60}>60 fps</option>
+              </select>
+            </label>
+            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
+              <div className="text-slate-400 text-[11px]">默认输出：ProRes 4444 透明 MOV（含预乘 Alpha 与混音，直接进剪映）</div>
+              <label className="flex items-center justify-between">
+                <span className="text-slate-200">附加 WebM（小体积，适合网页预览）</span>
+                <input type="checkbox" checked={exportOpts.includeWebm} onChange={(e) => setExportOpts({ ...exportOpts, includeWebm: e.target.checked })} />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-slate-200">Windows 兼容模式（渲染偏慢时开启）</span>
+                <input type="checkbox" checked={exportOpts.compatibilityMode} onChange={(e) => setExportOpts({ ...exportOpts, compatibilityMode: e.target.checked })} />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-slate-200">加快帧截图（实验 · fastPng）</span>
+                <input type="checkbox" checked={exportOpts.fastPng} onChange={(e) => setExportOpts({ ...exportOpts, fastPng: e.target.checked })} />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-slate-200">边渲染边编码（实验 · stream）</span>
+                <input
+                  type="checkbox"
+                  checked={exportOpts.exportMode === 'stream'}
+                  onChange={(e) => setExportOpts({ ...exportOpts, exportMode: e.target.checked ? 'stream' : 'sequence' })}
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setExportModal(null)} className="px-3 py-1.5 rounded bg-slate-800 text-slate-300">取消</button>
+              <button onClick={() => handleExport(exportModal.mode, exportOpts)} className="px-4 py-1.5 rounded bg-orange-600 hover:bg-orange-500 text-white font-medium">
+                开始导出
+              </button>
             </div>
           </div>
         </div>

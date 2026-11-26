@@ -556,6 +556,9 @@ def execute_overlay_render_job(
     on_complete,
     on_fail,
     single_params: Optional[dict[str, Any]] = None,
+    compatibility_mode: bool = False,
+    fast_png: bool = False,
+    export_mode: str = "sequence",
 ) -> None:
     """A12/A15：后台线程调用独立 Overlay Studio 的 scripts/export-frames.mjs 执行真实透明导出。"""
     def _worker():
@@ -577,6 +580,9 @@ def execute_overlay_render_job(
                 "ratio": ratio_code,
                 "scale": float(doc.get("fxScale") or 1),
                 "speed": float(doc.get("animSpeed") or 1),
+                "compatibilityMode": bool(compatibility_mode),
+                "fastPng": bool(fast_png),
+                "exportMode": "stream" if export_mode == "stream" else "sequence",
                 "outputDir": str(job_dir),
             }
             if mode == "single":

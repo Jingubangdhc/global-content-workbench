@@ -15,6 +15,7 @@ from backend.db import get_conn
 from backend.services.overlay_adapter import (
     DEFAULT_SFX_CATALOG,
     EFFECT_CATALOG,
+    OVERLAY_ENGINE_ROOT,
     VALID_EFFECT_IDS,
     VIDEO_CUSTOM_SFX_DIR,
     VIDEO_EXPORTS_DIR,
@@ -79,6 +80,22 @@ def api_get_effect_thumb(effect_id: str):
     if not p.exists():
         raise HTTPException(404, "缩略图尚未生成")
     return FileResponse(p, media_type="image/png")
+
+
+@router.get("/demo")
+def api_get_demo_overlay():
+    """读取本地 Overlay Studio 官方内置示例工程（demo-overlay.json + demo.srt），供一键体验。"""
+    demo_dir = OVERLAY_ENGINE_ROOT / "public" / "demo"
+    doc_file = demo_dir / "demo-overlay.json"
+    srt_file = demo_dir / "demo.srt"
+    if not doc_file.exists():
+        raise HTTPException(404, "未找到官方示例文件 demo-overlay.json")
+    doc = json.loads(doc_file.read_text(encoding="utf-8"))
+    srt_text = srt_file.read_text(encoding="utf-8") if srt_file.exists() else ""
+    srt_lines = parse_srt_text(srt_text) if srt_text else []
+    if srt_lines and not doc.get("srt"):
+        doc["srt"] = [{"start": x["start"], "end": x["end"], "text": x["text"]} for x in srt_lines]
+    return {"ok": True, "doc": doc, "srt_text": srt_text, "line_count": len(srt_lines)}
 
 
 class VideoProjectCreate(BaseModel):
@@ -549,6 +566,9 @@ class RenderJobCreate(BaseModel):
     include_webm: bool = True
     fps: float = 30
     duration_sec: Optional[float] = None
+    compatibility_mode: bool = False
+    fast_png: bool = False
+    export_mode: str = "sequence"  # sequence / stream
 
 
 @router.post("/render-jobs")
@@ -631,6 +651,9 @@ def api_create_render_job(body: RenderJobCreate):
         on_complete=_on_complete,
         on_fail=_on_fail,
         single_params=body.single_params,
+        compatibility_mode=body.compatibility_mode,
+        fast_png=body.fast_png,
+        export_mode=body.export_mode,
     )
 
     return {"ok": True, "id": jid, "job_uid": job_uid, "state": "running"}

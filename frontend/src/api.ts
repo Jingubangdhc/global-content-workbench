@@ -247,6 +247,7 @@ export const api = {
 
   // G1 智能视频制作（A01–A16）
   videoCapabilities: () => req('/api/video/capabilities'),
+  videoDemo: () => req('/api/video/demo'),
   listVideoProjects: (projectId?: number) =>
     req(`/api/video/projects${projectId ? `?project_id=${projectId}` : ''}`),
   createVideoProject: (body: any) =>
