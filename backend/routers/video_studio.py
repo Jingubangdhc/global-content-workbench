@@ -28,6 +28,7 @@ from backend.services.overlay_adapter import (
     execute_overlay_render_job,
     lint_overlay_doc,
     parse_srt_text,
+    run_ffprobe,
     safe_filename,
     segments_to_srt,
     sha256_text,
@@ -698,3 +699,59 @@ def api_download_render_output(job_uid: str, fmt: str = Query("mov")):
         raise HTTPException(404, "输出文件不存在或路径受限")
     media_type = "video/webm" if fmt == "webm" else "video/quicktime"
     return FileResponse(target, media_type=media_type, filename=target.name)
+
+
+@router.get("/engine-exports")
+def api_list_engine_exports():
+    """方案 B 桥接：扫描独立 Overlay Studio 引擎 exports/output 目录下最新导出的透明 MOV/WebM 产物。"""
+    out_dir = OVERLAY_ENGINE_ROOT / "exports" / "output"
+    items: list[dict[str, Any]] = []
+    if out_dir.exists():
+        files = sorted(
+            [p for p in out_dir.iterdir() if p.is_file() and p.suffix.lower() in (".mov", ".webm")],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )[:20]
+        for f in files:
+            items.append({
+                "name": f.name,
+                "path": str(f.resolve()),
+                "ext": f.suffix.lower().lstrip("."),
+                "size_bytes": f.stat().st_size,
+                "mtime": int(f.stat().st_mtime),
+            })
+    return {"ok": True, "output_dir": str(out_dir), "items": items}
+
+
+class SendToPublishBody(BaseModel):
+    video_file_path: Optional[str] = None
+    title: Optional[str] = None
+
+
+@router.post("/projects/{vid}/send-to-publish")
+def api_send_video_to_publish(vid: int, body: SendToPublishBody):
+    """方案 B 桥接：将当前视频工程与导出的透明/成片视频一键创建为 PublishHub 发布包。"""
+    conn = get_conn()
+    proj = conn.execute("SELECT * FROM video_projects WHERE id = ?", (vid,)).fetchone()
+    if not proj:
+        conn.close()
+        raise HTTPException(404, "未找到视频工程")
+    vpath = (body.video_file_path or "").strip()
+    if not vpath:
+        rj = conn.execute(
+            "SELECT output_mov_path, output_webm_path FROM render_jobs WHERE video_project_id = ? AND state = 'completed' ORDER BY id DESC LIMIT 1",
+            (vid,),
+        ).fetchone()
+        if rj:
+            vpath = rj["output_mov_path"] or rj["output_webm_path"] or ""
+    title = (body.title or proj["title"] or "未命名发布工程").strip()
+    cur = conn.execute(
+        """INSERT INTO publish_packages(project_id, topic_id, video_project_id, title, video_file_path, rules_version, schedule_timezone)
+           VALUES (?, ?, ?, ?, ?, 'gcw-rules-2026.11', 'Asia/Shanghai')""",
+        (proj["project_id"], proj["topic_id"], vid, title, vpath),
+    )
+    pid = cur.lastrowid
+    _audit(conn, "sent_to_publish", "video_project", str(vid), "ok", f"已推送至多平台发布中心 publish_package#{pid}")
+    conn.commit()
+    conn.close()
+    return {"ok": True, "package_id": pid, "title": title, "video_file_path": vpath}

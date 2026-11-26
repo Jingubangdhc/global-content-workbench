@@ -289,6 +289,9 @@ export const api = {
   getRenderJob: (jobUid: string) => req(`/api/video/render-jobs/${jobUid}`),
   cancelRenderJob: (jobUid: string) =>
     req(`/api/video/render-jobs/${jobUid}/cancel`, { method: 'POST' }),
+  listEngineExports: () => req('/api/video/engine-exports'),
+  sendVideoToPublish: (vid: number, body: { video_file_path?: string; title?: string } = {}) =>
+    req(`/api/video/projects/${vid}/send-to-publish`, { method: 'POST', body: JSON.stringify(body) }),
 
   // G2 多平台发布中心（B01–B11，全平台只填写不自动发布）
   publishCapabilities: () => req('/api/publish/capabilities'),

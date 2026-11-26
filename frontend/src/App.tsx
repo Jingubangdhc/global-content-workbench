@@ -289,7 +289,7 @@ export default function App() {
             templates={templates}
           />
         )}
-        {page === 'video' && <VideoStudio projectId={projectId} />}
+        {page === 'video' && <VideoStudio projectId={projectId} onJumpPublish={() => setPage('publish')} />}
         {page === 'publish' && <PublishHub projectId={projectId} />}
         {page === 'revenue' && (
           <RevenueRadar initialXray={xrayTarget} onOpenCalc={() => setCalcOpen(true)} />
