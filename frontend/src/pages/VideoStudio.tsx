@@ -66,6 +66,8 @@ export default function VideoStudio({ projectId }: Props) {
 
   const [effectSearch, setEffectSearch] = useState('');
   const [effectGroup, setEffectGroup] = useState('全部');
+  const [hoverEffect, setHoverEffect] = useState<{ eff: any; top: number } | null>(null);
+  const hoverIframeRef = useRef<HTMLIFrameElement | null>(null);
   const [rightTab, setRightTab] = useState<'props' | 'lint' | 'sfx' | 'feedback' | 'versions'>('props');
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -570,13 +572,14 @@ export default function VideoStudio({ projectId }: Props) {
         </div>
       ) : (
       <div className="flex-1 flex gap-2.5 min-h-0 overflow-hidden">
-        {/* 左栏：25 种动效模板库 */}
-        <div className="w-64 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden">
+        {/* 左栏：25 种动效模板库（两列真实缩略图 + 悬停动态小窗预览） */}
+        <div className="w-76 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl flex flex-col overflow-hidden relative">
           <div className="p-2.5 border-b border-slate-800 bg-[#0f172a] space-y-2">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
               <span className="flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-cyan-400" /> 动效模板库 ({effects.length})
               </span>
+              <span className="text-[10px] text-slate-400 font-normal">悬停预览 · 点击添加</span>
             </div>
             <input
               value={effectSearch}
@@ -600,22 +603,96 @@ export default function VideoStudio({ projectId }: Props) {
               ))}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 content-start">
             {filteredEffects.map((e) => (
               <button
                 key={e.id}
                 onClick={() => activeProj && addEffectCard(e)}
+                onMouseEnter={(ev) => {
+                  const rect = ev.currentTarget.getBoundingClientRect();
+                  setHoverEffect({ eff: e, top: Math.max(80, Math.min(window.innerHeight - 280, rect.top - 20)) });
+                }}
+                onMouseLeave={() => setHoverEffect(null)}
                 disabled={!activeProj}
-                className="w-full text-left p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 transition disabled:opacity-40"
+                className="text-left rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/60 transition overflow-hidden flex flex-col disabled:opacity-40 group"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-100">{e.name}</span>
-                  <span className="text-[10px] text-cyan-400/80 font-mono-num">{e.id}</span>
+                <div className="w-full aspect-video bg-[#070c16] border-b border-slate-800/80 overflow-hidden relative flex items-center justify-center">
+                  {e.thumb_url ? (
+                    <img
+                      src={e.thumb_url}
+                      alt={e.name}
+                      loading="lazy"
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-slate-600 font-mono-num">{e.id}</span>
+                  )}
+                  <span className="absolute top-1 right-1 px-1 py-0.2 rounded bg-black/70 text-[9px] text-cyan-300 opacity-0 group-hover:opacity-100 transition">
+                    +添加
+                  </span>
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{e.desc}</div>
+                <div className="p-1.5">
+                  <div className="text-[11px] font-medium text-slate-100 truncate">{e.name}</div>
+                  <div className="text-[9px] text-slate-400 truncate mt-0.5">{e.desc}</div>
+                </div>
               </button>
             ))}
           </div>
+
+          {/* 悬停实时动态小窗预览（同源真实 Overlay Studio 动画渲染） */}
+          {hoverEffect && engine?.reachable && (
+            <div
+              style={{ top: `${hoverEffect.top}px` }}
+              className="fixed left-[545px] z-50 w-[384px] rounded-xl bg-[#0b1120] border border-cyan-500/60 shadow-2xl shadow-black/80 overflow-hidden pointer-events-none"
+            >
+              <div className="px-2.5 py-1.5 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between text-[11px]">
+                <span className="font-semibold text-cyan-300">{hoverEffect.eff.name}</span>
+                <span className="font-mono-num text-[10px] text-slate-400">{hoverEffect.eff.id} · 实时预览</span>
+              </div>
+              <div className="w-[384px] h-[216px] bg-[#070c16] relative overflow-hidden">
+                <iframe
+                  key={hoverEffect.eff.id}
+                  ref={hoverIframeRef}
+                  src={`/overlay-engine/?export=1&ratio=h&effect=${encodeURIComponent(hoverEffect.eff.id)}&duration=6`}
+                  title={`预览 ${hoverEffect.eff.name}`}
+                  onLoad={() => {
+                    const win = hoverIframeRef.current?.contentWindow as any;
+                    if (!win) return;
+                    setTimeout(() => {
+                      try {
+                        win.__startExport?.();
+                        let t = 0.05;
+                        win.__setExportT?.(t);
+                        const iv = setInterval(() => {
+                          try {
+                            if (!hoverIframeRef.current || !win.__setExportT) {
+                              clearInterval(iv);
+                              return;
+                            }
+                            t = t >= 4.2 ? 0.05 : Number((t + 0.1).toFixed(2));
+                            win.__setExportT(t);
+                          } catch {
+                            clearInterval(iv);
+                          }
+                        }, 100);
+                      } catch {}
+                    }, 60);
+                  }}
+                  style={{
+                    width: '1920px',
+                    height: '1080px',
+                    transform: 'scale(0.2)',
+                    transformOrigin: 'top left',
+                    border: 0,
+                    background: 'transparent',
+                  }}
+                />
+              </div>
+              <div className="px-2.5 py-1 text-[10px] text-slate-400 bg-[#080d18]">
+                {hoverEffect.eff.desc}（点击卡片立即插入时间轴）
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 中栏：预览画布 + 4 轨时间轴 */}

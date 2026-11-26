@@ -15,8 +15,10 @@ from backend.db import get_conn
 from backend.services.overlay_adapter import (
     DEFAULT_SFX_CATALOG,
     EFFECT_CATALOG,
+    VALID_EFFECT_IDS,
     VIDEO_CUSTOM_SFX_DIR,
     VIDEO_EXPORTS_DIR,
+    VIDEO_STORAGE_DIR,
     VIDEO_UPLOADS_DIR,
     cancel_overlay_render_job,
     check_overlay_engine_health,
@@ -48,12 +50,31 @@ def api_video_capabilities():
     conn = get_conn()
     custom_sfx = [dict(r) for r in conn.execute("SELECT * FROM video_custom_sfx ORDER BY id DESC").fetchall()]
     conn.close()
+    thumbs_dir = VIDEO_STORAGE_DIR / "effect_thumbs"
+    effects_with_thumb = [
+        {
+            **e,
+            "thumb_url": f"/api/video/thumbs/{e['id']}.png" if (thumbs_dir / f"{e['id']}.png").exists() else None,
+        }
+        for e in EFFECT_CATALOG
+    ]
     return {
         "engine": health,
-        "effects": EFFECT_CATALOG,
+        "effects": effects_with_thumb,
         "default_sfx": DEFAULT_SFX_CATALOG,
         "custom_sfx": custom_sfx,
     }
+
+
+@router.get("/thumbs/{effect_id}.png")
+def api_get_effect_thumb(effect_id: str):
+    """返回由本地 Overlay Studio 真实渲染生成的动效卡缩略图。"""
+    if effect_id not in VALID_EFFECT_IDS:
+        raise HTTPException(404, "未知动效卡")
+    p = (VIDEO_STORAGE_DIR / "effect_thumbs" / f"{effect_id}.png").resolve()
+    if not p.exists():
+        raise HTTPException(404, "缩略图尚未生成")
+    return FileResponse(p, media_type="image/png")
 
 
 class VideoProjectCreate(BaseModel):
