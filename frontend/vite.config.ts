@@ -32,6 +32,12 @@ export default defineConfig({
       '/api/project': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       '/api/review-log': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       '/api/choose-export-folder': { target: 'http://127.0.0.1:5177', changeOrigin: true },
+      // AI Motion & Style Lab（M5/M6 独立白模解耦与 504+264 风格工坊同源代理）
+      '/motion-lab': {
+        target: 'http://127.0.0.1:5199',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/motion-lab/, '') || '/',
+      },
       // 主工作台 FastAPI 后端
       '/api': 'http://127.0.0.1:8000',
       '/quick-collect': 'http://127.0.0.1:8000',

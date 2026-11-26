@@ -46,6 +46,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
   const [lintRes, setLintRes] = useState<any>(null);
 
   const [iframeNonce, setIframeNonce] = useState(0);
+  const [studioMode, setStudioMode] = useState<'overlay' | 'motion_lab'>('overlay');
   const [drawerTab, setDrawerTab] = useState<null | 'versions' | 'feedback' | 'lint' | 'exports'>(null);
 
   const [newProjModal, setNewProjModal] = useState(false);
@@ -254,7 +255,28 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
       {/* 顶部 44px 轻量工作台工程交接栏（绝不挤压下方原版完整编辑器） */}
       <div className="h-11 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl px-3 flex items-center justify-between gap-2 overflow-x-auto">
         <div className="flex items-center gap-2 shrink-0">
-          <Clapperboard className="w-4 h-4 text-cyan-400" />
+          {/* 双工作台同源切换胶囊：原版 Overlay Studio v1.4.0 vs AI Motion & Style Lab */}
+          <div className="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-0.5 text-[11px]">
+            <button
+              onClick={() => setStudioMode('overlay')}
+              className={`px-2 py-0.5 rounded-md font-medium transition ${
+                studioMode === 'overlay' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="100% 原版 Overlay Studio v1.4.0 多轨编排台"
+            >
+              🎬 原版编排台
+            </button>
+            <button
+              onClick={() => setStudioMode('motion_lab')}
+              className={`px-2 py-0.5 rounded-md font-medium transition ${
+                studioMode === 'motion_lab' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="AI Motion & Style Lab：白模解耦 · 参考反推 · 504图鉴 & 264动效库 · 1080p透明导出"
+            >
+              ◈ AI 动效工坊
+            </button>
+          </div>
+          <Clapperboard className="w-4 h-4 text-cyan-400 hidden lg:inline" />
           <span className="text-xs font-semibold text-slate-200 hidden sm:inline">工作台工程</span>
           <select
             value={activeProj?.id || ''}
@@ -359,23 +381,31 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
         </div>
       )}
 
-      {/* 主体全屏区：100% 完整保留原版独立 Overlay Studio v1.4.0 编辑器（零功能丢失、零许可混入） */}
+      {/* 主体全屏区：双引擎按需独占渲染（零主线程抢占、100% 保留原版 Overlay Studio v1.4.0 + 同源 AI Motion & Style Lab） */}
       <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl overflow-hidden flex flex-col relative min-h-0">
-        {engine?.reachable ? (
-          <iframe
-            key={iframeNonce}
-            src="/overlay-engine/"
-            title="Overlay Studio v1.4.0 原版完整编辑器"
-            className="w-full flex-1 border-0 bg-[#090d16]"
-          />
+        {studioMode === 'overlay' ? (
+          engine?.reachable ? (
+            <iframe
+              key={iframeNonce}
+              src="/overlay-engine/"
+              title="Overlay Studio v1.4.0 原版完整编辑器"
+              className="w-full flex-1 border-0 bg-[#090d16]"
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-xs gap-2 p-6">
+              <Clapperboard className="w-8 h-8 text-slate-600" />
+              <div>独立 Overlay Studio 引擎（http://127.0.0.1:5177/overlay-engine/）当前未启动</div>
+              <button onClick={() => loadAll()} className="px-3 py-1.5 rounded bg-cyan-600 text-white flex items-center gap-1">
+                <RefreshCw className="w-3.5 h-3.5" /> 重新检测引擎
+              </button>
+            </div>
+          )
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-xs gap-2 p-6">
-            <Clapperboard className="w-8 h-8 text-slate-600" />
-            <div>独立 Overlay Studio 引擎（http://127.0.0.1:5177/overlay-engine/）当前未启动</div>
-            <button onClick={() => loadAll()} className="px-3 py-1.5 rounded bg-cyan-600 text-white flex items-center gap-1">
-              <RefreshCw className="w-3.5 h-3.5" /> 重新检测引擎
-            </button>
-          </div>
+          <iframe
+            src="/motion-lab/"
+            title="AI Motion & Style Lab 动效研发工坊"
+            className="w-full flex-1 border-0 bg-[#f7f6f2]"
+          />
         )}
 
         {/* 右侧滑出工作台桥接抽屉（按需展开，默认关闭不占原版空间） */}

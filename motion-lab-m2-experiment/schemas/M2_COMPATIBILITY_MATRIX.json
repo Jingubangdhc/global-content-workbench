@@ -1,0 +1,32 @@
+{
+  "schema_version": "m2.compatibility.v1",
+  "summary": {
+    "skeleton_count": 4,
+    "skin_count": 4,
+    "total_combinations": 16,
+    "production_combinations": 12,
+    "wireframe_combinations": 4,
+    "requirement_min_verified": 9
+  },
+  "combinations": [
+    { "id": "stat_counter__wireframe_gray", "skeleton": "stat_counter", "skin": "wireframe_gray", "compatible": true, "role": "wireframe_baseline" },
+    { "id": "stat_counter__maitian_minimal", "skeleton": "stat_counter", "skin": "maitian_minimal", "compatible": true, "role": "production" },
+    { "id": "stat_counter__editorial_ink", "skeleton": "stat_counter", "skin": "editorial_ink", "compatible": true, "role": "production" },
+    { "id": "stat_counter__cyber_glass", "skeleton": "stat_counter", "skin": "cyber_glass", "compatible": true, "role": "production" },
+
+    { "id": "bar_race_rank__wireframe_gray", "skeleton": "bar_race_rank", "skin": "wireframe_gray", "compatible": true, "role": "wireframe_baseline" },
+    { "id": "bar_race_rank__maitian_minimal", "skeleton": "bar_race_rank", "skin": "maitian_minimal", "compatible": true, "role": "production" },
+    { "id": "bar_race_rank__editorial_ink", "skeleton": "bar_race_rank", "skin": "editorial_ink", "compatible": true, "role": "production" },
+    { "id": "bar_race_rank__cyber_glass", "skeleton": "bar_race_rank", "skin": "cyber_glass", "compatible": true, "role": "production" },
+
+    { "id": "callout_reveal__wireframe_gray", "skeleton": "callout_reveal", "skin": "wireframe_gray", "compatible": true, "role": "wireframe_baseline" },
+    { "id": "callout_reveal__maitian_minimal", "skeleton": "callout_reveal", "skin": "maitian_minimal", "compatible": true, "role": "production" },
+    { "id": "callout_reveal__editorial_ink", "skeleton": "callout_reveal", "skin": "editorial_ink", "compatible": true, "role": "production" },
+    { "id": "callout_reveal__cyber_glass", "skeleton": "callout_reveal", "skin": "cyber_glass", "compatible": true, "role": "production" },
+
+    { "id": "versus_split__wireframe_gray", "skeleton": "versus_split", "skin": "wireframe_gray", "compatible": true, "role": "wireframe_baseline" },
+    { "id": "versus_split__maitian_minimal", "skeleton": "versus_split", "skin": "maitian_minimal", "compatible": true, "role": "production" },
+    { "id": "versus_split__editorial_ink", "skeleton": "versus_split", "skin": "editorial_ink", "compatible": true, "role": "production" },
+    { "id": "versus_split__cyber_glass", "skeleton": "versus_split", "skin": "cyber_glass", "compatible": true, "role": "production" }
+  ]
+}

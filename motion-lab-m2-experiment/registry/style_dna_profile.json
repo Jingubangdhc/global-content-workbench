@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "likes": 2,
+  "dislikes": 0,
+  "theme_score_dark": 2.0,
+  "preferred_theme": "dark",
+  "motion_intensity": 1.09,
+  "radius_scale": 1.04,
+  "favorite_accents": [
+    "#3b82f6",
+    "#10b981",
+    "#ea580c"
+  ],
+  "liked_atlas_ids": [
+    "1-bit-threshold",
+    "360-panorama"
+  ],
+  "disliked_atlas_ids": [],
+  "updated_at": "2026-11-26 03:05:43"
+}

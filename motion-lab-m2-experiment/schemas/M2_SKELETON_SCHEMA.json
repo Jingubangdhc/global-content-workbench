@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-07/schema",
+  "schema_version": "m2.skeleton.v1",
+  "description": "AI Motion & Style Lab 运动骨架规范：100% 纯函数确定性时间驱动 evaluate(t, duration, params)，严禁自播放动画与 performance.now()。",
+  "time_contract": {
+    "deterministic": true,
+    "supports_scrub_forward": true,
+    "supports_scrub_reverse": true,
+    "supports_pause_seek": true,
+    "normalized_progress_formula": "u = clamp((t - start) / max(duration, 0.001), 0, 1)"
+  },
+  "skeletons": [
+    {
+      "id": "stat_counter",
+      "name": "数值实证递增骨架",
+      "derived_from": ["stat-proof", "odometer", "ring-metric"],
+      "category": "数据实证",
+      "default_duration": 4.0,
+      "motion_phases": [
+        { "phase": "enter", "range": [0.0, 0.18], "easing": "easeOutCubic", "tracks": ["containerOpacity: 0->1", "containerY: 28->0", "containerScale: 0.94->1"] },
+        { "phase": "count_and_ring", "range": [0.12, 0.72], "easing": "easeOutExpo", "tracks": ["numberValue: 0->target", "ringSweep: 0->percent"] },
+        { "phase": "hold", "range": [0.72, 0.90], "easing": "linear", "tracks": ["subtlePulse: 1->1.015->1"] },
+        { "phase": "exit", "range": [0.90, 1.0], "easing": "easeInCubic", "tracks": ["containerOpacity: 1->0", "containerY: 0->-14"] }
+      ],
+      "layout_slots": ["kicker", "primary_metric", "ring_gauge", "label", "source_footnote"],
+      "content_schema": {
+        "kicker": { "type": "string", "label": "顶部眉题", "default": "MARKET SIGNAL" },
+        "value": { "type": "number", "label": "目标数值", "default": 18.6 },
+        "prefix": { "type": "string", "label": "前缀", "default": "" },
+        "suffix": { "type": "string", "label": "后缀", "default": "x" },
+        "percent": { "type": "number", "label": "环形进度(0-100)", "default": 84 },
+        "label": { "type": "string", "label": "主说明", "default": "低粉爆款异常播放倍数" },
+        "source": { "type": "string", "label": "数据出处", "default": "YouTube 真实样本实测" }
+      },
+      "sound_cues": [
+        { "at_ratio": 0.02, "sfx": "pop-light", "role": "卡片进场" },
+        { "at_ratio": 0.68, "sfx": "ding", "role": "数字落定确认" }
+      ]
+    },
+    {
+      "id": "bar_race_rank",
+      "name": "阶梯柱状生长骨架",
+      "derived_from": ["rank-bars", "growth-bars", "checklist"],
+      "category": "多维排行",
+      "default_duration": 4.5,
+      "motion_phases": [
+        { "phase": "header_enter", "range": [0.0, 0.14], "easing": "easeOutCubic", "tracks": ["titleOpacity: 0->1", "titleX: -24->0"] },
+        { "phase": "stagger_bars", "range": [0.12, 0.78], "easing": "easeOutQuart", "stagger_per_item": 0.08, "tracks": ["rowOpacity: 0->1", "barWidthRatio: 0->value/max", "rowValue: 0->value"] },
+        { "phase": "hold", "range": [0.78, 0.90], "easing": "linear", "tracks": ["leaderHighlight: 1"] },
+        { "phase": "exit", "range": [0.90, 1.0], "easing": "easeInCubic", "tracks": ["containerOpacity: 1->0"] }
+      ],
+      "layout_slots": ["title", "ranked_rows[]", "source_footnote"],
+      "content_schema": {
+        "title": { "type": "string", "label": "榜单标题", "default": "高转化内容形式播放中位数对比" },
+        "rows_text": { "type": "string", "label": "条目(名称:数值,|分隔)", "default": "真实账单对比:92|医院实地探访:74|流程避坑指南:58|纯口播科普:31" },
+        "unit": { "type": "string", "label": "单位", "default": "万" },
+        "source": { "type": "string", "label": "数据出处", "default": "样本周期：近30天" }
+      },
+      "sound_cues": [
+        { "at_ratio": 0.14, "sfx": "pop-cluster", "role": "条目依次生长" }
+      ]
+    },
+    {
+      "id": "callout_reveal",
+      "name": "焦点金句逐块浮现骨架",
+      "derived_from": ["blur-text", "quote-lockup", "term-card"],
+      "category": "观点金句",
+      "default_duration": 4.0,
+      "motion_phases": [
+        { "phase": "accent_bar", "range": [0.0, 0.16], "easing": "easeOutCubic", "tracks": ["accentBarScaleY: 0->1", "cardOpacity: 0->1"] },
+        { "phase": "chunk_focus", "range": [0.10, 0.72], "easing": "easeOutExpo", "stagger_per_item": 0.12, "tracks": ["chunkBlurPx: 14->0", "chunkY: 22->0", "chunkOpacity: 0->1"] },
+        { "phase": "meta_reveal", "range": [0.58, 0.80], "easing": "easeOutCubic", "tracks": ["authorOpacity: 0->1", "authorX: -12->0"] },
+        { "phase": "exit", "range": [0.90, 1.0], "easing": "easeInCubic", "tracks": ["containerOpacity: 1->0", "containerScale: 1->0.97"] }
+      ],
+      "layout_slots": ["accent_bar", "badge", "chunks[]", "author_meta"],
+      "content_schema": {
+        "badge": { "type": "string", "label": "顶部标签", "default": "核心洞察" },
+        "chunks_text": { "type": "string", "label": "词块(|分隔,*高亮*)", "default": "动效骨架决定节奏|视觉皮肤决定调性|*解耦后可无限混搭*" },
+        "author": { "type": "string", "label": "署名/出处", "default": "AI Motion & Style Lab · M2 验证" }
+      },
+      "sound_cues": [
+        { "at_ratio": 0.12, "sfx": "hit-soft", "role": "词块聚焦" },
+        { "at_ratio": 0.55, "sfx": "chime", "role": "核心高亮定格" }
+      ]
+    },
+    {
+      "id": "versus_split",
+      "name": "双栏对撞对比骨架",
+      "derived_from": ["versus-card"],
+      "category": "对比取舍",
+      "default_duration": 4.2,
+      "motion_phases": [
+        { "phase": "collide", "range": [0.0, 0.28], "easing": "easeOutBackSoft", "tracks": ["leftX: -140->0", "rightX: 140->0", "cardsOpacity: 0->1"] },
+        { "phase": "vs_badge", "range": [0.22, 0.42], "easing": "easeOutExpo", "tracks": ["vsScale: 0.2->1", "vsRotate: -25->0", "vsOpacity: 0->1"] },
+        { "phase": "winner_glow", "range": [0.46, 0.72], "easing": "easeOutCubic", "tracks": ["winnerBoost: 0->1", "loserDim: 1->0.68"] },
+        { "phase": "exit", "range": [0.90, 1.0], "easing": "easeInCubic", "tracks": ["containerOpacity: 1->0"] }
+      ],
+      "layout_slots": ["left_card", "vs_badge", "right_card"],
+      "content_schema": {
+        "left_kicker": { "type": "string", "label": "左卡小标", "default": "旧方案 · 耦合开发" },
+        "left_title": { "type": "string", "label": "左卡标题", "default": "每换风格重写组件" },
+        "left_sub": { "type": "string", "label": "左卡说明", "default": "450行/卡 · 难复用于501卡" },
+        "right_kicker": { "type": "string", "label": "右卡小标", "default": "新方案 · 白模解耦" },
+        "right_title": { "type": "string", "label": "右卡标题", "default": "骨架与皮肤正交组合" },
+        "right_sub": { "type": "string", "label": "右卡说明", "default": "N骨架 × M皮肤 = 几何级扩容" },
+        "winner": { "type": "string", "label": "胜出侧(left/right/none)", "default": "right" }
+      },
+      "sound_cues": [
+        { "at_ratio": 0.24, "sfx": "impact", "role": "双卡对撞与 VS 弹出" }
+      ]
+    },
+    {
+      "id": "step_flow_list",
+      "name": "步骤流程清单骨架",
+      "category": "流程拆解",
+      "default_duration": 4.2,
+      "motion_phases": [
+        { "phase": "header_enter", "range": [0.0, 0.16], "easing": "easeOutCubic", "desc": "眉题与主标题整体淡入上移" },
+        { "phase": "underline_draw", "range": [0.12, 0.30], "easing": "easeOutQuart", "desc": "高亮关键词下划线与分割线左向右绘制" },
+        { "phase": "steps_cascade", "range": [0.22, 0.80], "easing": "easeOutCubic", "desc": "序号节点沿纵轴依次点亮并推进焦点" },
+        { "phase": "hold", "range": [0.80, 0.90], "easing": "linear", "desc": "完整流程清晰停留" },
+        { "phase": "exit", "range": [0.90, 1.0], "easing": "easeInCubic", "desc": "整体优雅退场" }
+      ],
+      "layout_slots": ["kicker", "headline_highlight", "divider", "step_nodes"],
+      "content_schema": {
+        "kicker_accent": { "type": "string", "label": "眉题高亮前缀", "default": "出片流程" },
+        "kicker_sub": { "type": "string", "label": "眉题后缀说明", "default": " · 共 3 部分" },
+        "title": { "type": "string", "label": "主标题(*包裹高亮词*)", "default": "《*三步*出片》" },
+        "steps_text": { "type": "string", "label": "步骤条目(|分隔)", "default": "丢一份字幕稿|AI 按语义编排|一键透明导出" }
+      },
+      "sound_cues": [
+        { "at_ratio": 0.14, "sfx": "whoosh", "role": "高亮下划线绘出" },
+        { "at_ratio": 0.28, "sfx": "tick", "role": "步骤节点依次点亮" }
+      ]
+    }
+  ]
+}

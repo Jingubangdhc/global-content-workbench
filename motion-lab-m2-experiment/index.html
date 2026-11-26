@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Motion & Style Lab · M2 白模解耦实验台</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root {
+      --bg: #f7f6f2;
+      --surface: #ffffff;
+      --surface-alt: #f1efe9;
+      --border: #e2ded5;
+      --ink: #18181b;
+      --ink-2: #52525b;
+      --muted: #71717a;
+      --accent: #ea580c;
+      --accent-soft: #fff7ed;
+      --teal: #0f766e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font: 13px/1.45 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+    header {
+      height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 1px solid #fed7aa; font-weight: 600; }
+    .btn-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    button, select, input, textarea { font: inherit; color: inherit; }
+    button {
+      cursor: pointer; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 11px; font-size: 12px; transition: all .15s;
+    }
+    button:hover { border-color: #a1a1aa; background: var(--surface-alt); }
+    button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+    button.primary:hover { background: #c2410c; }
+    .main { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+    aside.left {
+      width: 248px; background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto; padding: 12px; gap: 10px; flex-shrink: 0;
+    }
+    aside.right {
+      width: 312px; background: var(--surface); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto; padding: 12px; gap: 12px; flex-shrink: 0;
+    }
+    .sec-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .skel-card {
+      padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg);
+      cursor: pointer; transition: all .15s; text-align: left; width: 100%;
+    }
+    .skel-card.active { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); box-shadow: 0 2px 10px rgba(234,88,12,.10); }
+    .skel-card.active b { color: var(--accent); }
+    .skel-card b { display: block; font-size: 13px; margin-bottom: 2px; }
+    .skel-card small { color: var(--muted); font-size: 11px; }
+    .center { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 12px; gap: 10px; }
+    .stage-wrap {
+      flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; overflow: auto;
+    }
+    .checker {
+      background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+      background-size: 18px 18px;
+      background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+    }
+    canvas.stage-canvas {
+      max-width: 100%; max-height: 100%; aspect-ratio: 16/9; border-radius: 10px;
+      border: 1px solid var(--border); box-shadow: 0 10px 28px rgba(24,24,27,.07);
+    }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 1120px; }
+    .compare-col { display: flex; flex-direction: column; gap: 6px; }
+    .compare-label { font-size: 12px; font-weight: 600; color: var(--ink-2); display: flex; justify-content: space-between; }
+    .matrix-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: 100%; }
+    .matrix-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px; cursor: pointer; }
+    .matrix-item:hover { border-color: var(--accent); }
+    .matrix-item canvas { width: 100%; aspect-ratio: 16/9; border-radius: 6px; display: block; }
+    .matrix-item .cap { font-size: 10px; color: var(--ink-2); margin-top: 4px; display: flex; justify-content: space-between; }
+    .timeline {
+      height: 124px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+    }
+    .tl-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .tl-track {
+      position: relative; flex: 1; background: var(--surface-alt); border: 1px solid var(--border);
+      border-radius: 8px; cursor: ew-resize; user-select: none; overflow: hidden;
+    }
+    .tl-phases { position: absolute; inset: 8px 0 8px 0; display: flex; pointer-events: none; }
+    .tl-phase {
+      height: 100%; border-right: 1px dashed rgba(24,24,27,.15); font-size: 10px; color: var(--ink-2);
+      display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap;
+    }
+    .tl-cue {
+      position: absolute; bottom: 4px; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--teal); transform: translateX(-4px); pointer-events: none;
+    }
+    .tl-head {
+      position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); pointer-events: none;
+    }
+    .tl-head::before {
+      content: ''; position: absolute; top: -1px; left: -5px; width: 12px; height: 12px;
+      border-radius: 3px; background: var(--accent);
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .field label { font-size: 11px; color: var(--ink-2); display: flex; justify-content: space-between; }
+    .field input[type="text"], .field input[type="number"], .field textarea {
+      width: 100%; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); font-size: 12px;
+    }
+    .skin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .skin-btn { text-align: left; padding: 8px; border-radius: 8px; }
+    .skin-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
+    .ai-box { padding: 10px; border-radius: 10px; background: var(--surface-alt); border: 1px dashed #cbd5e1; }
+    .status-bar { font-size: 11px; color: var(--teal); min-height: 16px; }
+    .mono { font-family: 'JetBrains Mono', Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span>◈ AI Motion & Style Lab</span>
+      <span class="badge">M4 风格混搭 · Style DNA 研发台</span>
+    </div>
+    <div class="btn-group">
+      <button id="modeSingle" class="active">单画布预览</button>
+      <button id="modeCompare">白模 vs 成品对比</button>
+      <button id="modeMatrix">矩阵总览</button>
+      <button id="modeRemix">🎲 M4 风格混搭</button>
+      <button id="modeAssets">📚 504图鉴 & 264动效库</button>
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px;margin:0 6px;color:var(--ink-2)">
+        <input type="checkbox" id="chkTransparent" /> 透明底纹
+      </label>
+      <button id="btnSaveProj">保存工程</button>
+      <button id="btnRestoreProj">恢复工程</button>
+      <button id="btnExport" class="primary">导出透明 MOV + WebM</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="left">
+      <div class="sec-title">1. 动效白模骨架 (5)</div>
+      <div id="skeletonList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="sec-title" style="margin-top:8px">2. 已入库原创卡片 (<span id="lblCustomCount">0</span>)</div>
+      <div id="customCardList" style="display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted)">
+        <div>暂无入库卡片（通过右侧沙箱门禁后可入库）</div>
+      </div>
+      <div class="sec-title" style="margin-top:8px">3. 架构契约验证</div>
+      <div style="font-size:11px;color:var(--muted);background:var(--bg);padding:9px;border-radius:8px;border:1px solid var(--border)">
+        • 纯函数 <span class="mono">f(t)</span> 驱动，零自播放动画<br/>
+        • 支持正/反向任意擦洗与暂停定点<br/>
+        • 换皮肤不改变骨架运动轨迹<br/>
+        • 4 道沙箱门禁全绿后方可入库
+      </div>
+    </aside>
+
+    <section class="center">
+      <div id="exportBanner" style="display:none;background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;border-radius:10px;padding:8px 12px;align-items:center;justify-content:space-between;gap:10px;font-size:12px;flex-shrink:0">
+        <span id="exportBannerText">✅ 透明视频已生成</span>
+        <div class="btn-group">
+          <a id="dlMovLink" download style="text-decoration:none;background:#059669;color:#fff;padding:5px 10px;border-radius:7px;font-weight:600;font-size:12px">⬇ 下载透明 MOV</a>
+          <a id="dlWebmLink" download style="text-decoration:none;background:#0f766e;color:#fff;padding:5px 10px;border-radius:7px;font-weight:600;font-size:12px">⬇ 下载透明 WebM</a>
+          <button id="btnCloseBanner" style="padding:4px 8px;font-size:11px">关闭</button>
+        </div>
+      </div>
+      <div id="stageWrap" class="stage-wrap">
+        <canvas id="mainCanvas" class="stage-canvas" width="2560" height="1440"></canvas>
+        <div id="compareWrap" class="compare-grid" style="display:none">
+          <div class="compare-col">
+            <div class="compare-label"><span>左侧：灰色白模骨架（Wireframe）</span><span class="mono" id="cmpTimeL">0.00s</span></div>
+            <canvas id="cmpLeft" class="stage-canvas" width="1920" height="1080"></canvas>
+          </div>
+          <div class="compare-col">
+            <div class="compare-label"><span id="cmpSkinTitle">右侧：成品视觉皮肤</span><span class="mono" id="cmpTimeR">0.00s</span></div>
+            <canvas id="cmpRight" class="stage-canvas" width="1920" height="1080"></canvas>
+          </div>
+        </div>
+        <div id="matrixWrap" class="matrix-grid" style="display:none"></div>
+        <div id="remixWrap" style="display:none;width:100%;height:100%;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:240px">
+              <input id="atlasQueryInput" type="text" placeholder="检索 504 项 Atlas 风格基因（例：极简、赛博、印刷、电影）..." style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px" />
+              <button id="btnGenRemix" class="primary">🎲 生成 4 组混搭变体</button>
+            </div>
+            <div id="remixDnaBadge" class="mono" style="font-size:11px;color:var(--teal);background:#f0fdfa;border:1px solid #99f6e4;padding:4px 9px;border-radius:999px">
+              Style DNA v1 · balanced
+            </div>
+          </div>
+          <div id="remixGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0"></div>
+        </div>
+        <div id="assetsWrap" style="display:none;width:100%;height:100%;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <div class="btn-group">
+              <button id="tabAtlas504" class="active">🎨 Atlas 视觉图鉴 (<span id="cntAtlas504">504</span>)</button>
+              <button id="tabMotion264">🎬 Motion Prompt 镜头库 (<span id="cntMotion264">264</span>)</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:260px">
+              <select id="assetCatSelect" style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:12px">
+                <option value="">全部分类</option>
+              </select>
+              <input id="assetSearchInput" type="text" placeholder="中英文检索全部 504 + 264 项资产..." style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px" />
+              <button id="btnAssetSearch" class="primary">搜索</button>
+            </div>
+          </div>
+          <div id="assetGrid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;overflow-y:auto;flex:1;align-content:start;padding-right:4px"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--ink-2);padding-top:4px;border-top:1px solid var(--border)">
+            <span id="assetPageInfo" class="mono">共 504 项 · 第 1 / 21 页</span>
+            <div class="btn-group">
+              <button id="btnAssetPrev">上一页</button>
+              <button id="btnAssetNext">下一页</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline">
+        <div class="tl-bar">
+          <div class="btn-group">
+            <button id="btnPlay" class="primary">▶ 播放 (Space)</button>
+            <button id="btnZero">归零</button>
+            <select id="selSpeed" style="padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);font-size:12px">
+              <option value="0.5">0.5× 慢放</option>
+              <option value="1" selected>1.0× 原速</option>
+              <option value="1.5">1.5× 快放</option>
+            </select>
+          </div>
+          <div class="mono" style="font-size:12px;color:var(--ink-2)">
+            当前 <b id="lblTime" style="color:var(--accent)">0.00s</b> / <span id="lblDur">4.00s</span> · 拖动轨道支持正向/反向实时擦洗
+          </div>
+          <div id="exportStatus" class="status-bar"></div>
+        </div>
+        <div id="tlTrack" class="tl-track">
+          <div id="tlPhases" class="tl-phases"></div>
+          <div id="tlCues"></div>
+          <div id="tlHead" class="tl-head" style="left:0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right">
+      <div>
+        <div class="sec-title">3. 视觉皮肤（Atlas 映射 · 4）</div>
+        <div id="skinGrid" class="skin-grid"></div>
+      </div>
+
+      <div>
+        <div class="sec-title">4. 个人 Style DNA 学习画像</div>
+        <div id="dnaProfileCard" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <b id="dnaSummaryTitle">DNA v1 · 均衡偏好</b>
+            <span class="mono" id="dnaCounts" style="color:var(--muted)">👍0 / 👎0</span>
+          </div>
+          <div id="dnaSwatches" style="display:flex;align-items:center;gap:5px"></div>
+          <div style="display:flex;gap:6px;margin-top:2px">
+            <button id="btnApplyMyDna" style="flex:1;padding:4px 6px;font-size:11px">一键套用我的 DNA</button>
+            <button id="btnResetDna" style="padding:4px 8px;font-size:11px">重置</button>
+          </div>
+        </div>
+        <div class="field">
+          <label><span>运动幅度系数</span><span class="mono" id="lblAmp">1.00×</span></label>
+          <input id="rngAmp" type="range" min="0.5" max="1.6" step="0.05" value="1" />
+        </div>
+        <div class="field">
+          <label><span>圆角锐利度</span><span class="mono" id="lblRad">1.00×</span></label>
+          <input id="rngRad" type="range" min="0" max="2" step="0.1" value="1" />
+        </div>
+        <div class="field">
+          <label><span>强调色覆盖（可选）</span><button id="btnClearAccent" style="padding:1px 6px;font-size:10px">恢复默认</button></label>
+          <input id="colAccent" type="color" value="#ea580c" style="width:100%;height:28px;border:1px solid var(--border);border-radius:6px;padding:2px" />
+        </div>
+      </div>
+
+      <div>
+        <div class="sec-title">5. Content 内容参数（实时修改）</div>
+        <div id="contentFields"></div>
+      </div>
+
+      <div class="ai-box" style="display:flex;flex-direction:column;gap:8px">
+        <div class="sec-title" style="margin-bottom:0">6. M3 参考上传反推（图/视频/GIF）</div>
+        <input id="refFileInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.mp4,.mov,.webm" style="font-size:11px" />
+        <div id="refAnalysisBox" style="font-size:11px;color:var(--ink-2);display:none;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px"></div>
+
+        <div class="sec-title" style="margin:4px 0 0">7. M3 AI 协作共创（检索 504 Atlas）</div>
+        <textarea id="aiPrompt" rows="2" placeholder="例：做一个《三步出片》风格的暗黑数据蓝步骤清单，3.2秒快节奏..."></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--muted)">产出草案进入隔离沙箱</span>
+          <button id="btnAiApply" class="primary" style="padding:5px 10px;font-size:11px">生成沙箱草案</button>
+        </div>
+        <div id="aiReply" style="font-size:11px;color:var(--teal)"></div>
+
+        <div id="sandboxPanel" style="display:none;background:var(--surface);border:1px solid #fed7aa;border-radius:8px;padding:8px;font-size:11px">
+          <div style="font-weight:700;color:var(--accent);margin-bottom:4px" id="draftTitle">沙箱待检草案</div>
+          <div id="gateList" style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px;color:var(--ink-2)"></div>
+          <div style="display:flex;gap:6px">
+            <button id="btnRunGate" style="flex:1;padding:5px 8px;font-size:11px">运行 4 道沙箱门禁</button>
+            <button id="btnRegisterCard" class="primary" disabled style="flex:1;padding:5px 8px;font-size:11px;opacity:0.5">✓ 入库动效库</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module">
+    import { renderFrame, clamp } from './engine.js';
+
+    // 自动适配独立运行 (http://127.0.0.1:5199/) 与主工作台同源代理 (http://localhost:5173/motion-lab/)
+    const API_BASE = window.location.pathname.startsWith('/motion-lab') ? '/motion-lab' : '';
+    const apiUrl = (p) => `${API_BASE}${p}`;
+
+    const STORAGE_KEY = 'motionLabM2ProjectV1';
+    const [skelSchema, skinSchema] = await Promise.all([
+      fetch(apiUrl('/schemas/M2_SKELETON_SCHEMA.json')).then((r) => r.json()),
+      fetch(apiUrl('/schemas/M2_SKIN_SCHEMA.json')).then((r) => r.json()),
+    ]);
+
+    const skeletons = skelSchema.skeletons;
+    const skins = skinSchema.skins;
+
+    const state = {
+      mode: 'single', // single | compare | matrix
+      skeletonId: skeletons[0].id,
+      skinId: 'maitian_minimal',
+      transparent: false,
+      t: 1.4,
+      duration: skeletons[0].default_duration,
+      playing: false,
+      speed: 1.0,
+      dna: { motion_intensity: 1.0, radius_scale: 1.0, accent_override: null },
+      contentsBySkeleton: Object.fromEntries(
+        skeletons.map((s) => [
+          s.id,
+          Object.fromEntries(Object.entries(s.content_schema).map(([k, v]) => [k, v.default])),
+        ])
+      ),
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const getSkel = () => skeletons.find((s) => s.id === state.skeletonId);
+    const getSkin = (id = state.skinId) => skins.find((s) => s.id === id);
+
+    function renderHiRes(cv, t, duration, skelId, skinObj, content, dna, transparent) {
+      const ctx = cv.getContext('2d');
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      if ('textRendering' in ctx) ctx.textRendering = 'geometricPrecision';
+      ctx.scale(cv.width / 1280, cv.height / 720);
+      renderFrame(ctx, 1280, 720, t, duration, skelId, skinObj, content, dna, transparent);
+      ctx.restore();
+    }
+
+    function drawAll() {
+      const skel = getSkel();
+      const skin = getSkin();
+      const content = state.contentsBySkeleton[state.skeletonId];
+      $('lblTime').textContent = `${state.t.toFixed(2)}s`;
+      $('lblDur').textContent = `${state.duration.toFixed(2)}s`;
+      $('tlHead').style.left = `${clamp(state.t / state.duration, 0, 1) * 100}%`;
+
+      if (state.mode === 'single') {
+        const cv = $('mainCanvas');
+        cv.classList.toggle('checker', state.transparent);
+        renderHiRes(cv, state.t, state.duration, state.skeletonId, skin, content, state.dna, state.transparent);
+      } else if (state.mode === 'compare') {
+        const wf = getSkin('wireframe_gray');
+        const cL = $('cmpLeft'), cR = $('cmpRight');
+        cL.classList.toggle('checker', state.transparent);
+        cR.classList.toggle('checker', state.transparent);
+        $('cmpTimeL').textContent = `${state.t.toFixed(2)}s`;
+        $('cmpTimeR').textContent = `${state.t.toFixed(2)}s`;
+        $('cmpSkinTitle').textContent = `右侧：${skin.name}`;
+        renderHiRes(cL, state.t, state.duration, state.skeletonId, wf, content, state.dna, state.transparent);
+        renderHiRes(cR, state.t, state.duration, state.skeletonId, skin, content, state.dna, state.transparent);
+      } else if (state.mode === 'matrix') {
+        document.querySelectorAll('#matrixWrap canvas').forEach((cv) => {
+          const skId = cv.dataset.skeleton;
+          const snId = cv.dataset.skin;
+          renderHiRes(cv, state.t, state.duration, skId, getSkin(snId), state.contentsBySkeleton[skId], state.dna, state.transparent);
+        });
+      } else if (state.mode === 'remix') {
+        document.querySelectorAll('#remixGrid canvas').forEach((cv) => {
+          const idx = Number(cv.dataset.vidx);
+          const v = remixVariants[idx];
+          if (!v) return;
+          renderHiRes(cv, state.t, state.duration, state.skeletonId, v.skin, content, v.dna, state.transparent);
+        });
+      }
+    }
+
+    function renderLeftList() {
+      const box = $('skeletonList');
+      box.innerHTML = '';
+      skeletons.forEach((s) => {
+        const b = document.createElement('button');
+        b.className = `skel-card ${s.id === state.skeletonId ? 'active' : ''}`;
+        b.innerHTML = `<b>${s.name}</b><small class="mono">${s.id} · ${s.category} · ${s.default_duration}s</small>`;
+        b.onclick = () => {
+          state.skeletonId = s.id;
+          state.duration = s.default_duration;
+          state.t = Math.min(state.t, state.duration);
+          renderLeftList();
+          renderContentFields();
+          renderTimelinePhases();
+          drawAll();
+        };
+        box.appendChild(b);
+      });
+    }
+
+    function renderSkinButtons() {
+      const box = $('skinGrid');
+      box.innerHTML = '';
+      skins.forEach((sn) => {
+        const b = document.createElement('button');
+        b.className = `skin-btn ${sn.id === state.skinId ? 'active' : ''}`;
+        b.innerHTML = `<div style="font-size:12px">${sn.name.split('（')[0]}</div><div style="font-size:10px;color:var(--muted)" class="mono">${sn.mode}</div>`;
+        b.onclick = () => {
+          state.skinId = sn.id;
+          renderSkinButtons();
+          drawAll();
+        };
+        box.appendChild(b);
+      });
+    }
+
+    function renderContentFields() {
+      const skel = getSkel();
+      const content = state.contentsBySkeleton[state.skeletonId];
+      const box = $('contentFields');
+      box.innerHTML = '';
+      Object.entries(skel.content_schema).forEach(([k, meta]) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'field';
+        wrap.innerHTML = `<label><span>${meta.label}</span><span class="mono">${k}</span></label>`;
+        const inp = document.createElement('input');
+        inp.type = meta.type === 'number' ? 'number' : 'text';
+        inp.value = content[k] ?? '';
+        inp.oninput = () => {
+          content[k] = meta.type === 'number' ? Number(inp.value) : inp.value;
+          drawAll();
+        };
+        wrap.appendChild(inp);
+        box.appendChild(wrap);
+      });
+    }
+
+    function renderTimelinePhases() {
+      const skel = getSkel();
+      const pBox = $('tlPhases');
+      pBox.innerHTML = '';
+      const colors = ['rgba(234,88,12,.14)', 'rgba(15,118,110,.14)', 'rgba(100,116,139,.12)', 'rgba(225,29,72,.12)'];
+      skel.motion_phases.forEach((ph, i) => {
+        const d = document.createElement('div');
+        d.className = 'tl-phase';
+        d.style.width = `${(ph.range[1] - ph.range[0]) * 100}%`;
+        d.style.background = colors[i % colors.length];
+        d.textContent = ph.phase;
+        pBox.appendChild(d);
+      });
+      const cBox = $('tlCues');
+      cBox.innerHTML = '';
+      (skel.sound_cues || []).forEach((c) => {
+        const dot = document.createElement('div');
+        dot.className = 'tl-cue';
+        dot.style.left = `${c.at_ratio * 100}%`;
+        dot.title = `音效锚点: ${c.sfx} (${c.role})`;
+        cBox.appendChild(dot);
+      });
+    }
+
+    function buildMatrixGrid() {
+      const wrap = $('matrixWrap');
+      wrap.innerHTML = '';
+      skeletons.forEach((sk) => {
+        skins.forEach((sn) => {
+          const item = document.createElement('div');
+          item.className = 'matrix-item';
+          const cv = document.createElement('canvas');
+          cv.width = 480;
+          cv.height = 270;
+          cv.dataset.skeleton = sk.id;
+          cv.dataset.skin = sn.id;
+          const cap = document.createElement('div');
+          cap.className = 'cap';
+          cap.innerHTML = `<span>${sk.name.slice(0, 6)}</span><span class="mono">${sn.id.split('_')[0]}</span>`;
+          item.appendChild(cv);
+          item.appendChild(cap);
+          item.onclick = () => {
+            state.skeletonId = sk.id;
+            state.skinId = sn.id;
+            setMode('single');
+            renderLeftList();
+            renderSkinButtons();
+            renderContentFields();
+            renderTimelinePhases();
+            drawAll();
+          };
+          wrap.appendChild(item);
+        });
+      });
+    }
+
+    let remixVariants = [];
+    let remixSeed = 0;
+    let dnaProfile = null;
+    const assetState = { source: 'atlas', q: '', category: '', page: 1, totalPages: 1 };
+
+    function setMode(m) {
+      state.mode = m;
+      $('modeSingle').classList.toggle('active', m === 'single');
+      $('modeCompare').classList.toggle('active', m === 'compare');
+      $('modeMatrix').classList.toggle('active', m === 'matrix');
+      $('modeRemix').classList.toggle('active', m === 'remix');
+      $('modeAssets').classList.toggle('active', m === 'assets');
+      $('mainCanvas').style.display = m === 'single' ? 'block' : 'none';
+      $('compareWrap').style.display = m === 'compare' ? 'grid' : 'none';
+      $('matrixWrap').style.display = m === 'matrix' ? 'grid' : 'none';
+      $('remixWrap').style.display = m === 'remix' ? 'flex' : 'none';
+      $('assetsWrap').style.display = m === 'assets' ? 'flex' : 'none';
+      if (m === 'remix' && !remixVariants.length) generateRemixVariants();
+      else if (m === 'assets') loadAssetsCatalog();
+      else drawAll();
+    }
+
+    $('modeSingle').onclick = () => setMode('single');
+    $('modeCompare').onclick = () => setMode('compare');
+    $('modeMatrix').onclick = () => setMode('matrix');
+    $('modeRemix').onclick = () => setMode('remix');
+    $('modeAssets').onclick = () => setMode('assets');
+
+    async function loadAssetsCatalog() {
+      const qs = new URLSearchParams({
+        source: assetState.source,
+        q: assetState.q,
+        category: assetState.category,
+        page: String(assetState.page),
+        page_size: '18',
+      });
+      const res = await fetch(apiUrl(`/api/m4/assets/browse?${qs}`)).then((r) => r.json());
+      if (!res.ok) return;
+      $('cntAtlas504').textContent = String(res.atlas_total);
+      $('cntMotion264').textContent = String(res.motion_total);
+      assetState.totalPages = res.total_pages;
+      $('assetPageInfo').textContent = `当前命中 ${res.total_matched} 项（全库 ${res.atlas_total} Atlas + ${res.motion_total} Motion = ${res.atlas_total + res.motion_total} 项）· 第 ${res.page} / ${res.total_pages} 页`;
+
+      const sel = $('assetCatSelect');
+      const prevCat = assetState.category;
+      sel.innerHTML = '<option value="">全部分类</option>' + (res.categories || []).map((c) => `<option value="${c}" ${c === prevCat ? 'selected' : ''}>${c}</option>`).join('');
+
+      const grid = $('assetGrid');
+      grid.innerHTML = '';
+      (res.items || []).forEach((it) => {
+        const card = document.createElement('div');
+        card.className = 'asset-card';
+        card.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px';
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+            <b style="font-size:13px;color:var(--ink)">${it.title_zh}</b>
+            <span class="mono" style="font-size:10px;padding:2px 6px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--muted);flex-shrink:0">${it.category}</span>
+          </div>
+          <div class="mono" style="font-size:10px;color:var(--teal)">${it.title_en}${it.cycle ? ` · 周期 ${it.cycle}s` : it.decade ? ` · ${it.decade}` : ''}</div>
+          <div style="font-size:11px;color:var(--ink-2);line-height:1.4;min-height:30px">${it.summary || '视觉风格与动效基因参考'}</div>
+          <div style="display:flex;gap:6px;margin-top:auto">
+            <button class="primary btn-asset-apply" style="flex:1;padding:4px 8px;font-size:11px">✨ 套用到当前画布</button>
+            <button class="btn-asset-remix" style="padding:4px 8px;font-size:11px">🎲 4格混搭</button>
+          </div>
+        `;
+        card.querySelector('.btn-asset-apply').onclick = async () => {
+          const resp = await fetch(apiUrl('/api/m4/assets/apply'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: assetState.source, item_id: it.id, current_skeleton_id: state.skeletonId }),
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            setMode('single');
+            applyDraftToStage(data.draft_card, false);
+            $('exportStatus').textContent = `✨ 已将 ${assetState.source === 'atlas' ? 'Atlas 图鉴' : 'Motion Prompt'}「${it.title_zh}」编译并套用到画布`;
+          }
+        };
+        card.querySelector('.btn-asset-remix').onclick = () => {
+          $('atlasQueryInput').value = it.title_zh.slice(0, 6);
+          setMode('remix');
+          generateRemixVariants();
+        };
+        grid.appendChild(card);
+      });
+    }
+
+    $('tabAtlas504').onclick = () => {
+      assetState.source = 'atlas'; assetState.category = ''; assetState.page = 1;
+      $('tabAtlas504').classList.add('active'); $('tabMotion264').classList.remove('active');
+      loadAssetsCatalog();
+    };
+    $('tabMotion264').onclick = () => {
+      assetState.source = 'motion'; assetState.category = ''; assetState.page = 1;
+      $('tabMotion264').classList.add('active'); $('tabAtlas504').classList.remove('active');
+      loadAssetsCatalog();
+    };
+    $('assetCatSelect').onchange = (e) => { assetState.category = e.target.value; assetState.page = 1; loadAssetsCatalog(); };
+    $('btnAssetSearch').onclick = () => { assetState.q = $('assetSearchInput').value.trim(); assetState.page = 1; loadAssetsCatalog(); };
+    $('assetSearchInput').onkeydown = (e) => { if (e.key === 'Enter') $('btnAssetSearch').click(); };
+    $('btnAssetPrev').onclick = () => { if (assetState.page > 1) { assetState.page -= 1; loadAssetsCatalog(); } };
+    $('btnAssetNext').onclick = () => { if (assetState.page < assetState.totalPages) { assetState.page += 1; loadAssetsCatalog(); } };
+
+    function renderDnaProfileCard(prof) {
+      dnaProfile = prof;
+      const themeMap = { dark: '偏暗黑编辑部', light: '偏浅色极简', balanced: '明暗均衡' };
+      $('dnaSummaryTitle').textContent = `DNA v${prof.version} · ${themeMap[prof.preferred_theme] || prof.preferred_theme}`;
+      $('dnaCounts').textContent = `👍${prof.likes} / 👎${prof.dislikes}`;
+      $('remixDnaBadge').textContent = `Style DNA v${prof.version} · ${prof.preferred_theme} · 幅度 ${prof.motion_intensity}×`;
+      const sw = (prof.favorite_accents || []).slice(0, 5).map((c) => `<span title="${c}" style="display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid #cbd5e1;background:${c}"></span>`).join('');
+      $('dnaSwatches').innerHTML = `<span style="color:var(--muted)">偏好色板：</span>${sw}<span class="mono" style="margin-left:auto;color:var(--muted)">幅度${prof.motion_intensity}× 圆角${prof.radius_scale}×</span>`;
+    }
+
+    async function loadDnaProfile() {
+      try {
+        const res = await fetch(apiUrl('/api/m4/dna')).then((r) => r.json());
+        if (res.ok) renderDnaProfileCard(res.profile);
+      } catch (e) { /* 忽略 */ }
+    }
+
+    async function sendDnaFeedback(payload) {
+      const resp = await fetch(apiUrl('/api/m4/dna/feedback'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const res = await resp.json();
+      if (res.ok) {
+        renderDnaProfileCard(res.profile);
+        $('exportStatus').textContent = payload.action === 'reset'
+          ? '🔄 已重置个人 Style DNA 偏好'
+          : `🧠 Style DNA 已学习更新至 v${res.profile.version}（偏好：${res.profile.preferred_theme}）`;
+      }
+    }
+
+    async function generateRemixVariants() {
+      remixSeed += 1;
+      const q = $('atlasQueryInput').value.trim();
+      const resp = await fetch(apiUrl('/api/m4/mix-variants'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skeleton_id: state.skeletonId, atlas_query: q, seed: remixSeed }),
+      });
+      const res = await resp.json();
+      if (!res.ok) return;
+      remixVariants = res.variants || [];
+      const grid = $('remixGrid');
+      grid.innerHTML = '';
+      remixVariants.forEach((v, idx) => {
+        const card = document.createElement('div');
+        card.className = 'remix-card';
+        card.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px';
+        const cv = document.createElement('canvas');
+        cv.width = 960; cv.height = 540;
+        cv.dataset.vidx = String(idx);
+        cv.style.cssText = 'width:100%;aspect-ratio:16/9;border-radius:7px;display:block;border:1px solid var(--border)';
+        const meta = document.createElement('div');
+        meta.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;gap:6px';
+        meta.innerHTML = `<b>${v.label}</b><span class="mono" style="color:var(--muted);font-size:10px">Atlas: ${v.atlas_ref}</span>`;
+        const bar = document.createElement('div');
+        bar.style.cssText = 'display:flex;gap:6px';
+        const bLike = document.createElement('button');
+        bLike.className = 'btn-remix-like';
+        bLike.textContent = '👍 喜欢 (学习)';
+        bLike.style.cssText = 'padding:4px 8px;font-size:11px';
+        bLike.onclick = () => sendDnaFeedback({
+          action: 'like', theme: v.theme, accent: v.skin.tokens.accent_primary,
+          motion_intensity: v.dna.motion_intensity, radius_scale: v.dna.radius_scale, atlas_id: v.atlas_ref,
+        });
+        const bDis = document.createElement('button');
+        bDis.className = 'btn-remix-dislike';
+        bDis.textContent = '👎 否决';
+        bDis.style.cssText = 'padding:4px 8px;font-size:11px';
+        bDis.onclick = () => sendDnaFeedback({ action: 'dislike', theme: v.theme, atlas_id: v.atlas_ref });
+        const bPick = document.createElement('button');
+        bPick.className = 'primary btn-remix-pick';
+        bPick.textContent = '送入沙箱门禁';
+        bPick.style.cssText = 'margin-left:auto;padding:4px 9px;font-size:11px';
+        bPick.onclick = () => {
+          setMode('single');
+          applyDraftToStage({
+            id: `remix_${Date.now().toString(36)}`,
+            name: `${v.label} (${v.atlas_ref})`,
+            created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+            source_prompt: `m4_remix:${v.atlas_ref}`,
+            skeleton_id: state.skeletonId,
+            duration: state.duration,
+            skin: v.skin,
+            content: state.contentsBySkeleton[state.skeletonId],
+            dna: v.dna,
+            atlas_inspirations: [{ source_id: v.atlas_ref, recipe: v.atlas_recipe }],
+            gate_passed: false,
+          });
+        };
+        bar.append(bLike, bDis, bPick);
+        card.append(cv, meta, bar);
+        grid.appendChild(card);
+      });
+      drawAll();
+    }
+
+    $('btnGenRemix').onclick = generateRemixVariants;
+    $('btnApplyMyDna').onclick = () => {
+      if (!dnaProfile) return;
+      state.dna.motion_intensity = dnaProfile.motion_intensity;
+      state.dna.radius_scale = dnaProfile.radius_scale;
+      state.dna.accent_override = (dnaProfile.favorite_accents || [])[0] || null;
+      if (dnaProfile.preferred_theme === 'dark') state.skinId = 'editorial_ink';
+      else if (dnaProfile.preferred_theme === 'light') state.skinId = 'maitian_minimal';
+      $('rngAmp').value = state.dna.motion_intensity;
+      $('lblAmp').textContent = `${state.dna.motion_intensity.toFixed(2)}×`;
+      $('rngRad').value = state.dna.radius_scale;
+      $('lblRad').textContent = `${state.dna.radius_scale.toFixed(2)}×`;
+      renderSkinButtons(); drawAll();
+      $('exportStatus').textContent = `✅ 已一键套用个人 Style DNA v${dnaProfile.version}`;
+    };
+    $('btnResetDna').onclick = () => sendDnaFeedback({ action: 'reset' });
+    loadDnaProfile();
+    $('chkTransparent').onchange = (e) => { state.transparent = e.target.checked; drawAll(); };
+    $('selSpeed').onchange = (e) => { state.speed = Number(e.target.value); };
+
+    // 统一时间轴播放循环（仅播放态运行 rAF，暂停态零空转零耗电）
+    let lastRaf = 0;
+    let rafId = null;
+    function loop(now) {
+      if (!state.playing) { rafId = null; return; }
+      const dt = Math.min(0.05, (now - lastRaf) / 1000) * state.speed;
+      state.t += dt;
+      if (state.t > state.duration) state.t = 0;
+      drawAll();
+      lastRaf = now;
+      rafId = requestAnimationFrame(loop);
+    }
+
+    const togglePlay = () => {
+      state.playing = !state.playing;
+      $('btnPlay').textContent = state.playing ? '⏸ 暂停 (Space)' : '▶ 播放 (Space)';
+      if (state.playing && !rafId) {
+        lastRaf = performance.now();
+        rafId = requestAnimationFrame(loop);
+      }
+    };
+    $('btnPlay').onclick = togglePlay;
+    $('btnZero').onclick = () => { state.t = 0; drawAll(); };
+
+    // 剪映式时间轴正向/反向任意擦洗（PointerEvent）
+    const track = $('tlTrack');
+    const seekByClientX = (cx) => {
+      const rect = track.getBoundingClientRect();
+      const ratio = clamp((cx - rect.left) / rect.width, 0, 1);
+      state.t = Number((ratio * state.duration).toFixed(3));
+      drawAll();
+    };
+    track.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      state.playing = false;
+      $('btnPlay').textContent = '▶ 播放 (Space)';
+      seekByClientX(e.clientX);
+      const onMove = (ev) => seekByClientX(ev.clientX);
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      else if (e.code === 'ArrowLeft') { e.preventDefault(); state.t = clamp(state.t - 0.1, 0, state.duration); drawAll(); }
+      else if (e.code === 'ArrowRight') { e.preventDefault(); state.t = clamp(state.t + 0.1, 0, state.duration); drawAll(); }
+    });
+
+    // Style DNA 实时绑定
+    $('rngAmp').oninput = (e) => { state.dna.motion_intensity = Number(e.target.value); $('lblAmp').textContent = `${state.dna.motion_intensity.toFixed(2)}×`; drawAll(); };
+    $('rngRad').oninput = (e) => { state.dna.radius_scale = Number(e.target.value); $('lblRad').textContent = `${state.dna.radius_scale.toFixed(2)}×`; drawAll(); };
+    $('colAccent').oninput = (e) => { state.dna.accent_override = e.target.value; drawAll(); };
+    $('btnClearAccent').onclick = () => { state.dna.accent_override = null; drawAll(); };
+
+    // 工程保存与恢复
+    $('btnSaveProj').onclick = () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        skeletonId: state.skeletonId, skinId: state.skinId, t: state.t, duration: state.duration,
+        dna: state.dna, contentsBySkeleton: state.contentsBySkeleton,
+      }));
+      $('exportStatus').textContent = '✅ 工程已保存至本地';
+    };
+    $('btnRestoreProj').onclick = () => {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { $('exportStatus').textContent = '暂无已保存工程'; return; }
+      const d = JSON.parse(raw);
+      Object.assign(state, d);
+      $('rngAmp').value = state.dna.motion_intensity;
+      $('lblAmp').textContent = `${state.dna.motion_intensity.toFixed(2)}×`;
+      $('rngRad').value = state.dna.radius_scale;
+      $('lblRad').textContent = `${state.dna.radius_scale.toFixed(2)}×`;
+      renderLeftList(); renderSkinButtons(); renderContentFields(); renderTimelinePhases(); drawAll();
+      $('exportStatus').textContent = '✅ 已恢复保存的工程状态';
+    };
+
+    // === M3：参考素材反推、AI 协作共创、4 道隔离沙箱门禁与个人动效库持久化 ===
+    let currentDraft = null;
+    let customCards = [];
+    let activeCustomCardId = null;
+
+    function upsertSkin(skinObj) {
+      const idx = skins.findIndex((s) => s.id === skinObj.id);
+      if (idx >= 0) skins[idx] = skinObj;
+      else skins.push(skinObj);
+      renderSkinButtons();
+    }
+
+    function applyDraftToStage(draft, fromRegistry = false) {
+      currentDraft = draft;
+      activeCustomCardId = fromRegistry ? draft.id : null;
+      upsertSkin(draft.skin);
+      state.skeletonId = draft.skeleton_id;
+      state.skinId = draft.skin.id;
+      state.duration = draft.duration || 4.0;
+      state.dna = { motion_intensity: 1.0, radius_scale: 1.0, accent_override: null, ...(draft.dna || {}) };
+      $('rngAmp').value = state.dna.motion_intensity;
+      $('lblAmp').textContent = `${state.dna.motion_intensity.toFixed(2)}×`;
+      $('rngRad').value = state.dna.radius_scale;
+      $('lblRad').textContent = `${state.dna.radius_scale.toFixed(2)}×`;
+      if (draft.content) {
+        state.contentsBySkeleton[draft.skeleton_id] = {
+          ...state.contentsBySkeleton[draft.skeleton_id],
+          ...draft.content,
+        };
+      }
+      if (state.t < 0.3 || state.t > state.duration * 0.88) {
+        state.t = Number((state.duration * 0.5).toFixed(2));
+      }
+      if (state.mode === 'matrix') setMode('single');
+      renderLeftList(); renderSkinButtons(); renderContentFields(); renderTimelinePhases(); renderCustomList(); drawAll();
+      $('sandboxPanel').style.display = 'block';
+      $('draftTitle').textContent = fromRegistry ? `已加载入库卡片：${draft.name}` : `沙箱待检：${draft.name}`;
+      $('gateList').innerHTML = fromRegistry
+        ? '<div style="color:#059669">✅ 该卡片已通过 4 道隔离沙箱门禁并正式入库</div>'
+        : '<div style="color:var(--muted)">待校验：点击「运行 4 道沙箱门禁」执行安全与确定性审计</div>';
+      $('btnRegisterCard').disabled = !fromRegistry;
+      $('btnRegisterCard').style.opacity = fromRegistry ? '1' : '0.5';
+      if (fromRegistry) {
+        $('exportStatus').textContent = `✅ 已切换至已入库卡片：${draft.name}`;
+      }
+    }
+
+    function renderCustomList() {
+      $('lblCustomCount').textContent = String(customCards.length);
+      const box = $('customCardList');
+      if (!customCards.length) {
+        box.innerHTML = '<div>暂无入库卡片（通过右侧沙箱门禁后可入库）</div>';
+        return;
+      }
+      box.innerHTML = '';
+      customCards.forEach((c) => {
+        const isSel = c.id === activeCustomCardId;
+        const row = document.createElement('div');
+        row.className = `custom-card-item ${isSel ? 'active' : ''}`;
+        row.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px;border:1px solid ${isSel ? 'var(--accent)' : 'var(--border)'};border-radius:8px;background:${isSel ? 'var(--accent-soft)' : 'var(--bg)'};cursor:pointer;transition:all .15s`;
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        info.innerHTML = `<b style="color:${isSel ? 'var(--accent)' : 'var(--ink)'}">${c.name}</b><div class="mono" style="font-size:10px;color:var(--muted)">${c.skeleton_id} · ${c.duration}s</div>`;
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '删';
+        delBtn.style.cssText = 'padding:2px 7px;font-size:10px;flex-shrink:0';
+        delBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          await fetch(apiUrl(`/api/m3/registry/${c.id}`), { method: 'DELETE' });
+          if (activeCustomCardId === c.id) activeCustomCardId = null;
+          await loadCustomRegistry();
+        };
+        row.onclick = () => applyDraftToStage({ ...c, gate_passed: true }, true);
+        row.appendChild(info);
+        row.appendChild(delBtn);
+        box.appendChild(row);
+      });
+    }
+
+    async function loadCustomRegistry() {
+      try {
+        const res = await fetch(apiUrl('/api/m3/registry')).then((r) => r.json());
+        customCards = res.cards || [];
+        renderCustomList();
+      } catch (e) { /* 忽略初始化异常 */ }
+    }
+
+    // 6. 上传参考图/视频/GIF 真实色彩与节奏反推
+    $('refFileInput').onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const box = $('refAnalysisBox');
+      box.style.display = 'block';
+      box.textContent = `⏳ 正在调用 FFmpeg 分析参考素材 ${file.name}...`;
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      try {
+        const resp = await fetch(apiUrl('/api/m3/analyze-reference'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, data_url: dataUrl }),
+        });
+        const res = await resp.json();
+        if (!resp.ok || !res.ok) throw new Error(res.detail || '分析失败');
+        const a = res.analysis;
+        const atlasNames = (a.atlas_matches || []).map((m) => m.source_id).join(', ');
+        box.innerHTML = `
+          <div><b>✅ 反推完成</b>（${a.media_type} · 采样 ${a.sampled_frames} 帧 · 主题=${a.theme}）</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+            <span>底色</span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid #ccc;background:${a.detected_bg}"></span><span class="mono">${a.detected_bg}</span>
+            <span>强调色</span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid #ccc;background:${a.detected_accent}"></span><span class="mono">${a.detected_accent}</span>
+          </div>
+          <div style="margin-top:3px;color:var(--muted)">推荐骨架：<b class="mono">${a.recommended_skeleton}</b> · Atlas 匹配：${atlasNames}</div>
+        `;
+        applyDraftToStage({
+          id: `ref_card_${Date.now().toString(36)}`,
+          name: `参考反推：${file.name.slice(0, 14)}`,
+          created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+          source_prompt: `reference:${file.name}`,
+          skeleton_id: a.recommended_skeleton,
+          duration: a.recommended_duration,
+          skin: res.candidate_skin,
+          content: state.contentsBySkeleton[a.recommended_skeleton],
+          dna: { motion_intensity: a.recommended_motion_intensity, radius_scale: 1.0, accent_override: null },
+          atlas_inspirations: a.atlas_matches,
+          gate_passed: false,
+        });
+      } catch (err) {
+        box.textContent = '❌ 参考反推失败：' + err.message;
+      }
+    };
+
+    // 7. M3 AI 协作共创（检索 504 Atlas 生成沙箱草案）
+    $('btnAiApply').onclick = async () => {
+      const txt = $('aiPrompt').value.trim();
+      if (!txt) return;
+      $('aiReply').textContent = '⏳ 正在检索 504 项 Atlas 风格库并生成沙箱草案...';
+      try {
+        const resp = await fetch(apiUrl('/api/m3/generate-variant'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: txt,
+            base_skeleton_id: state.skeletonId,
+            base_skin: getSkin(),
+            base_content: state.contentsBySkeleton[state.skeletonId],
+            base_duration: state.duration,
+          }),
+        });
+        const res = await resp.json();
+        if (!resp.ok || !res.ok) throw new Error(res.detail || '生成失败');
+        applyDraftToStage(res.draft_card);
+        const hits = (res.draft_card.atlas_inspirations || []).map((m) => m.source_id).join(', ');
+        $('aiReply').textContent = `✅ 已生成沙箱草案（骨架=${res.draft_card.skeleton_id} · 时长=${res.draft_card.duration}s · Atlas 灵感: ${hits}）`;
+      } catch (err) {
+        $('aiReply').textContent = '❌ 生成失败：' + err.message;
+      }
+    };
+
+    // 8. 运行 4 道隔离沙箱安全与确定性门禁
+    async function sha256Hex(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+    }
+
+    $('btnRunGate').onclick = async () => {
+      if (!currentDraft) return;
+      $('gateList').innerHTML = '<div>⏳ 正在离屏沙箱执行 4 道安全与确定性审计...</div>';
+      const off = document.createElement('canvas');
+      off.width = 640; off.height = 360;
+      const skId = currentDraft.skeleton_id;
+      const sn = currentDraft.skin;
+      const cnt = state.contentsBySkeleton[skId];
+      const dur = currentDraft.duration;
+
+      renderHiRes(off, 0.35, dur, skId, sn, cnt, state.dna, true);
+      const h035 = await sha256Hex(off.toDataURL('image/png'));
+      renderHiRes(off, 1.85, dur, skId, sn, cnt, state.dna, true);
+      const h185 = await sha256Hex(off.toDataURL('image/png'));
+      renderHiRes(off, 1.50, dur, skId, sn, cnt, state.dna, true);
+      const det1 = await sha256Hex(off.toDataURL('image/png'));
+      const pxData = off.getContext('2d').getImageData(0, 0, off.width, off.height).data;
+      let hasTransparent = false;
+      for (let i = 3; i < pxData.length; i += 64) {
+        if (pxData[i] < 250) { hasTransparent = true; break; }
+      }
+      renderHiRes(off, 1.50, dur, skId, sn, cnt, state.dna, true);
+      const det2 = await sha256Hex(off.toDataURL('image/png'));
+
+      const resp = await fetch(apiUrl('/api/m3/sandbox-gate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draft_card: { ...currentDraft, content: cnt, dna: state.dna },
+          render_proof: { hash_t035: h035, hash_t185: h185, hash_det1: det1, hash_det2: det2, has_transparent_pixels: hasTransparent },
+        }),
+      });
+      const res = await resp.json();
+      $('gateList').innerHTML = (res.gates || []).map((g) => `
+        <div style="color:${g.pass ? '#059669' : '#dc2626'}">${g.pass ? '✅' : '❌'} ${g.label} <span class="mono" style="color:var(--muted)">(${g.detail})</span></div>
+      `).join('');
+      currentDraft.gate_passed = Boolean(res.passed);
+      $('btnRegisterCard').disabled = !res.passed;
+      $('btnRegisterCard').style.opacity = res.passed ? '1' : '0.5';
+    };
+
+    $('btnRegisterCard').onclick = async () => {
+      if (!currentDraft || !currentDraft.gate_passed) return;
+      const resp = await fetch(apiUrl('/api/m3/registry/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_card: { ...currentDraft, content: state.contentsBySkeleton[currentDraft.skeleton_id], dna: state.dna } }),
+      });
+      const res = await resp.json();
+      if (resp.ok && res.ok) {
+        $('aiReply').textContent = `🎉 已正式入库个人动效库（当前共 ${res.total} 张自定义卡片，刷新不丢失）`;
+        await loadCustomRegistry();
+      }
+    };
+
+    loadCustomRegistry();
+
+    $('btnCloseBanner').onclick = () => { $('exportBanner').style.display = 'none'; };
+
+    // 真实透明视频导出（1920x1080 高清逐帧渲染 RGBA PNG → 后端 ffmpeg 编码 MOV + WebM → 弹出下载条）
+    $('btnExport').onclick = async () => {
+      const btn = $('btnExport');
+      const origLabel = btn.textContent;
+      btn.disabled = true;
+      $('exportBanner').style.display = 'none';
+      btn.textContent = '⏳ 渲染 1080p 透明帧...';
+      $('exportStatus').textContent = '正在逐帧渲染 1920×1080 透明 RGBA 帧序列...';
+      try {
+        const fps = 30;
+        const dur = Math.min(3.0, state.duration);
+        const totalFrames = Math.round(fps * dur);
+        const off = document.createElement('canvas');
+        off.width = 1920; off.height = 1080;
+        const skin = getSkin();
+        const content = state.contentsBySkeleton[state.skeletonId];
+        const frames = [];
+        for (let i = 0; i < totalFrames; i++) {
+          renderHiRes(off, i / fps, state.duration, state.skeletonId, skin, content, state.dna, true);
+          frames.push(off.toDataURL('image/png'));
+          if (i % 10 === 0) {
+            btn.textContent = `⏳ 渲染帧 ${i + 1}/${totalFrames}...`;
+            await new Promise((r) => setTimeout(r, 0));
+          }
+        }
+        btn.textContent = '⏳ FFmpeg 编码中...';
+        $('exportStatus').textContent = `已生成 ${frames.length} 帧 1080p RGBA，正在编码透明 MOV + WebM...`;
+        const resp = await fetch(apiUrl('/api/export-transparent'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `${state.skeletonId}__${state.skinId}`,
+            fps,
+            frames,
+          }),
+        });
+        const res = await resp.json();
+        if (!resp.ok || !res.ok) throw new Error(res.detail || '导出失败');
+        const movMb = (res.mov_size_bytes / 1024 / 1024).toFixed(2);
+        const webmKb = (res.webm_size_bytes / 1024).toFixed(0);
+        $('exportStatus').textContent = `✅ 1080p 导出成功！MOV Alpha=${res.ffprobe_mov.has_alpha} (${res.ffprobe_mov.pix_fmt}) · WebM Alpha=${res.ffprobe_webm.has_alpha}`;
+        $('exportBannerText').textContent = `✅ 1920×1080 透明视频已生成（MOV Alpha=${res.ffprobe_mov.has_alpha} · WebM Alpha=${res.ffprobe_webm.has_alpha}）`;
+        $('dlMovLink').href = apiUrl(res.mov_url);
+        $('dlMovLink').download = res.mov_filename;
+        $('dlMovLink').textContent = `⬇ 下载透明 MOV (${movMb} MB)`;
+        $('dlWebmLink').href = apiUrl(res.webm_url);
+        $('dlWebmLink').download = res.webm_filename;
+        $('dlWebmLink').textContent = `⬇ 下载透明 WebM (${webmKb} KB)`;
+        $('exportBanner').style.display = 'flex';
+      } catch (e) {
+        $('exportStatus').textContent = '导出失败：' + e.message;
+        alert('导出失败：' + e.message);
+      } finally {
+        btn.textContent = origLabel;
+        btn.disabled = false;
+      }
+    };
+
+    // 暴露给自动化测试校验确定性帧哈希
+    window.__labTest = {
+      setState: (patch) => {
+        Object.assign(state, patch);
+        renderLeftList(); renderSkinButtons(); renderContentFields(); renderTimelinePhases(); drawAll();
+      },
+      getFrameDataUrl: (t, skelId, skinId, transparent = true) => {
+        const off = document.createElement('canvas');
+        off.width = 1280; off.height = 720;
+        renderFrame(off.getContext('2d'), 1280, 720, t, state.duration, skelId || state.skeletonId, getSkin(skinId || state.skinId), state.contentsBySkeleton[skelId || state.skeletonId], state.dna, transparent);
+        return off.toDataURL('image/png');
+      },
+    };
+
+    renderLeftList();
+    renderSkinButtons();
+    renderContentFields();
+    renderTimelinePhases();
+    buildMatrixGrid();
+    drawAll();
+  </script>
+</body>
+</html>

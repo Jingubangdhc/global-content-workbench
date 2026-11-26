@@ -1,0 +1,230 @@
+{
+  "verified_at": "2026-11-26T09:00:08.749Z",
+  "url": "http://127.0.0.1:5199/",
+  "console_errors": [],
+  "page_errors": [],
+  "combos_total": 16,
+  "combos_dynamic_passed": 16,
+  "combo_results": [
+    {
+      "combo_id": "stat_counter__wireframe_gray",
+      "skeleton": "stat_counter",
+      "skin": "wireframe_gray",
+      "hash_t035": "314d0621be47bf70",
+      "hash_t185": "4dd8697a9cf8067e",
+      "bytes_t035": 94230,
+      "bytes_t185": 92302,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "stat_counter__maitian_minimal",
+      "skeleton": "stat_counter",
+      "skin": "maitian_minimal",
+      "hash_t035": "cd695c1f67837f6b",
+      "hash_t185": "01508714270bf781",
+      "bytes_t035": 87430,
+      "bytes_t185": 86522,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "stat_counter__editorial_ink",
+      "skeleton": "stat_counter",
+      "skin": "editorial_ink",
+      "hash_t035": "5c04acb24f34b115",
+      "hash_t185": "a229ead604906ee1",
+      "bytes_t035": 88258,
+      "bytes_t185": 87958,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "stat_counter__cyber_glass",
+      "skeleton": "stat_counter",
+      "skin": "cyber_glass",
+      "hash_t035": "69fa4fc9ef41a854",
+      "hash_t185": "0b1660f8f2ae55c0",
+      "bytes_t035": 107398,
+      "bytes_t185": 112134,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "bar_race_rank__wireframe_gray",
+      "skeleton": "bar_race_rank",
+      "skin": "wireframe_gray",
+      "hash_t035": "4a4a50d5755a92c6",
+      "hash_t185": "19a6cc2d03520bd5",
+      "bytes_t035": 67746,
+      "bytes_t185": 102118,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "bar_race_rank__maitian_minimal",
+      "skeleton": "bar_race_rank",
+      "skin": "maitian_minimal",
+      "hash_t035": "92f24eb0da87c2d9",
+      "hash_t185": "c30319a5636eaed1",
+      "bytes_t035": 62586,
+      "bytes_t185": 95182,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "bar_race_rank__editorial_ink",
+      "skeleton": "bar_race_rank",
+      "skin": "editorial_ink",
+      "hash_t035": "87b60dd87b15e845",
+      "hash_t185": "8759788d387ea5d0",
+      "bytes_t035": 63282,
+      "bytes_t185": 97386,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "bar_race_rank__cyber_glass",
+      "skeleton": "bar_race_rank",
+      "skin": "cyber_glass",
+      "hash_t035": "2b8e6017cb34f588",
+      "hash_t185": "81b35e33b9958aec",
+      "bytes_t035": 85334,
+      "bytes_t185": 125782,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "callout_reveal__wireframe_gray",
+      "skeleton": "callout_reveal",
+      "skin": "wireframe_gray",
+      "hash_t035": "3353dec72aa9b3a1",
+      "hash_t185": "30fa25ece7f91cc5",
+      "bytes_t035": 48190,
+      "bytes_t185": 121170,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "callout_reveal__maitian_minimal",
+      "skeleton": "callout_reveal",
+      "skin": "maitian_minimal",
+      "hash_t035": "e911eee942ed53a4",
+      "hash_t185": "535196d05c633cb8",
+      "bytes_t035": 43798,
+      "bytes_t185": 114406,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "callout_reveal__editorial_ink",
+      "skeleton": "callout_reveal",
+      "skin": "editorial_ink",
+      "hash_t035": "2e429393f9a9f65b",
+      "hash_t185": "fcf5623bc85cc802",
+      "bytes_t035": 43654,
+      "bytes_t185": 117254,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "callout_reveal__cyber_glass",
+      "skeleton": "callout_reveal",
+      "skin": "cyber_glass",
+      "hash_t035": "6fa29a6a7107b2f7",
+      "hash_t185": "998c93dcd415fb3a",
+      "bytes_t035": 62518,
+      "bytes_t185": 146134,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "versus_split__wireframe_gray",
+      "skeleton": "versus_split",
+      "skin": "wireframe_gray",
+      "hash_t035": "2b71abafe41aa4d8",
+      "hash_t185": "49c51f038fd15d52",
+      "bytes_t035": 85762,
+      "bytes_t185": 90526,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "versus_split__maitian_minimal",
+      "skeleton": "versus_split",
+      "skin": "maitian_minimal",
+      "hash_t035": "fd58fd31c934b08f",
+      "hash_t185": "5bb4c1014b34bb01",
+      "bytes_t035": 87258,
+      "bytes_t185": 89366,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "versus_split__editorial_ink",
+      "skeleton": "versus_split",
+      "skin": "editorial_ink",
+      "hash_t035": "37442833af7f57ad",
+      "hash_t185": "6183f86cc752296b",
+      "bytes_t035": 87678,
+      "bytes_t185": 90570,
+      "dynamic_changed": true
+    },
+    {
+      "combo_id": "versus_split__cyber_glass",
+      "skeleton": "versus_split",
+      "skin": "cyber_glass",
+      "hash_t035": "fba6bc133f0ec2e7",
+      "hash_t185": "c9d1201685c73e5a",
+      "bytes_t035": 116726,
+      "bytes_t185": 125862,
+      "dynamic_changed": true
+    }
+  ],
+  "determinism": {
+    "hash_1": "cdd52b1101940020",
+    "hash_2": "cdd52b1101940020",
+    "pass": true
+  },
+  "timeline_scrub": {
+    "forward": "3.00s",
+    "backward": "1.20s",
+    "after_play_450ms": "1.68s",
+    "pass": true
+  },
+  "param_realtime_pass": true,
+  "save_restore": {
+    "restored_time": "2.10s",
+    "pass": true
+  },
+  "transparent_export": {
+    "http_status": 200,
+    "ui_status": "✅ 1080p 导出成功！MOV Alpha=true (yuva444p12le) · WebM Alpha=true",
+    "payload": {
+      "ok": true,
+      "frames": 90,
+      "mov_path": "C:\\Users\\wodhc\\.gemini\\antigravity\\scratch\\content-workbench\\motion-lab-m2-experiment\\exports\\stat_counter__maitian_minimal_20261126_015956.mov",
+      "webm_path": "C:\\Users\\wodhc\\.gemini\\antigravity\\scratch\\content-workbench\\motion-lab-m2-experiment\\exports\\stat_counter__maitian_minimal_20261126_015956.webm",
+      "mov_filename": "stat_counter__maitian_minimal_20261126_015956.mov",
+      "webm_filename": "stat_counter__maitian_minimal_20261126_015956.webm",
+      "mov_url": "/api/download/stat_counter__maitian_minimal_20261126_015956.mov",
+      "webm_url": "/api/download/stat_counter__maitian_minimal_20261126_015956.webm",
+      "mov_size_bytes": 22119831,
+      "webm_size_bytes": 179777,
+      "ffprobe_mov": {
+        "ok": true,
+        "codec": "prores",
+        "pix_fmt": "yuva444p12le",
+        "alpha_mode": null,
+        "has_alpha": true,
+        "width": 1920,
+        "height": 1080,
+        "duration_sec": 3,
+        "size_bytes": 22119831
+      },
+      "ffprobe_webm": {
+        "ok": true,
+        "codec": "vp9",
+        "pix_fmt": "yuva420p",
+        "alpha_mode": "1",
+        "has_alpha": true,
+        "width": 1920,
+        "height": 1080,
+        "duration_sec": 3,
+        "size_bytes": 179777
+      }
+    },
+    "pass": true
+  },
+  "screenshots": [
+    "reports/screenshots/01_single_maitian_minimal.png",
+    "reports/screenshots/02_compare_wireframe_vs_skin.png",
+    "reports/screenshots/03_matrix_16_combos.png"
+  ]
+}

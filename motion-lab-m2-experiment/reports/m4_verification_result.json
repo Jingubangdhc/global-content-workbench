@@ -1,0 +1,46 @@
+{
+  "verified_at": "2026-11-26T09:58:54.198Z",
+  "console_errors": [],
+  "page_errors": [],
+  "atlas_504_search": {
+    "total_catalog": 504,
+    "hits": 0,
+    "pass": false
+  },
+  "remix_4_variants": {
+    "canvas_count": 4,
+    "variants_count": 4,
+    "pass": true
+  },
+  "dna_feedback_learning": {
+    "profile": {
+      "version": 4,
+      "likes": 2,
+      "dislikes": 1,
+      "theme_score_dark": 2.8,
+      "preferred_theme": "dark",
+      "motion_intensity": 1.07,
+      "radius_scale": 1.05,
+      "favorite_accents": [
+        "#10b981",
+        "#3b82f6",
+        "#ea580c"
+      ],
+      "liked_atlas_ids": [
+        "3d-gaussian-splatting",
+        "1-bit-threshold"
+      ],
+      "disliked_atlas_ids": [
+        "2-5d-parallax"
+      ],
+      "updated_at": "2026-11-26 02:58:52"
+    },
+    "pass": true
+  },
+  "dna_persistence_and_apply": {
+    "summary_after_reload": "DNA v4 · 偏暗黑编辑部",
+    "counts_after_reload": "👍2 / 👎1",
+    "apply_status": "✅ 已一键套用个人 Style DNA v4",
+    "pass": true
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "verified_at": "2026-11-26T09:37:25.418Z",
+  "console_errors": [],
+  "page_errors": [],
+  "reference_reverse": {
+    "http_status": 200,
+    "analysis": {
+      "filename": "media_1795683348785_42ad5ae2.png",
+      "media_type": "image",
+      "sampled_frames": 1,
+      "avg_luma": 33.6,
+      "theme": "dark",
+      "detected_bg": "#17151c",
+      "detected_accent": "#4674bd",
+      "motion_energy": 0,
+      "recommended_duration": 4,
+      "recommended_motion_intensity": 1,
+      "recommended_skeleton": "step_flow_list",
+      "atlas_matches": [
+        {
+          "source_id": "1-bit-dithering",
+          "mode": "后期特效",
+          "recipe": "以二值调色板运行抖动算法，固定像素尺度并检查输出只有两个色值。"
+        },
+        {
+          "source_id": "1-bit-threshold",
+          "mode": "后期特效",
+          "recipe": "将输入转为灰度并应用一个阈值，输出二值图。不启用误差扩散。"
+        },
+        {
+          "source_id": "2-5d-parallax",
+          "mode": "程序化",
+          "recipe": "将静态授权图分层合成，使近景位移大于远景，检查边缘与遮挡。"
+        }
+      ]
+    },
+    "pass": true
+  },
+  "evil_security_block": {
+    "passed_flag": false,
+    "static_security_gate": {
+      "id": "static_security",
+      "label": "Gate 2 · 静态安全审计（禁外网/自时钟/注入）",
+      "pass": false,
+      "detail": "拦截风险：['\\\\bfetch\\\\s*\\\\(', 'performance\\\\.now']"
+    },
+    "pass": true
+  },
+  "ai_generate_variant": {
+    "ok": true,
+    "skeleton_id": "step_flow_list",
+    "duration": 3.2,
+    "atlas_inspirations": [
+      {
+        "source_id": "anamorphic-lens-flare",
+        "mode": "文生图",
+        "recipe": "应用变形镜头眩光效果，其中具有从现有明亮源延伸的细水平蓝青色光条纹、微弱的彩色反射鬼影和局部眩光。添加柔和的高光绽放并降"
+      },
+      {
+        "source_id": "anamorphic-widescreen",
+        "mode": "文生图",
+        "recipe": "应用变形宽屏镜头效果，具有水平蓝白色光条纹、垂直拉长的椭圆形背景散景、柔和的边缘柔和度和微妙的桶形畸变。通过外围镜头渲染"
+      },
+      {
+        "source_id": "backlit-animation",
+        "mode": "待专用工具核实",
+        "recipe": "按原理核对所需输入、处理算法及输出格式，再用小样对照原始参考。具体处理器与参数待核实。"
+      }
+    ],
+    "pass": true
+  },
+  "sandbox_gate_4_of_4": {
+    "passed": true,
+    "gates": [
+      {
+        "id": "schema_integrity",
+        "label": "Gate 1 · 6 层 Schema 与数值边界校验",
+        "pass": true,
+        "detail": "skeleton=step_flow_list, duration=3.2s"
+      },
+      {
+        "id": "static_security",
+        "label": "Gate 2 · 静态安全审计（禁外网/自时钟/注入）",
+        "pass": true,
+        "detail": "零风险命中"
+      },
+      {
+        "id": "determinism_dynamic",
+        "label": "Gate 3 · 纯函数动态变化 & 同帧确定性哈希",
+        "pass": true,
+        "detail": "t0.35=c42e62225c0107a5 != t1.85=b336cc6948aa3afc, det=9f2134e52bfeabfc"
+      },
+      {
+        "id": "transparent_alpha",
+        "label": "Gate 4 · 透明底 RGBA Alpha 通道校验",
+        "pass": true,
+        "detail": "检测到有效透明 Alpha 像素"
+      }
+    ],
+    "pass": true
+  },
+  "registry_persistence": {
+    "register_ok": true,
+    "persisted_count_after_reload": 1,
+    "pass": true
+  }
+}

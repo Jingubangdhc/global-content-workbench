@@ -1,0 +1,131 @@
+[
+  {
+    "id": "custom_card_bd2e7d",
+    "name": "AI 共创：做一个3秒出片蓝色霓虹玻璃H",
+    "created_at": "2026-11-26 02:50:47",
+    "source_prompt": "做一个3秒出片蓝色霓虹玻璃HUD",
+    "skeleton_id": "callout_reveal",
+    "duration": 3,
+    "skin": {
+      "id": "ai_skin_bd2e7d",
+      "name": "AI 共创 · 做一个3秒出片蓝",
+      "mode": "production",
+      "source": "m3_reference_reverse",
+      "atlas_refs": [
+        "anamorphic-lens-flare",
+        "anamorphic-widescreen"
+      ],
+      "tokens": {
+        "stage_bg": "#060914",
+        "surface_bg": "rgba(15, 23, 42, 0.82)",
+        "surface_alt": "#1e293b",
+        "border_color": "rgba(34, 211, 238, 0.6)",
+        "border_style": "solid",
+        "border_width": 1.2,
+        "radius": 14,
+        "text_primary": "#ecfeff",
+        "text_secondary": "#a5f3fc",
+        "text_muted": "#94a3b8",
+        "accent_primary": "#3b82f6",
+        "accent_secondary": "#0ea5e9",
+        "shadow": "0 20px 44px rgba(0, 0, 0, 0.45)",
+        "font_display": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "font_body": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "show_motion_guides": false
+      }
+    },
+    "content": {
+      "badge": "核心洞察",
+      "chunks_text": "动效骨架决定节奏|视觉皮肤决定调性|*解耦后可无限混搭*",
+      "author": "AI Motion & Style Lab · M2 验证"
+    },
+    "dna": {
+      "motion_intensity": 1,
+      "radius_scale": 1,
+      "accent_override": null
+    },
+    "atlas_inspirations": [
+      {
+        "source_id": "neon-sign-glow",
+        "mode": "文生图",
+        "recipe": "将此图像转换为霓虹灯发光处理，用亮粉色、电蓝色和橙红色的发光玻璃管描绘拍摄对象的轮廓轮廓。使用圆形弯曲、一致的笔划粗细、"
+      },
+      {
+        "source_id": "crystoleum",
+        "mode": "文生图",
+        "recipe": "应用水晶效果，将精美的摄影细节置于柔和的凸面玻璃下方，从后面可以看到柔和的手绘颜色。将精致的玫瑰色、蓝色和奶油色颜料与摄"
+      },
+      {
+        "source_id": "frutiger-aero",
+        "mode": "文生图",
+        "recipe": "通过明亮的水蓝色、清新的草绿色、光泽的气泡和半透明的玻璃装饰，将此图像转变为 Frutiger Aero 美学。添加圆形"
+      }
+    ],
+    "gate_passed": true
+  },
+  {
+    "id": "custom_card_67bb10",
+    "name": "AI 共创：做一个三步出片风格的暗黑数据",
+    "created_at": "2026-11-26 02:37:23",
+    "source_prompt": "做一个三步出片风格的暗黑数据蓝步骤清单，3.2秒快节奏",
+    "skeleton_id": "step_flow_list",
+    "duration": 3.2,
+    "skin": {
+      "id": "ai_skin_67bb10",
+      "name": "AI 共创 · 做一个三步出片风",
+      "mode": "production",
+      "source": "m3_reference_reverse",
+      "atlas_refs": [
+        "anamorphic-lens-flare",
+        "anamorphic-widescreen"
+      ],
+      "tokens": {
+        "stage_bg": "#0b0f19",
+        "surface_bg": "#121826",
+        "surface_alt": "#1e293b",
+        "border_color": "#334155",
+        "border_style": "solid",
+        "border_width": 1.2,
+        "radius": 14,
+        "text_primary": "#ffffff",
+        "text_secondary": "#cbd5e1",
+        "text_muted": "#94a3b8",
+        "accent_primary": "#3b82f6",
+        "accent_secondary": "#0ea5e9",
+        "shadow": "0 20px 44px rgba(0, 0, 0, 0.45)",
+        "font_display": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "font_body": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "show_motion_guides": false
+      }
+    },
+    "content": {
+      "kicker_accent": "出片流程",
+      "kicker_sub": " · 共 3 部分",
+      "title": "《*三步*出片》",
+      "steps_text": "丢一份字幕稿|AI 按语义编排|一键透明导出"
+    },
+    "dna": {
+      "motion_intensity": 1.25,
+      "radius_scale": 1,
+      "accent_override": null
+    },
+    "atlas_inspirations": [
+      {
+        "source_id": "anamorphic-lens-flare",
+        "mode": "文生图",
+        "recipe": "应用变形镜头眩光效果，其中具有从现有明亮源延伸的细水平蓝青色光条纹、微弱的彩色反射鬼影和局部眩光。添加柔和的高光绽放并降"
+      },
+      {
+        "source_id": "anamorphic-widescreen",
+        "mode": "文生图",
+        "recipe": "应用变形宽屏镜头效果，具有水平蓝白色光条纹、垂直拉长的椭圆形背景散景、柔和的边缘柔和度和微妙的桶形畸变。通过外围镜头渲染"
+      },
+      {
+        "source_id": "backlit-animation",
+        "mode": "待专用工具核实",
+        "recipe": "按原理核对所需输入、处理算法及输出格式，再用小样对照原始参考。具体处理器与参数待核实。"
+      }
+    ],
+    "gate_passed": true
+  }
+]

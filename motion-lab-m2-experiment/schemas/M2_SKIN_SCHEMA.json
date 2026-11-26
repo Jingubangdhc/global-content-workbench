@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-07/schema",
+  "schema_version": "m2.skin.v1",
+  "description": "AI Motion & Style Lab 视觉皮肤规范：纯视觉 Design Tokens，禁止包含任何运动算法或时间控制逻辑，切换皮肤绝不破坏骨架轨迹。",
+  "style_dna_overrides": {
+    "motion_intensity": { "min": 0.5, "max": 1.6, "default": 1.0, "desc": "整体位移/缩放幅度系数" },
+    "radius_scale": { "min": 0.0, "max": 2.0, "default": 1.0, "desc": "圆角锐利度缩放" },
+    "accent_override": { "type": "color|null", "default": null, "desc": "个人偏好强调色覆盖" }
+  },
+  "skins": [
+    {
+      "id": "wireframe_gray",
+      "name": "白模灰盒（Wireframe）",
+      "mode": "wireframe",
+      "atlas_refs": ["swiss-wireframe-study"],
+      "description": "去装饰灰阶几何白模，清晰暴露运动轨迹、对齐边界、阶段进度与物理缓动曲线。",
+      "tokens": {
+        "stage_bg": "#f3f4f6",
+        "surface_bg": "#e5e7eb",
+        "surface_alt": "#d1d5db",
+        "border_color": "#6b7280",
+        "border_style": "dashed",
+        "border_width": 2,
+        "radius": 6,
+        "text_primary": "#1f2937",
+        "text_secondary": "#4b5563",
+        "text_muted": "#6b7280",
+        "accent_primary": "#374151",
+        "accent_secondary": "#9ca3af",
+        "shadow": "none",
+        "font_display": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "font_body": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "show_motion_guides": true
+      }
+    },
+    {
+      "id": "maitian_minimal",
+      "name": "麦田浅色极简（Editorial Light）",
+      "mode": "production",
+      "atlas_refs": ["atlas_swiss_minimal", "atlas_editorial_print"],
+      "description": "暖白纸感底面、高对比炭黑排版、克制琥珀橙点缀与极细分割线，高质感知识口播首选。",
+      "tokens": {
+        "stage_bg": "#f7f6f2",
+        "surface_bg": "#ffffff",
+        "surface_alt": "#f1efe9",
+        "border_color": "#e2ded5",
+        "border_style": "solid",
+        "border_width": 1,
+        "radius": 14,
+        "text_primary": "#18181b",
+        "text_secondary": "#52525b",
+        "text_muted": "#71717a",
+        "accent_primary": "#ea580c",
+        "accent_secondary": "#0f766e",
+        "shadow": "0 14px 34px rgba(24, 24, 27, 0.08)",
+        "font_display": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "font_body": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "show_motion_guides": false
+      }
+    },
+    {
+      "id": "editorial_ink",
+      "name": "瑞士暗黑编辑部（Swiss Dark）",
+      "mode": "production",
+      "atlas_refs": ["atlas_swiss_dark", "atlas_financial_terminal"],
+      "description": "深邃石墨暗底、精密等宽数字与冷静数据蓝强调，适配商业认知、科技拆解与金融数据类内容。",
+      "tokens": {
+        "stage_bg": "#090d16",
+        "surface_bg": "#111827",
+        "surface_alt": "#1e293b",
+        "border_color": "#334155",
+        "border_style": "solid",
+        "border_width": 1,
+        "radius": 12,
+        "text_primary": "#f8fafc",
+        "text_secondary": "#cbd5e1",
+        "text_muted": "#94a3b8",
+        "accent_primary": "#38bdf8",
+        "accent_secondary": "#f43f5e",
+        "shadow": "0 20px 44px rgba(0, 0, 0, 0.45)",
+        "font_display": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "font_body": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "show_motion_guides": false
+      }
+    },
+    {
+      "id": "cyber_glass",
+      "name": "霓虹玻璃 HUD（Neon Glass）",
+      "mode": "production",
+      "atlas_refs": ["atlas_glassmorphism", "atlas_cyber_hud"],
+      "description": "半透明磨砂玻璃表面、青紫霓虹边缘高光与强科技纵深，适配 AI 前沿、极客评测与未来感叙事。",
+      "tokens": {
+        "stage_bg": "#060914",
+        "surface_bg": "rgba(15, 23, 42, 0.78)",
+        "surface_alt": "rgba(30, 41, 59, 0.65)",
+        "border_color": "rgba(34, 211, 238, 0.55)",
+        "border_style": "solid",
+        "border_width": 1.5,
+        "radius": 18,
+        "text_primary": "#ecfeff",
+        "text_secondary": "#a5f3fc",
+        "text_muted": "#67e8f9",
+        "accent_primary": "#22d3ee",
+        "accent_secondary": "#a855f7",
+        "shadow": "0 0 32px rgba(34, 211, 238, 0.24)",
+        "font_display": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "font_body": "'Microsoft YaHei UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "show_motion_guides": false
+      }
+    }
+  ]
+}
