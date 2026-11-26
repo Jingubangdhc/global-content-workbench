@@ -167,6 +167,7 @@ export default function VideoStudio({ projectId }: Props) {
   const [effectGroup, setEffectGroup] = useState('全部');
   const [feelTag, setFeelTag] = useState<string | null>(null);
   const [onlyFavEffects, setOnlyFavEffects] = useState(false);
+  const [onlyUsedEffects, setOnlyUsedEffects] = useState(false);
   const [editorLeftTab, setEditorLeftTab] = useState<'cards' | 'srt'>('cards');
   const [muted, setMuted] = useState(false);
   const [tlZoom, setTlZoom] = useState(1);
@@ -640,10 +641,34 @@ export default function VideoStudio({ projectId }: Props) {
   const effects: any[] = caps?.effects || [];
   const effectById = useMemo(() => Object.fromEntries(effects.map((e) => [e.id, e])), [effects]);
   const groups = useMemo(() => ['全部', ...Array.from(new Set(effects.map((e) => e.group)))], [effects]);
+  // 统计当前视频时间轴中每种动效卡的使用次数与卡片列表（支持多次复用计数与轮跳定位）
+  const usedCardsByKind = useMemo(() => {
+    const map: Record<string, OverlayCard[]> = {};
+    for (const c of doc.cards) {
+      if (!map[c.kind]) map[c.kind] = [];
+      map[c.kind].push(c);
+    }
+    return map;
+  }, [doc.cards]);
+
+  const usedKindCount = useMemo(() => Object.keys(usedCardsByKind).length, [usedCardsByKind]);
+
+  const jumpToNextUsedCard = (kind: string) => {
+    const list = usedCardsByKind[kind] || [];
+    if (list.length === 0) return;
+    const curIdx = list.findIndex((c) => c.id === selectedCardId);
+    const target = list[(curIdx + 1) % list.length];
+    setSelectedCardId(target.id);
+    setCurrentTime(Number((target.start + 0.4).toFixed(1)));
+    setRightTab('props');
+    showToast(`已定位到 ${effectById[kind]?.name || kind}（第 ${((curIdx + 1) % list.length) + 1}/${list.length} 处 · ${fmtClock(target.start)}）`);
+  };
+
   const filteredEffects = useMemo(
     () =>
       effects.filter((e) => {
         if (onlyFavEffects && !favEffects.includes(e.id)) return false;
+        if (onlyUsedEffects && !(usedCardsByKind[e.id]?.length > 0)) return false;
         if (feelTag && !(FEEL_TAGS[feelTag] || []).includes(e.id)) return false;
         if (effectGroup !== '全部' && e.group !== effectGroup) return false;
         if (effectSearch.trim()) {
@@ -652,7 +677,7 @@ export default function VideoStudio({ projectId }: Props) {
         }
         return true;
       }),
-    [effects, effectGroup, effectSearch, onlyFavEffects, favEffects, feelTag]
+    [effects, effectGroup, effectSearch, onlyFavEffects, onlyUsedEffects, usedCardsByKind, favEffects, feelTag]
   );
 
   const selectedCard = useMemo(() => doc.cards.find((c) => c.id === selectedCardId) || null, [doc.cards, selectedCardId]);
@@ -1199,18 +1224,31 @@ export default function VideoStudio({ projectId }: Props) {
             ) : (
               <>
                 <div className="p-2.5 border-b border-slate-800 bg-[#0f172a] space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-200 gap-1">
                     <span className="flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-cyan-400" /> 效果库 ({filteredEffects.length}/{effects.length})
                     </span>
-                    <button
-                      onClick={() => setOnlyFavEffects((v) => !v)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border ${
-                        onlyFavEffects ? 'bg-amber-500/20 border-amber-400/50 text-amber-300' : 'bg-slate-900 border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      <Star className="w-3 h-3" /> 收藏
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setOnlyUsedEffects((v) => !v)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                          onlyUsedEffects
+                            ? 'bg-emerald-500/25 border-emerald-400/60 text-emerald-200'
+                            : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="只看当前视频已使用过的动效模板"
+                      >
+                        已用({usedKindCount})
+                      </button>
+                      <button
+                        onClick={() => setOnlyFavEffects((v) => !v)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5 border ${
+                          onlyFavEffects ? 'bg-amber-500/20 border-amber-400/50 text-amber-300' : 'bg-slate-900 border-slate-700 text-slate-400'
+                        }`}
+                      >
+                        <Star className="w-3 h-3" /> 收藏
+                      </button>
+                    </div>
                   </div>
                   <input
                     value={effectSearch}
@@ -1248,6 +1286,14 @@ export default function VideoStudio({ projectId }: Props) {
                 <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-1.5 content-start">
                   {filteredEffects.map((e) => {
                     const isFav = favEffects.includes(e.id);
+                    const usedCount = usedCardsByKind[e.id]?.length || 0;
+                    const isSelectedKind = selectedCard?.kind === e.id;
+                    const highlightCls =
+                      usedCount >= 2
+                        ? 'bg-amber-950/30 border-amber-400/80 shadow-[0_0_12px_rgba(251,191,36,0.28)] hover:border-amber-300'
+                        : usedCount === 1
+                        ? 'bg-emerald-950/25 border-emerald-400/75 shadow-[0_0_10px_rgba(52,211,153,0.24)] hover:border-emerald-300'
+                        : 'bg-slate-900/80 border-slate-800 hover:bg-slate-800 hover:border-cyan-400/60';
                     return (
                       <div
                         key={e.id}
@@ -1257,9 +1303,9 @@ export default function VideoStudio({ projectId }: Props) {
                           setHoverEffect({ eff: e, top: Math.max(80, Math.min(window.innerHeight - 280, rect.top - 20)) });
                         }}
                         onMouseLeave={() => setHoverEffect(null)}
-                        className={`text-left rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-400/60 transition overflow-hidden flex flex-col cursor-pointer group ${
-                          !activeProj ? 'opacity-40 pointer-events-none' : ''
-                        }`}
+                        className={`text-left rounded-lg border transition overflow-hidden flex flex-col cursor-pointer group ${highlightCls} ${
+                          isSelectedKind ? 'ring-2 ring-orange-400' : ''
+                        } ${!activeProj ? 'opacity-40 pointer-events-none' : ''}`}
                       >
                         <div className="w-full aspect-video bg-[#070c16] border-b border-slate-800/80 overflow-hidden relative flex items-center justify-center">
                           {e.thumb_url ? (
@@ -1276,9 +1322,34 @@ export default function VideoStudio({ projectId }: Props) {
                           >
                             <Star className="w-3 h-3" fill={isFav ? 'currentColor' : 'none'} />
                           </button>
+                          {usedCount > 0 && (
+                            <button
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                jumpToNextUsedCard(e.id);
+                              }}
+                              title={`当前视频已使用 ${usedCount} 次，点击循环定位到时间轴位置`}
+                              className={`absolute top-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono-num shadow ${
+                                usedCount >= 2
+                                  ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                                  : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                              }`}
+                            >
+                              已用 ×{usedCount}
+                            </button>
+                          )}
                         </div>
                         <div className="p-1.5">
-                          <div className="text-[11px] font-medium text-slate-100 truncate">{e.name}</div>
+                          <div className="text-[11px] font-medium text-slate-100 truncate flex items-center justify-between gap-1">
+                            <span className="truncate">{e.name}</span>
+                            {usedCount > 0 && (
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  usedCount >= 2 ? 'bg-amber-400' : 'bg-emerald-400'
+                                }`}
+                              />
+                            )}
+                          </div>
                           <div className="text-[9px] text-slate-400 truncate mt-0.5">{e.desc}</div>
                         </div>
                       </div>
