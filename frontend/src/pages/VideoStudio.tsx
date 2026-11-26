@@ -375,6 +375,7 @@ export default function VideoStudio({ projectId }: Props) {
   };
 
   // 自适应计算真实 1920x1080 / 1080x1920 透明渲染画布的缩放比例
+  const engine = caps?.engine;
   const isVertical = activeProj?.aspect_ratio === '9:16';
   const stageW = isVertical ? 1080 : 1920;
   const stageH = isVertical ? 1920 : 1080;
@@ -445,7 +446,6 @@ export default function VideoStudio({ projectId }: Props) {
 
   const totalDur = Math.max(10, (activeProj?.duration_ms || 15000) / 1000, ...doc.cards.map((c) => c.end));
   const activeSubtitle = (doc.srt || []).find((s) => currentTime >= s.start && currentTime <= s.end);
-  const engine = caps?.engine;
 
   return (
     <div className="h-full flex flex-col gap-2.5 overflow-hidden">
