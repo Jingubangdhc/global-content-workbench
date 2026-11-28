@@ -1,5 +1,8 @@
 # Global Content Workbench · 变更日志 (CHANGELOG.md)
 
+## [v0.2.5-rc] - 2026-11-28（GCW-VIDEO-STUDIO-V1.0-A）
+- **原版 Overlay Studio 托管集成**：新增 `desktop/overlay_service.js` 并接入 `desktop/main.js` / `desktop/preload.js` / `VideoStudio.tsx`，实现 GCW Electron 自动启动原版 Overlay Studio v1.4.0（`127.0.0.1:5177/overlay-engine/`，`--strictPort --open false`）、单例防重复启动、健康检查、端口冲突报错与退出时 Windows 进程树零残留清理；`engines/overlay-studio` 原版源码零改动。
+
 ## [v0.2.4-rc] - 2026-11-28（GCW-WORKSPACE-V2-FIX-03-C）
 - **FIX-C01（P0）**：`topic_hub_service.py` 抽离统一 `validate_topic_evidence_scope`，生成接口与入库接口共享一致的项目/作品/评论归属校验规则，任何无效证据均完整回滚事务且无残留选题或状态历史。
 - **FIX-C02（P0）**：`CommentTopicDiscoveryPane.tsx` 改用稳定唯一 `candidate_uid` 及生成/入库独立双序列号与作用域守卫；后端严格拒绝混合有效/无效评论 ID 请求。

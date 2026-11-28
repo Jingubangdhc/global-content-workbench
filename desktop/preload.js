@@ -34,3 +34,9 @@ contextBridge.exposeInMainWorld('gcwDesktopBrowser', {
   setActiveView: (viewId) => ipcRenderer.invoke('gcw-browser:set-active-view', viewId),
   hideAll: () => ipcRenderer.invoke('gcw-browser:hide-all'),
 });
+
+contextBridge.exposeInMainWorld('gcwOverlayStudio', {
+  getStatus: () => ipcRenderer.invoke('gcw-overlay:status'),
+  start: () => ipcRenderer.invoke('gcw-overlay:start'),
+  stop: () => ipcRenderer.invoke('gcw-overlay:stop'),
+});

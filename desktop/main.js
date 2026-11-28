@@ -13,6 +13,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const overlayService = require('./overlay_service');
 const { app, BaseWindow, WebContentsView, ipcMain } = require('electron');
 const { buildReadonlyVideoMetaScript } = require('./video_meta_extractor');
 
@@ -662,6 +663,14 @@ ipcMain.handle('gcw-browser:seek-video', async (event, viewId, seconds) => {
   }
 });
 
+// GCW-VIDEO-STUDIO-V1.0-A: Overlay Studio 独立本地托管服务受控 IPC
+ipcMain.handle('gcw-overlay:status', async () => overlayService.getStatus());
+ipcMain.handle('gcw-overlay:start', async () => overlayService.startOverlayStudio());
+ipcMain.handle('gcw-overlay:stop', async () => {
+  overlayService.stopOverlayStudio();
+  return overlayService.getStatus();
+});
+
 app.on('second-instance', () => {
   if (mainWin) {
     if (mainWin.isMinimized()) mainWin.restore();
@@ -672,6 +681,8 @@ app.on('second-instance', () => {
 
 if (gotSingleInstanceLock) {
   app.whenReady().then(() => {
+    // 自动异步拉起托管的 Overlay Studio 本地服务（127.0.0.1:5177/overlay-engine/）
+    void overlayService.startOverlayStudio();
     createWindow();
     app.on('activate', () => {
       if (BaseWindow.getAllWindows().length === 0) createWindow();
@@ -679,6 +690,11 @@ if (gotSingleInstanceLock) {
   });
 }
 
+app.on('before-quit', () => {
+  overlayService.stopOverlayStudio();
+});
+
 app.on('window-all-closed', () => {
+  overlayService.stopOverlayStudio();
   if (process.platform !== 'darwin') app.quit();
 });

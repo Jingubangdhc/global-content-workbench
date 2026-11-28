@@ -29,6 +29,6 @@
 - 付费云端 API（需用户主动授权）生成原创文案的风格满意度需用户亲测。
 
 ## 4. 版本与测试证据
-- 本地候选版本：`v0.2.4-rc`（上一恢复点：`v0.2.3-rc`）
-- 本轮 FIX-03-C 验收证据：`docs/gcw_workspace_v2_fix_03_c/verify_fix03c_e2e.js`、`GCW_FIX_03_C_TEST_RESULTS.json`、`GCW_FIX_03_C_CODE_CHANGE_REPORT.md`（单/多条评论生成、混合无效评论 400、跨项目/无效评论入库拒绝且事务零残留回滚、`free_only` 隔离拦截 403、`[TEST-ONLY]` Skill 拆解安全 Markdown 表格渲染与四档字号回归全绿；用户正式拆解 Skill 仍标 `BLOCKED`）。
+- 本地候选版本：`v0.2.5-rc`（上一恢复点：`v0.2.4-rc`）
+- 本轮 GCW-VIDEO-STUDIO-V1.0-A 验收证据：`docs/gcw_video_studio_v1a/GCW_VIDEO_STUDIO_V1A_REPORT.md`、`GCW_VIDEO_STUDIO_V1A_TEST_RESULTS.json`、`verify_video_studio_v1a_e2e.js`（Overlay Studio 原版零改动托管集成、5177 健康检查与退出零残留清理、A–J 全绿）。
 - 远程审查分支最终 Commit SHA 见本轮交付卡与 `git rev-parse origin/review/gcw-uat-r4`。

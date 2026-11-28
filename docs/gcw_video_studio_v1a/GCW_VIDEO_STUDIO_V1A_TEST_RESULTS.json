@@ -1,0 +1,73 @@
+{
+  "version": "v0.2.5-rc (GCW-VIDEO-STUDIO-V1.0-A)",
+  "overlay_studio_upstream_repo": "https://github.com/jeszhou/overlay-studio",
+  "overlay_studio_upstream_commit": "8ce89d410af6ce648e1658eadf57fec15a612d62",
+  "overlay_studio_source_diff": "ZERO_DIFF (0 files modified in engines/overlay-studio)",
+  "tested_at": "2026-11-28T13:03:00.000Z",
+  "criteria": {
+    "A_standalone_and_health": {
+      "pass": true,
+      "actual": {
+        "standalone_status": 200,
+        "standalone_ready_ms": 378,
+        "engine_version": "1.4.0",
+        "pinned_commit": "8ce89d410af6ce648e1658eadf57fec15a612d62",
+        "license_file_present": true,
+        "engine_dir_ready": true,
+        "reachable": true,
+        "http_status": 200,
+        "effect_count": 25,
+        "default_sfx_count": 15
+      }
+    },
+    "B_gcw_auto_start": {
+      "pass": true,
+      "actual": {
+        "ok": true,
+        "running": true,
+        "managedByUs": true,
+        "port": 5177,
+        "url": "http://127.0.0.1:5177/overlay-engine/",
+        "duplicate_start_reused_same_pid": true
+      }
+    },
+    "C_D_E_F_editor_cards_timeline_preview": {
+      "pass": true,
+      "screenshot": "docs/gcw_video_studio_v1a/screenshots/gcw_overlay_studio_integrated.png",
+      "actual": {
+        "loaded": true,
+        "title": "Overlay Studio",
+        "clickedDemo": true,
+        "hasEditor": true,
+        "hasTimeline": true,
+        "buttonCount": 67,
+        "inputCount": 23,
+        "textLen": 2760
+      }
+    },
+    "G_H_overlaydoc_import_modify_save_reopen": {
+      "pass": true,
+      "actual": {
+        "import_v1_ok": true,
+        "modify_and_save_v2_ok": true,
+        "reopened_cue_value": "24.0x",
+        "testProjectCleaned": true
+      }
+    },
+    "I_zero_residual_process_on_quit": {
+      "pass": true,
+      "actual": {
+        "port_5177_after_quit": "NONE"
+      }
+    },
+    "J_gcw_regression": {
+      "pass": true,
+      "actual": {
+        "topicsStatus": 200,
+        "subtitlesStatus": 200,
+        "platformsStatus": 200
+      }
+    }
+  },
+  "all_criteria_pass": true
+}

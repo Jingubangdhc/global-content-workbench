@@ -418,9 +418,22 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-xs gap-2 p-6">
               <Clapperboard className="w-8 h-8 text-slate-600" />
               <div>独立 Overlay Studio 引擎（http://127.0.0.1:5177/overlay-engine/）当前未启动</div>
-              <button onClick={() => loadAll()} className="px-3 py-1.5 rounded bg-cyan-600 text-white flex items-center gap-1">
-                <RefreshCw className="w-3.5 h-3.5" /> 重新检测引擎
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const ctl = (window as any).gcwOverlayStudio;
+                    if (ctl?.start) {
+                      showToast('正在通过 GCW 启动原版 Overlay Studio 引擎...');
+                      const st = await ctl.start();
+                      if (!st?.running && st?.lastError) showToast(st.lastError);
+                    }
+                    await loadAll();
+                  }}
+                  className="px-3 py-1.5 rounded bg-cyan-600 text-white flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> 启动 / 重新检测引擎
+                </button>
+              </div>
             </div>
           )
         ) : (
