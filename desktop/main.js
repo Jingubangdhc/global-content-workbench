@@ -574,6 +574,40 @@ async function extractReadonlyVideoMeta(wc) {
           document.querySelector('[data-e2e="video-detail"]') ||
           document.querySelector('.video-detail-container') ||
           document;
+        // GCW-UAT-R4-H: 在抖音精选/推荐流中，地址栏停留在 /jingxuan/，尝试从当前活跃视频容器只读提取真实 19 位 aweme_id
+        if (!platformItemId && activeScope) {
+          const vidAttr =
+            (activeScope.getAttribute && (activeScope.getAttribute('data-e2e-vid') || activeScope.getAttribute('data-aweme-id'))) ||
+            '';
+          if (/^\\d{15,22}$/.test(vidAttr)) {
+            platformItemId = vidAttr;
+          } else {
+            const vidNode = activeScope.querySelector('[data-e2e-vid], [data-aweme-id], a[href*="/video/"], a[href*="modal_id="]');
+            if (vidNode) {
+              const candAttr = vidNode.getAttribute('data-e2e-vid') || vidNode.getAttribute('data-aweme-id') || vidNode.getAttribute('href') || '';
+              const dm = candAttr.match(/(\\d{15,22})/);
+              if (dm) platformItemId = dm[1];
+            }
+          }
+          if (!platformItemId) {
+            try {
+              const fiberKey = Object.keys(activeScope).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
+              let cur = fiberKey ? activeScope[fiberKey] : null;
+              for (let depth = 0; cur && depth < 12; depth++) {
+                const p = cur.memoizedProps || cur;
+                const aid = (p && (p.awemeId || p.itemId || (p.awemeInfo && p.awemeInfo.awemeId) || (p.data && p.data.awemeId))) || '';
+                if (/^\\d{15,22}$/.test(String(aid))) {
+                  platformItemId = String(aid);
+                  break;
+                }
+                cur = cur.return;
+              }
+            } catch {}
+          }
+          if (platformItemId) {
+            url = 'https://www.douyin.com/video/' + platformItemId;
+          }
+        }
         title =
           getText('[data-e2e="video-desc"]', activeScope) ||
           getText('[data-e2e="detail-video-desc"]', activeScope) ||

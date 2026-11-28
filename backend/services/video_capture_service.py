@@ -348,17 +348,44 @@ def _suggest_research_tags(title: str, platform: str, search_keyword: str = "") 
     return tags[:6]
 
 
+def _is_temp_md5_hash(item_id: str) -> bool:
+    """判断是否为旧逻辑生成的 12 位十六进制临时哈希（非真实平台作品 ID）。"""
+    return bool(re.fullmatch(r"[0-9a-f]{12}", (item_id or "").strip()))
+
+
+def _resolve_verified_work_identity(url: str, hint_platform: str = "", hint_item_id: str = "") -> tuple[str, str, str, bool]:
+    """返回 (platform, verified_item_id, canonical_url, is_verified)。严禁把首页 URL 或 12 位临时哈希当真实作品 ID。"""
+    u = (url or "").strip()
+    plat, item_id, is_work = _extract_work_identity(u)
+    if is_work and item_id and not _is_temp_md5_hash(item_id):
+        canon = f"https://www.douyin.com/video/{item_id}" if plat == "douyin" else u
+        return plat, item_id, canon, True
+
+    # 若外部传入了合法的真实平台 ID（例如从抖音精选页 DOM 提取的 19 位 aweme_id），且不是 12 位临时哈希
+    hp = (hint_platform or plat or "").strip().lower()
+    hid = (hint_item_id or "").strip()
+    if hid and not _is_temp_md5_hash(hid):
+        if hp == "douyin" and re.fullmatch(r"\d{15,22}", hid):
+            return "douyin", hid, f"https://www.douyin.com/video/{hid}", True
+        if hp == "youtube" and re.fullmatch(r"[A-Za-z0-9_-]{8,20}", hid):
+            return "youtube", hid, u, True
+        if hp == "bilibili" and re.fullmatch(r"(?:BV[A-Za-z0-9]{10}|av\d+)", hid, re.I):
+            return "bilibili", hid, u, True
+    return (hp or "web"), "", u, False
+
+
 def preview_video_capture(project_id: int, snapshot: dict[str, Any]) -> dict[str, Any]:
     """合并 Electron 只读 DOM 快照与公开只读元数据，返回可供用户核对补填的结构化预览。"""
     url = (snapshot.get("url") or "").strip()
     if not url:
         return {"ok": False, "error": "当前页面 URL 为空，请先在内置浏览器打开视频页面"}
 
-    det_plat, det_id = detect_platform(url)
-    platform = (snapshot.get("platform") or det_plat or "web").strip().lower()
-    if platform == "web" and det_plat:
-        platform = det_plat
-    item_id = (snapshot.get("platform_item_id") or det_id or "").strip()
+    platform, item_id, canonical_url, identity_verified = _resolve_verified_work_identity(
+        url,
+        hint_platform=str(snapshot.get("platform") or ""),
+        hint_item_id=str(snapshot.get("platform_item_id") or ""),
+    )
+    url = canonical_url
 
     public_extra = _enrich_public_metadata(url, platform, item_id)
     raw_m = snapshot.get("raw_metrics") or {}
@@ -387,16 +414,20 @@ def preview_video_capture(project_id: int, snapshot: dict[str, Any]) -> dict[str
         share_count = _opt_int(public_extra.get("share_count"))
     author_follower_count = _opt_int(raw_m.get("followers"))
 
-    # 检查是否已全局收录（去重提示）及该作者是否有可靠历史基线
+    # 检查是否已全局收录（去重提示）及该作者是否有可靠历史基线（仅在真实作品 ID 确认后查去重，绝不用空 ID 或临时哈希）
     conn = get_conn()
     existing_content = None
     linked_topic_ids: list[int] = []
     baseline_median: float | None = None
     try:
-        row_c = conn.execute(
-            "SELECT id, title, creator_id, research_tags_json, collect_reason FROM contents WHERE platform = ? AND platform_item_id = ?",
-            (platform, item_id),
-        ).fetchone()
+        row_c = (
+            conn.execute(
+                "SELECT id, title, creator_id, research_tags_json, collect_reason FROM contents WHERE platform = ? AND platform_item_id = ?",
+                (platform, item_id),
+            ).fetchone()
+            if identity_verified and item_id
+            else None
+        )
         if row_c:
             existing_content = {
                 "content_id": row_c["id"],
@@ -430,6 +461,12 @@ def preview_video_capture(project_id: int, snapshot: dict[str, Any]) -> dict[str
             "url": url,
             "platform": platform,
             "platform_item_id": item_id,
+            "identity_verified": identity_verified,
+            "identity_warning": (
+                ""
+                if identity_verified
+                else "当前页面未识别到具体视频唯一 ID（可能是抖音精选首页/搜索页），请点击视频分享按钮复制具体链接粘贴到下方并解析，系统绝不以首页或临时哈希入库。"
+            ),
             "title": title,
             "thumbnail_url": thumbnail_url,
             "author": author,
@@ -456,16 +493,47 @@ def preview_video_capture(project_id: int, snapshot: dict[str, Any]) -> dict[str
 
 
 def save_video_capture(project_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """用户确认后正式落库：全局去重写入 contents，按三方向关联 TopicHub，严格不自动进入文案工坊。"""
-    url = (payload.get("url") or "").strip()
-    if not url:
-        return {"ok": False, "error": "原始链接不能为空"}
+    """GCW-UAT-R4-H 统一事务收录：
+    1. 强校验作品真实身份（拒绝首页 URL / 12 位临时哈希，支持自动解析完整抖音分享文本）；
+    2. 统一选题归属逻辑：指定已有 target_topic_id 则直接关联（不改原生命周期状态）；指定同项目候选选题则走方案A；否则复用同名选题或新建「待研究」选题；
+    3. 作品主体遵循 UNIQUE(platform, platform_item_id) 全局去重，绝不覆盖其他作品，绝不自动进入文案工坊；
+    4. 返回完整可核验结果：content_id, topic_id, project_id, project_name, topic_title, topic_status, topic_created, link_status, dedup_reused。
+    """
+    raw_url = (payload.get("url") or "").strip()
+    if not raw_url:
+        return {"ok": False, "error": "作品链接不能为空"}
 
-    det_plat, det_id = detect_platform(url)
-    platform = (payload.get("platform") or det_plat or "web").strip().lower()
-    item_id = (payload.get("platform_item_id") or det_id or "").strip()
-    if not item_id:
-        return {"ok": False, "error": "无法确定作品唯一 ID"}
+    original_share_url = (payload.get("original_share_url") or "").strip()
+    extracted = extract_share_links(raw_url)
+    if len(extracted["urls"]) > 1:
+        return {"ok": False, "error": "检测到多个链接，请只保留一个具体视频链接后再确认收录"}
+    if len(extracted["urls"]) == 1:
+        cand_url = extracted["urls"][0]
+        if re.search(r"v\.douyin\.com|b23\.tv|xhslink\.com", cand_url, re.IGNORECASE):
+            res_link = resolve_share_link_safely(cand_url)
+            if not res_link.get("ok"):
+                return {"ok": False, "error": res_link.get("error") or "无法确认具体作品链接，请复制该视频的具体分享链接后重试"}
+            original_share_url = original_share_url or res_link.get("original_share_url") or cand_url
+            raw_url = res_link["final_url"]
+        else:
+            if raw_url != cand_url and not original_share_url:
+                original_share_url = cand_url
+            raw_url = cand_url
+
+    platform, item_id, url, identity_verified = _resolve_verified_work_identity(
+        raw_url,
+        hint_platform=str(payload.get("platform") or ""),
+        hint_item_id=str(payload.get("platform_item_id") or ""),
+    )
+    if not identity_verified or not item_id:
+        return {
+            "ok": False,
+            "needs_specific_url": True,
+            "error": (
+                f"当前链接「{raw_url[:80]}」无法确认具体视频作品唯一 ID（疑似抖音精选首页、搜索页或临时地址）。"
+                "请复制该视频的具体分享链接粘贴到作品链接框后重新收录，系统绝不将首页地址或临时哈希误认为真实作品 ID。"
+            ),
+        }
 
     title = (payload.get("title") or url).strip()[:240]
     thumbnail_url = (payload.get("thumbnail_url") or "").strip()[:500]
@@ -487,35 +555,89 @@ def save_video_capture(project_id: int, payload: dict[str, Any]) -> dict[str, An
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     collected_at = (payload.get("collected_at") or now_str).strip()[:40]
 
-    # 收录方向：candidate_topic(方案A推荐) / current_topic / existing_topic / new_topic
-    mode = (payload.get("target_mode") or "existing_topic").strip()
+    mode = (payload.get("target_mode") or "auto").strip()
     target_topic_id = payload.get("target_topic_id")
     candidate_topic_id = payload.get("candidate_topic_id")
+    desired_topic_title = (payload.get("new_topic_title") or payload.get("topic_title") or title.split("\n")[0]).strip()[:160]
     topic_created = False
 
     conn = get_conn()
     try:
-        # 方案 A（原子事务）：首次人工收录视频时，将当前候选选题立即转为 TopicHub「待研究」正式选题；
-        # 后续再收录视频时自动关联同一正式选题，且绝不覆盖其已有生命周期状态（如制作中/待制作）。
-        if mode == "candidate_topic" and candidate_topic_id:
+        proj_row = conn.execute("SELECT id, name FROM projects WHERE id = ?", (int(project_id),)).fetchone()
+        if not proj_row:
+            return {"ok": False, "error": f"目标研究项目 #{project_id} 不存在"}
+
+        resolved_topic_id: int | None = None
+
+        # 1) 显式指定了归属当前项目的已有选题：直接关联，绝不重置其生命周期状态
+        if target_topic_id:
+            tp_check = conn.execute(
+                "SELECT id FROM topics WHERE id = ? AND project_id = ?",
+                (int(target_topic_id), int(project_id)),
+            ).fetchone()
+            if tp_check:
+                resolved_topic_id = int(tp_check["id"])
+
+        # 2) 未指定已有选题但处于同项目候选选题研究上下文：执行方案 A（首次自动建待研究选题，已有则复用不改状态）
+        if not resolved_topic_id and candidate_topic_id and mode in ("auto", "candidate_topic"):
             cand = conn.execute(
                 "SELECT * FROM research_candidate_topics WHERE id = ? AND project_id = ?",
                 (int(candidate_topic_id), int(project_id)),
             ).fetchone()
-            if not cand:
-                return {"ok": False, "error": "关联候选选题不存在或不属于当前研究项目"}
-            existing_tid = cand["confirmed_topic_id"]
-            reused_tp = None
-            if existing_tid:
-                reused_tp = conn.execute(
-                    "SELECT id, project_id, topic_title, production_status FROM topics WHERE id = ? AND project_id = ?",
-                    (int(existing_tid), int(project_id)),
-                ).fetchone()
-            if reused_tp:
-                target_topic_id = int(reused_tp["id"])
+            if cand:
+                existing_tid = cand["confirmed_topic_id"]
+                if existing_tid:
+                    reused_tp = conn.execute(
+                        "SELECT id FROM topics WHERE id = ? AND project_id = ?",
+                        (int(existing_tid), int(project_id)),
+                    ).fetchone()
+                    if reused_tp:
+                        resolved_topic_id = int(reused_tp["id"])
+                if not resolved_topic_id:
+                    cand_queries = json.loads(cand["search_queries_zh_json"] or "[]") + json.loads(cand["search_queries_en_json"] or "[]")
+                    cur_tp = conn.execute(
+                        """INSERT INTO topics(
+                               project_id, batch_id, task_id, topic_title, research_question, angle,
+                               target_audience, tags_json, keywords_json, task_ids_json,
+                               origin_type, discovery_reason, source_evidence_ids_json,
+                               suggested_queries_json, missing_evidence_json,
+                               validation_status, validation_rule_version, validation_reason,
+                               evidence_coverage_pct, four_signals_json,
+                               production_status, is_favorite, recommendation,
+                               fact_check_status, differentiation_notes, user_notes, script_ready, round_no
+                           ) VALUES (?, NULL, NULL, ?, ?, ?, '', ?, ?, '[]', 'A_original_matched', ?, '[]', ?, '[]', 'U', 'gcw-mv-v1.0', '方案A首次收录视频自动保存至TopicHub，待继续研究', 0.0, '{}', '待研究', 0, '待研究', '待核实', '', '', 0, 1)""",
+                        (
+                            int(project_id),
+                            (desired_topic_title or cand["title"] or title)[:160],
+                            (cand["research_hypothesis"] or "")[:400],
+                            (cand["angle"] or "")[:400],
+                            json.dumps(user_tags, ensure_ascii=False),
+                            json.dumps([search_keyword] if search_keyword else [], ensure_ascii=False),
+                            f"方案A：用户首次收录参考视频《{title[:80]}》时自动沉淀至 TopicHub",
+                            json.dumps(cand_queries[:8], ensure_ascii=False),
+                        ),
+                    )
+                    resolved_topic_id = int(cur_tp.lastrowid)
+                    topic_created = True
+                    conn.execute(
+                        "INSERT INTO topic_status_history(topic_id, project_id, field_name, old_value, new_value, reason, changed_by) VALUES (?, ?, 'production_status', '', '待研究', '方案A首次收录视频自动创建正式选题', 'user')",
+                        (resolved_topic_id, int(project_id)),
+                    )
+                    conn.execute(
+                        "UPDATE research_candidate_topics SET confirmed_topic_id = ?, status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (resolved_topic_id, int(candidate_topic_id)),
+                    )
+
+        # 3) 否则在所选项目下按选题名复用同名选题（防连续重复点击重复建选题）或自动创建新的「待研究」选题
+        if not resolved_topic_id:
+            clean_tp_title = desired_topic_title or title.split("\n")[0][:160]
+            same_tp = conn.execute(
+                "SELECT id FROM topics WHERE project_id = ? AND topic_title = ? ORDER BY id DESC LIMIT 1",
+                (int(project_id), clean_tp_title),
+            ).fetchone()
+            if same_tp:
+                resolved_topic_id = int(same_tp["id"])
             else:
-                # 首次收录：在当前同一事务内创建正式选题（默认状态：待研究，验证等级：U）
-                cand_queries = json.loads(cand["search_queries_zh_json"] or "[]") + json.loads(cand["search_queries_en_json"] or "[]")
                 cur_tp = conn.execute(
                     """INSERT INTO topics(
                            project_id, batch_id, task_id, topic_title, research_question, angle,
@@ -526,62 +648,26 @@ def save_video_capture(project_id: int, payload: dict[str, Any]) -> dict[str, An
                            evidence_coverage_pct, four_signals_json,
                            production_status, is_favorite, recommendation,
                            fact_check_status, differentiation_notes, user_notes, script_ready, round_no
-                       ) VALUES (?, NULL, NULL, ?, ?, ?, '', ?, ?, '[]', 'A_original_matched', ?, '[]', ?, '[]', 'U', 'gcw-mv-v1.0', '方案A首次收录视频自动保存至TopicHub，待继续研究', 0.0, '{}', '待研究', 0, '待研究', '待核实', '', '', 0, 1)""",
+                       ) VALUES (?, NULL, NULL, ?, ?, ?, '', ?, ?, '[]', 'content_comment_discovery', ?, '[]', ?, '[]', 'U', 'gcw-mv-v1.0', '一键收录自动创建待研究选题', 0.0, '{}', '待研究', 0, '待研究', '待核实', '', '', 0, 1)""",
                     (
                         int(project_id),
-                        (cand["title"] or title)[:160],
-                        (cand["research_hypothesis"] or "")[:400],
-                        (cand["angle"] or "")[:400],
+                        clean_tp_title,
+                        (payload.get("new_topic_question") or "")[:400],
+                        (payload.get("new_topic_angle") or capture_reason)[:400],
                         json.dumps(user_tags, ensure_ascii=False),
                         json.dumps([search_keyword] if search_keyword else [], ensure_ascii=False),
-                        f"方案A：用户首次收录参考视频《{title[:80]}》时自动沉淀至 TopicHub",
-                        json.dumps(cand_queries[:8], ensure_ascii=False),
+                        f"从内置浏览器一键收录视频新建选题：{title[:80]}",
+                        json.dumps([search_keyword] if search_keyword else [clean_tp_title[:40]], ensure_ascii=False),
                     ),
                 )
-                target_topic_id = int(cur_tp.lastrowid)
+                resolved_topic_id = int(cur_tp.lastrowid)
                 topic_created = True
                 conn.execute(
-                    "INSERT INTO topic_status_history(topic_id, project_id, field_name, old_value, new_value, reason, changed_by) VALUES (?, ?, 'production_status', '', '待研究', '方案A首次收录视频自动创建正式选题', 'user')",
-                    (target_topic_id, int(project_id)),
+                    "INSERT INTO topic_status_history(topic_id, project_id, field_name, old_value, new_value, reason, changed_by) VALUES (?, ?, 'production_status', '', '待研究', '收录视频自动新建正式选题', 'user')",
+                    (resolved_topic_id, int(project_id)),
                 )
-                conn.execute(
-                    "UPDATE research_candidate_topics SET confirmed_topic_id = ?, status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (target_topic_id, int(candidate_topic_id)),
-                )
-        elif mode == "new_topic":
-            new_title = (payload.get("new_topic_title") or title).strip()
-            cur_tp = conn.execute(
-                """INSERT INTO topics(
-                       project_id, batch_id, task_id, topic_title, research_question, angle,
-                       target_audience, tags_json, keywords_json, task_ids_json,
-                       origin_type, discovery_reason, source_evidence_ids_json,
-                       suggested_queries_json, missing_evidence_json,
-                       validation_status, validation_rule_version, validation_reason,
-                       evidence_coverage_pct, four_signals_json,
-                       production_status, is_favorite, recommendation,
-                       fact_check_status, differentiation_notes, user_notes, script_ready, round_no
-                   ) VALUES (?, NULL, NULL, ?, ?, ?, '', ?, ?, '[]', 'content_comment_discovery', ?, '[]', ?, '[]', 'U', 'gcw-mv-v1.0', '由内置浏览器一键收录新建选题', 0.0, '{}', '待研究', 0, '待研究', '待核实', '', '', 0, 1)""",
-                (
-                    int(project_id),
-                    new_title[:160],
-                    (payload.get("new_topic_question") or "")[:400],
-                    (payload.get("new_topic_angle") or capture_reason)[:400],
-                    json.dumps(user_tags, ensure_ascii=False),
-                    json.dumps([search_keyword] if search_keyword else [], ensure_ascii=False),
-                    f"从内置浏览器一键收录视频新建选题：{title[:80]}",
-                    json.dumps([search_keyword] if search_keyword else [new_title[:40]], ensure_ascii=False),
-                ),
-            )
-            target_topic_id = int(cur_tp.lastrowid)
-            topic_created = True
-            conn.execute(
-                "INSERT INTO topic_status_history(topic_id, project_id, field_name, old_value, new_value, reason, changed_by) VALUES (?, ?, 'production_status', '', '待研究', '收录视频新建正式选题', 'user')",
-                (target_topic_id, int(project_id)),
-            )
-        else:
-            if not target_topic_id:
-                return {"ok": False, "error": "请选择要关联的目标选题，或切换为「方案A当前候选选题 / 新建选题」"}
-            target_topic_id = int(target_topic_id)
+
+        target_topic_id = resolved_topic_id
 
         # 校验目标选题归属当前项目（绝不修改其已有 production_status）
         tp_row = conn.execute(
@@ -726,16 +812,24 @@ def save_video_capture(project_id: int, payload: dict[str, Any]) -> dict[str, An
                 ),
             )
 
+        link_status = "updated" if ex_ev else "created"
         conn.execute("UPDATE topics SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (target_topic_id,))
         conn.commit()
         return {
             "ok": True,
             "content_id": content_id,
             "topic_id": target_topic_id,
+            "project_id": int(project_id),
+            "project_name": proj_row["name"],
             "topic_title": tp_row["topic_title"],
             "topic_status": tp_row["production_status"],
             "topic_created": topic_created,
+            "link_status": link_status,
             "dedup_reused": dedup_reused,
+            "platform": platform,
+            "platform_item_id": item_id,
+            "url": url,
+            "original_share_url": original_share_url,
             "manual_transcript_collected": 0,
             "metrics": metrics,
         }

@@ -65,4 +65,38 @@
 ## 四、剩余需用户亲自验证事项（严格不标 PASS）
 
 1. **抖音实机扫码登录及跨重启会话保持**：受限于手机端实机扫码交互，未在自动化脚本中代为登录，请用户在桌面版内置研究浏览器中亲自扫码登录抖音，验证跨页面与重启后免重复登录。
-2. **版本定型与远程推送**：所有候选标签（`v0.1.5-rc` ~ `v0.1.10-rc`）均仅保存在本地 Git，未推送 GitHub，未标记为正式稳定版本，待 ChatGPT 独立审查及用户统一验收确认后再决定后续动作。
+2. **版本定型与远程推送**：已按用户授权将纯安全源码同步至独立审查分支 `review/gcw-uat-r4`（未触碰 `main`，未执行 `force push`），所有候选标签（`v0.1.5-rc` ~ `v0.1.13-rc`）均保持为候选状态，待 ChatGPT 独立审查及用户最终验收确认后再决定是否合并 `main` 或标记稳定版本。
+
+---
+
+## 五、GCW-UAT-R4-H｜源码同步及选题收录专项修复（`v0.1.13-rc`）
+
+### 5.1 第一阶段：独立审查分支纯安全源码同步（基于 `v0.1.12-rc`）
+- **同步分支**：`review/gcw-uat-r4`（从 `origin/main` 干净检出，仅含安全源码、清单与文档，不触碰 `main`，不使用 `force push`）。
+- **首批 Commit SHA**：`3b57c24dff55e759f430d903dca258c47e06072b`（共 `190` 文件，本次同步 `84` 个纯源码/文档/模型清单文件）。
+- **敏感信息与排除项扫描**：API Key、`.env`、Cookie/登录凭据、SQLite 数据库与备份、`models/*.gguf`、`.venv`/`runtime/llama.cpp`/`node_modules`、私人日志及真机截图录屏均已严格排除（`BAD_FILES: []`、`SECRET_HITS: []`）。
+
+### 5.2 第二阶段：作品 `#104` 收录 BUG 根因定位（数据库铁证 + 源码行号）
+1. **数据库实查铁证**：
+   - `contents.id=104`（《Gemini 4 Carbon 值不值得用？十个项目实测》）的 `source_url` 为抖音精选首页 `https://www.douyin.com/jingxuan/`，`source_item_id` 为 12 位 MD5 临时哈希 `3d5a56bd3d9c`；
+   - 用户先后收录的 3 条不同抖音视频——`topic_evidence.id=103`（`project_id=1`, `topic_id=37`, 《网红男明星的日记 吃不停》）、`id=104`（`project_id=1`, `topic_id=38`, 《一只鹈鹕，怎么成了全球顶级AI的噩梦？》）、`id=105`（`project_id=2`, `topic_id=13`, 《Gemini 4 Carbon 值不值得用？十个项目实测》）——因共享同一临时哈希 `3d5a56bd3d9c`，在全局去重时被错误合并覆盖到同一条 `contents.id=104`；
+   - 切换目标项目到 `project_id=2`（商业认知与变现）时，原前端弹窗自动切换为 `existing_topic` 并默认选中该项目第一条旧选题 `#13`（《马斯克政治立场争议》），导致未创建新选题且误挂在 `#13` 下。
+2. **源码行号定位**：
+   - `desktop/main.js#L567-L576`：原逻辑只从地址栏 `url` 提取抖音视频 ID，抖音精选页地址栏恒为 `/jingxuan/`；
+   - `backend/collectors/media.py#L55-L57`：对无视频 ID 的 URL 回退生成 12 位 MD5 临时哈希；
+   - `frontend/src/components/VideoCaptureModal.tsx`：原「选择收录方向（三选一）」在切项目时隐式切为 `existing_topic` 并选中 `filteredTopics[0]`。
+
+### 5.3 第三、四阶段：极简 4 步收录流重构与精准跳转
+- **`desktop/main.js`**：在抖音精选/推荐流中增强从 `[data-e2e="feed-active-video"]` 属性、`a[href*="/video/"]` 及 React fiber 只读提取真实 19 位 `aweme_id`，命中后自动规范化 `url = https://www.douyin.com/video/<id>`。
+- **`backend/services/video_capture_service.py`**：新增 `_is_temp_md5_hash` 与 `_resolve_verified_work_identity`，严格拒绝将精选首页/搜索页或 12 位 MD5 临时哈希当真实作品 ID 入库（返回 400 并引导粘贴分享链接）；统一单事务原子落库，自动复用/新建「待研究」选题，绝不修改已有选题生命周期状态；返回完整 `content_id, topic_id, project_id, topic_title, link_status, topic_created, manual_transcript_collected: 0`。
+- **`frontend/src/components/VideoCaptureModal.tsx`**：彻底删除「选择收录方向（三选一）」与 A/B/C 冗余逻辑，重构为极简 4 步弹窗（1. 所属研究项目 → 2. 选题名称自动生成或改选已有 → 3. 核对作品信息/分享链解析 → 4. 确认收录），增加防连点锁 `saving`，成功后展示真实保存明细与「前往选题资产中心查看 →」按钮。
+- **`frontend/src/App.tsx` & `frontend/src/pages/TopicHub.tsx`**：新增 `focusTarget`，点击直达按钮后自动切换目标项目、清空不适用的筛选条件并精准定位选中刚保存的选题。
+
+### 5.4 第五阶段：无损修复、自动化回归与真机录屏验收
+- **历史数据无损修复**：先执行专项热备 `data/backups/workbench_pre_fix104_20261128.db`，在 `project_id=2`（商业认知与变现）新建正式「待研究」选题 `#39`《Gemini 4 Carbon 值不值得用？十个项目实测》，将误挂在 `#13` 下的 `topic_evidence.id=105` 改指 `#39`，零删除历史数据。
+- **自动化回归测试（`docs/gcw_uat_r4_final/verify_r4_h.py`）**：5/5 ALL PASS（拒绝精选页临时哈希 400、抖音完整分享文本解析真实 19 位 ID 入库 `project_id=2`、连续重复点击幂等、跨项目收录至汽车项目 `461` 与跨境医疗项目 `1` 保留已有 `#20` 原状态 `已验证` 不变、TopicHub 立即可查且绝不自动进文案工坊）。
+- **Electron 真机截图与操作录屏（`capture_r4_h_demo_result.json`）**：
+  - `evidence/07_r4_h_simplified_capture_modal.png`（确认已移除「选择收录方向（三选一）」）
+  - `evidence/08_r4_h_proj2_gemini_topic39.png`（确认 `project_id=2` 下 `#39` 清晰可见）
+  - `evidence/07_r4_h_capture_flow_demo.mp4`（583KB，18 帧真实操作录屏）
+- **版本冻结与增量同步**：本地 SQLite 热备 `data/backups/workbench_v0.1.13_rc_20261128.db`（`PRAGMA integrity_check = ok`），本地标签 `v0.1.13-rc` 冻结后增量推送安全源码至 `review/gcw-uat-r4`。

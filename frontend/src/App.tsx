@@ -49,6 +49,7 @@ export default function App() {
 
   const [page, setPage] = useState<PageKey>('search');
   const [searchSeedKw, setSearchSeedKw] = useState<string | null>(null);
+  const [focusTopicTarget, setFocusTopicTarget] = useState<{ projectId: number; topicId: number; token: number } | null>(null);
   const [activeContentId, setActiveContentId] = useState<number | null>(null);
   const [autoExtractToken, setAutoExtractToken] = useState<number>(0);
   const [xrayTarget, setXrayTarget] = useState<{ query: string; platform: string } | null>(null);
@@ -311,8 +312,12 @@ export default function App() {
               setActiveContentId(cid);
               setPage('transcript');
             }}
-            onGoTopicHub={(targetPid) => {
-              if (targetPid && targetPid !== projectId) setProjectId(targetPid);
+            onGoTopicHub={(targetPid, targetTid) => {
+              const nextPid = targetPid || projectId;
+              if (nextPid !== projectId) setProjectId(nextPid);
+              if (targetTid) {
+                setFocusTopicTarget({ projectId: nextPid, topicId: targetTid, token: Date.now() });
+              }
               setPage('topics');
             }}
           />
@@ -320,6 +325,8 @@ export default function App() {
         {page === 'topics' && (
           <TopicHub
             projectId={projectId}
+            focusTarget={focusTopicTarget}
+            onClearFocusTarget={() => setFocusTopicTarget(null)}
             onOpenTranscript={(cid) => {
               setActiveContentId(cid);
               setAutoExtractToken((t) => t + 1);

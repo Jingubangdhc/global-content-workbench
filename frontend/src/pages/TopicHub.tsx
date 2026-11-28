@@ -37,6 +37,8 @@ import { api, fmtDur, fmtNum } from '../api';
 
 interface Props {
   projectId: number;
+  focusTarget?: { projectId: number; topicId: number; token: number } | null;
+  onClearFocusTarget?: () => void;
   onOpenTranscript: (contentId: number) => void;
   onJumpSearch: (keyword: string) => void;
 }
@@ -73,7 +75,7 @@ function platformBadgeCls(p: string) {
  * - 支持人工直接创建原创选题（不强制先 AI 搜索），未验证进入待制作仍保持 U；
  * - 支持多对多证据追溯、文案工坊联动、相似选题用户确认无损合并与重新发起真实搜索。
  */
-export default function TopicHub({ projectId, onOpenTranscript, onJumpSearch }: Props) {
+export default function TopicHub({ projectId, focusTarget, onClearFocusTarget, onOpenTranscript, onJumpSearch }: Props) {
   const [overview, setOverview] = useState<any>(null);
   const [topics, setTopics] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -627,6 +629,37 @@ export default function TopicHub({ projectId, onOpenTranscript, onJumpSearch }: 
       setDetail(null);
     }
   };
+
+  // GCW-UAT-R4-H: 从收录弹窗点击「前往选题资产中心查看」后，自动切换项目、清除不适用的筛选条件并精准定位到刚保存的选题
+  useEffect(() => {
+    if (!focusTarget?.topicId) return;
+    const targetPid = focusTarget.projectId;
+    const targetTid = focusTarget.topicId;
+    setActiveProjectFilter(targetPid);
+    setQ('');
+    setFilterVal('');
+    setFilterProd('');
+    setFilterOrigin('');
+    setFavOnly(false);
+    setIncludePublished(true);
+    (async () => {
+      try {
+        const [cats, ov, listRes] = await Promise.all([
+          api.topicHubProjectCategories().catch(() => null),
+          api.topicHubOverview(targetPid).catch(() => null),
+          api.topicHubList({ project_id: targetPid, include_published: 'true', include_archived: 'true', limit: 200 }).catch(() => ({ topics: [] })),
+        ]);
+        if (cats?.ok) setProjectCategories(cats);
+        setOverview(ov);
+        const list = listRes?.topics || [];
+        setTopics(list);
+        await loadDetail(targetTid, targetPid);
+        showToast(`✅ 已定位至选题 #${targetTid}`);
+      } finally {
+        onClearFocusTarget?.();
+      }
+    })();
+  }, [focusTarget?.token]);
 
   const loadDetail = async (tid: number, topicProjId?: number | null) => {
     setSelectedId(tid);

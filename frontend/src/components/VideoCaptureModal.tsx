@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   BookmarkPlus,
   CheckCircle2,
   Film,
@@ -31,11 +32,8 @@ interface Props {
 }
 
 /**
- * GCW-ASSET-01 · 内置浏览器一键收录当前视频弹窗（深蓝灰专业工作台规范）
- * - 自动填充可获得的真实数据，缺失留空（落库 NULL，前端展示 —）
- * - 三种收录方向：A 关联当前选题 / B 关联其他已有选题 / C 根据当前视频新建选题
- * - 支持人工标签 + AI 建议标签（点击采纳，绝不覆盖用户已确认标签）与收录原因
- * - 用户点击确认后才正式写入数据库，且保存视频绝不自动加入文案工坊
+ * GCW-UAT-R4-H · 极简统一收录确认弹窗（已彻底移除“选择收录方向三选一”与 A/B/C 冗余逻辑）
+ * 统一流程：选择项目 → 核对作品（强校验作品身份，拒绝首页/临时哈希） → 自动生成或编辑选题名称 → 确认收录
  */
 export default function VideoCaptureModal({
   open,
@@ -46,7 +44,6 @@ export default function VideoCaptureModal({
   candidateTopicId,
   candidateTopicTitle = '',
   currentTopicId,
-  currentTopicTitle,
   searchKeyword,
   initialPreview,
   initialOriginalShareUrl = '',
@@ -56,22 +53,20 @@ export default function VideoCaptureModal({
 }: Props) {
   const [selectedProjectId, setSelectedProjectId] = useState<number>(projectId);
   const [topics, setTopics] = useState<any[]>([]);
-  const [targetMode, setTargetMode] = useState<'candidate_topic' | 'current_topic' | 'existing_topic' | 'new_topic'>(
-    candidateTopicId ? 'candidate_topic' : currentTopicId ? 'current_topic' : 'existing_topic'
-  );
-  const [selectedTopicId, setSelectedTopicId] = useState<number | ''>(currentTopicId || '');
-  const [newTopicTitle, setNewTopicTitle] = useState('');
-  const [newTopicQuestion, setNewTopicQuestion] = useState('');
-  const [newTopicAngle, setNewTopicAngle] = useState('');
+  // 统一选题字段：默认自动关联当前有效研究选题或按视频标题自动生成新选题名；也允许用户下拉改选已有选题
+  const [linkedExistingTopicId, setLinkedExistingTopicId] = useState<number | ''>('');
+  const [topicTitle, setTopicTitle] = useState('');
 
-  // 可编辑真实视频字段（空字符串保存时转为 NULL）
+  // 作品核心字段
   const [url, setUrl] = useState('');
   const [originalShareUrl, setOriginalShareUrl] = useState('');
-  const [multiLinkCandidates, setMultiLinkCandidates] = useState<string[]>([]);
-  const [resolvingLink, setResolvingLink] = useState(false);
-  const [savedResult, setSavedResult] = useState<any | null>(null);
   const [platform, setPlatform] = useState('');
   const [itemId, setItemId] = useState('');
+  const [identityVerified, setIdentityVerified] = useState<boolean>(true);
+  const [identityWarning, setIdentityWarning] = useState<string>('');
+  const [multiLinkCandidates, setMultiLinkCandidates] = useState<string[]>([]);
+  const [resolvingLink, setResolvingLink] = useState(false);
+
   const [title, setTitle] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [author, setAuthor] = useState('');
@@ -85,7 +80,6 @@ export default function VideoCaptureModal({
   const [shareCount, setShareCount] = useState('');
   const [followerCount, setFollowerCount] = useState('');
 
-  // 标签与收录原因（AI 建议标签仅作候选项，绝不覆盖用户已确认标签）
   const [userTags, setUserTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
@@ -93,46 +87,52 @@ export default function VideoCaptureModal({
 
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState('');
+  const [savedResult, setSavedResult] = useState<any | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setSelectedProjectId(projectId);
     setSavedResult(null);
+    setErrMsg('');
     setMultiLinkCandidates([]);
     setOriginalShareUrl(initialOriginalShareUrl || '');
   }, [open, projectId, initialOriginalShareUrl]);
 
+  // 根据所选研究项目拉取真实数据库选题列表（切换项目时自动清空旧项目关联，避免误挂到其他项目的旧选题！）
   useEffect(() => {
     if (!open) return;
-    setErrMsg('');
     const isOrigProject = selectedProjectId === projectId;
     api
       .topicHubList({ project_id: selectedProjectId, include_published: 'true', limit: 100 })
       .then((r) => {
         const list = r?.topics || [];
         setTopics(list);
-        if (isOrigProject && candidateTopicId) {
-          setTargetMode('candidate_topic');
-          setSelectedTopicId(currentTopicId || '');
-        } else if (isOrigProject && currentTopicId && list.some((t: any) => t.id === currentTopicId)) {
-          setTargetMode('current_topic');
-          setSelectedTopicId(currentTopicId);
-        } else if (list.length > 0) {
-          setTargetMode('existing_topic');
-          setSelectedTopicId(list[0].id);
+        if (isOrigProject && currentTopicId && list.some((t: any) => t.id === currentTopicId)) {
+          const hit = list.find((t: any) => t.id === currentTopicId);
+          setLinkedExistingTopicId(currentTopicId);
+          setTopicTitle(hit?.topic_title || candidateTopicTitle || initialPreview?.title || '');
+        } else if (isOrigProject && candidateTopicId && candidateTopicTitle) {
+          setLinkedExistingTopicId('');
+          setTopicTitle(candidateTopicTitle);
         } else {
-          setTargetMode('new_topic');
-          setSelectedTopicId('');
+          // 切换到其他项目或无当前研究选题时：默认不乱挂旧选题，自动以视频标题作为待新建选题名
+          setLinkedExistingTopicId('');
+          setTopicTitle((prev) => prev || initialPreview?.title || '');
         }
       })
-      .catch(() => setTopics([]));
-  }, [open, selectedProjectId, projectId, currentTopicId, candidateTopicId]);
+      .catch(() => {
+        setTopics([]);
+        setLinkedExistingTopicId('');
+      });
+  }, [open, selectedProjectId, projectId, currentTopicId, candidateTopicId, candidateTopicTitle]);
 
   useEffect(() => {
     if (!open || !initialPreview) return;
     setUrl(initialPreview.url || '');
     setPlatform(initialPreview.platform || '');
     setItemId(initialPreview.platform_item_id || '');
+    setIdentityVerified(initialPreview.identity_verified !== false);
+    setIdentityWarning(initialPreview.identity_warning || '');
     setTitle(initialPreview.title || '');
     setThumbnailUrl(initialPreview.thumbnail_url || '');
     setAuthor(initialPreview.author || '');
@@ -145,9 +145,14 @@ export default function VideoCaptureModal({
     setFavoriteCount(initialPreview.favorite_count != null ? String(initialPreview.favorite_count) : '');
     setShareCount(initialPreview.share_count != null ? String(initialPreview.share_count) : '');
     setFollowerCount(initialPreview.author_follower_count != null ? String(initialPreview.author_follower_count) : '');
-    setNewTopicTitle(initialPreview.title || '');
+    if (!topicTitle) {
+      setTopicTitle(
+        selectedProjectId === projectId && candidateTopicTitle
+          ? candidateTopicTitle
+          : (initialPreview.title || '').split('\n')[0].slice(0, 120)
+      );
+    }
     setAiSuggestedTags(initialPreview.ai_suggested_tags || []);
-    // 若该作品此前已收录过，保留用户已确认标签与原因
     if (initialPreview.existing_content?.research_tags?.length) {
       setUserTags(initialPreview.existing_content.research_tags);
     } else {
@@ -192,8 +197,11 @@ export default function VideoCaptureModal({
         setUrl(r.final_url);
         if (r.platform) setPlatform(r.platform);
         if (r.platform_item_id) setItemId(r.platform_item_id);
+        setIdentityVerified(true);
+        setIdentityWarning('');
       } else {
-        setErrMsg(r?.error || '未能确认具体作品链接，请在内置浏览器中核对');
+        setIdentityVerified(false);
+        setErrMsg(r?.error || '未能确认具体作品链接，请复制该视频的具体分享链接粘贴后重试');
       }
     } catch (e: any) {
       setErrMsg(e?.message || '分享链接解析失败');
@@ -203,26 +211,21 @@ export default function VideoCaptureModal({
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!url.trim() || !title.trim()) {
       setErrMsg('作品链接和视频标题不能为空');
       return;
     }
-    if (targetMode === 'new_topic' && !newTopicTitle.trim()) {
-      setErrMsg('请输入要新建的选题标题');
-      return;
-    }
-    if (targetMode === 'candidate_topic' && (!candidateTopicId || selectedProjectId !== projectId)) {
-      setErrMsg('切换研究项目后请选择该项目的已有选题或新建选题');
-      return;
-    }
-    if ((targetMode === 'current_topic' || targetMode === 'existing_topic') && !selectedTopicId) {
-      setErrMsg('请选择目标选题，或切换为「根据当前视频新建选题」');
+    if (!linkedExistingTopicId && !topicTitle.trim()) {
+      setErrMsg('请输入选题名称，或选择一个已有选题');
       return;
     }
 
     setSaving(true);
     setErrMsg('');
+    setSavedResult(null);
     try {
+      const isOrigProject = selectedProjectId === projectId;
       const res = await api.videoCaptureSave({
         project_id: selectedProjectId,
         url: url.trim(),
@@ -246,21 +249,21 @@ export default function VideoCaptureModal({
         search_keyword: searchKeyword || initialPreview?.search_keyword || '',
         research_tags: userTags,
         capture_reason: captureReason.trim(),
-        target_mode: targetMode,
-        candidate_topic_id: targetMode === 'candidate_topic' ? candidateTopicId : null,
-        target_topic_id: targetMode === 'current_topic' ? currentTopicId : selectedTopicId || null,
-        new_topic_title: newTopicTitle.trim(),
-        new_topic_question: newTopicQuestion.trim(),
-        new_topic_angle: newTopicAngle.trim(),
+        target_mode: 'auto',
+        target_topic_id: linkedExistingTopicId ? Number(linkedExistingTopicId) : null,
+        candidate_topic_id: !linkedExistingTopicId && isOrigProject && candidateTopicId ? candidateTopicId : null,
+        new_topic_title: topicTitle.trim(),
       });
-      if (res?.ok) {
-        setSavedResult({ ...res, project_id: selectedProjectId });
-        onSaved({ ...res, project_id: selectedProjectId });
+      if (res?.ok && res.content_id && res.topic_id) {
+        setSavedResult(res);
+        setIdentityVerified(true);
+        setIdentityWarning('');
+        onSaved(res);
       } else {
-        setErrMsg(res?.error || '收录失败');
+        setErrMsg(res?.error || '收录写入失败，未保存');
       }
     } catch (e: any) {
-      setErrMsg(e?.message || '收录失败');
+      setErrMsg(e?.message || '收录写入失败，请检查具体视频链接后重试');
     } finally {
       setSaving(false);
     }
@@ -273,10 +276,10 @@ export default function VideoCaptureModal({
         <div className="px-5 py-3 bg-[#131E36] border-b border-[#1E2E4A] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookmarkPlus className="w-4 h-4 text-cyan-400" />
-            <span className="font-bold text-sm">一键收录当前视频至 TopicHub</span>
+            <span className="font-bold text-sm">收录作品至选题资产中心</span>
             {initialPreview?.existing_content && (
               <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[10px]">
-                作品已全局收录 (#{initialPreview.existing_content.content_id})，本次将去重更新并追加关联
+                作品已存在 (#{initialPreview.existing_content.content_id})，本次将去重复用并建立选题关联
               </span>
             )}
           </div>
@@ -291,59 +294,35 @@ export default function VideoCaptureModal({
             <span>正在安全只读提取当前真实视频元数据...</span>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs bg-[#0B111E]">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs bg-[#0B111E]">
             {errMsg && (
-              <div className="px-3 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/35 text-rose-300">
-                ⚠ {errMsg}
+              <div className="px-3 py-2 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errMsg}</span>
               </div>
             )}
 
-            {/* FIX-F03: 明确收录目的地、所属研究项目（可自由切换真实数据库项目）与关联选题归属确认条 */}
-            <div className="px-3 py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/40 space-y-1.5 text-[11px]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
-                    收录目的地：选题资产中心（TopicHub）
-                  </span>
-                  <span className="text-[10px] text-slate-300">绝不自动进文案工坊 · 不默认落入素材与作者库</span>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono-num">
-                  采集时间：{initialPreview?.collected_at || '当前'}
+            {!identityVerified && (
+              <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/45 text-amber-200 text-[11px] flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-300" />
+                <span>
+                  {identityWarning ||
+                    '当前页面未识别到具体视频唯一 ID（如抖音精选首页），请复制该视频的具体分享链接粘贴到下方「作品链接」框并点击「解析分享链」，绝不以首页或临时哈希入库。'}
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-slate-400 shrink-0">所属研究项目：</span>
-                {projects.length > 0 ? (
-                  <select
-                    value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(Number(e.target.value))}
-                    className="gcw-input px-2 py-0.5 text-[11px] font-semibold text-cyan-200"
-                  >
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        #{p.id} {p.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <strong className="text-cyan-300">{projectName || `项目 #${selectedProjectId}`}</strong>
-                )}
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-400">关联选题：</span>
-                <strong className="text-slate-100">
-                  {targetMode === 'candidate_topic' && candidateTopicId && selectedProjectId === projectId
-                    ? (currentTopicId ? `已沉淀正式选题 #${currentTopicId}「${candidateTopicTitle}」` : `方案A自动沉淀候选选题「${candidateTopicTitle}」→ 选题资产中心（待研究）`)
-                    : targetMode === 'new_topic'
-                      ? `新建选题「${newTopicTitle || title}」（待研究）`
-                      : `已有选题 #${selectedTopicId || '未选'}`}
-                </strong>
-              </div>
-            </div>
+            )}
 
             {savedResult && (
               <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/15 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-200">
-                <div>
-                  ✅ 已成功收录至 <strong>选题资产中心</strong>（项目 #{savedResult.project_id} · 选题 #{savedResult.topic_id}「{savedResult.topic_title}」· 状态：{savedResult.topic_status || '待研究'}）
+                <div className="space-y-0.5">
+                  <div>
+                    ✅ 已成功收录至 <strong>选题资产中心</strong>（项目：<strong>{savedResult.project_name || `#${savedResult.project_id}`}</strong> · 选题 <strong>#{savedResult.topic_id}</strong>「{savedResult.topic_title}」）
+                  </div>
+                  <div className="text-[11px] text-emerald-300/90">
+                    作品 #{savedResult.content_id}（{savedResult.dedup_reused ? '已存在去重复用' : '新收录'}）·
+                    {savedResult.topic_created ? '已自动新建待研究选题' : `已关联已有选题（保持原状态：${savedResult.topic_status || '待研究'}）`} ·
+                    关联结果：{savedResult.link_status === 'updated' ? '已更新关联' : '已新建关联'} · 不会自动进入文案工坊
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {onGoTopicHub && (
@@ -353,19 +332,99 @@ export default function VideoCaptureModal({
                         onClose();
                         onGoTopicHub(savedResult.project_id, savedResult.topic_id);
                       }}
-                      className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
                     >
-                      在选题资产中心查看 →
+                      前往选题资产中心查看 →
                     </button>
                   )}
-                  <button type="button" onClick={onClose} className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs">
-                    关闭窗口
+                  <button type="button" onClick={onClose} className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs">
+                    关闭
                   </button>
                 </div>
               </div>
             )}
 
-            {/* 顶部缩略图与基本信息 */}
+            {/* 步骤 1 & 3：明确收录目的地 + 选择研究项目 + 自动生成或编辑选题名称 */}
+            <div className="gcw-panel p-3 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
+                    收录目的地：选题资产中心（TopicHub）
+                  </span>
+                  <span className="text-[10px] text-slate-400">不默认落入素材与作者库 · 不自动进入文案工坊</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono-num">
+                  采集时间：{initialPreview?.collected_at || '当前'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-12 gap-2.5 items-end">
+                <div className="col-span-4 space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-300">1. 所属研究项目 *</label>
+                  {projects.length > 0 ? (
+                    <select
+                      value={selectedProjectId}
+                      onChange={(e) => {
+                        setSelectedProjectId(Number(e.target.value));
+                        setSavedResult(null);
+                      }}
+                      className="gcw-input w-full px-2.5 py-1.5 text-xs font-semibold text-cyan-200"
+                    >
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          #{p.id} {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="gcw-input px-2.5 py-1.5 text-xs text-cyan-300 font-semibold">
+                      {projectName || `项目 #${selectedProjectId}`}
+                    </div>
+                  )}
+                </div>
+
+                <div className="col-span-8 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      2. 选题名称（自动生成待研究选题，或直接选择已有选题关联）*
+                    </label>
+                    {topics.length > 0 && (
+                      <select
+                        value={linkedExistingTopicId}
+                        onChange={(e) => {
+                          const val = e.target.value ? Number(e.target.value) : '';
+                          setLinkedExistingTopicId(val);
+                          if (val) {
+                            const hit = topics.find((t) => t.id === val);
+                            if (hit) setTopicTitle(hit.topic_title);
+                          }
+                        }}
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[10px] text-slate-300 max-w-[210px]"
+                        title="可选：改选当前项目下已有选题"
+                      >
+                        <option value="">自动新建待研究选题</option>
+                        {topics.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            关联已有 #{t.id} {t.topic_title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <input
+                    value={topicTitle}
+                    onChange={(e) => {
+                      setTopicTitle(e.target.value);
+                      if (linkedExistingTopicId) setLinkedExistingTopicId('');
+                    }}
+                    placeholder="输入或编辑选题名称（无对应已有选题时将自动创建「待研究」选题）..."
+                    className="gcw-input w-full px-2.5 py-1.5 text-xs font-semibold text-slate-100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 步骤 2：核对作品信息与具体视频链接 */}
             <div className="gcw-panel p-3 flex gap-3">
               <div className="w-40 h-[90px] shrink-0 rounded-lg overflow-hidden bg-[#0C1424] border border-[#2C4268] relative flex items-center justify-center">
                 {thumbnailUrl ? (
@@ -388,22 +447,27 @@ export default function VideoCaptureModal({
                 />
                 <div className="grid grid-cols-3 gap-1.5">
                   <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="平台" className="gcw-input px-2 py-1 text-[11px]" />
-                  <input value={itemId} onChange={(e) => setItemId(e.target.value)} placeholder="作品唯一 ID" className="gcw-input px-2 py-1 text-[11px] font-mono-num" />
+                  <input
+                    value={itemId}
+                    onChange={(e) => setItemId(e.target.value)}
+                    placeholder="真实作品唯一 ID *"
+                    className={`gcw-input px-2 py-1 text-[11px] font-mono-num ${!identityVerified ? 'border-amber-500/70' : ''}`}
+                  />
                   <input value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} placeholder="发布时间" className="gcw-input px-2 py-1 text-[11px] font-mono-num" />
                 </div>
                 <div className="flex gap-1.5">
                   <input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="作品链接 *（支持粘贴完整抖音分享文本后点击右侧解析）"
-                    className="gcw-input flex-1 px-2 py-1 text-[11px] font-mono-num text-slate-300"
+                    placeholder="具体视频链接 *（支持粘贴完整抖音分享文本并点击解析）"
+                    className={`gcw-input flex-1 px-2 py-1 text-[11px] font-mono-num text-slate-200 ${!identityVerified ? 'border-amber-500/70' : ''}`}
                   />
                   <button
                     type="button"
                     onClick={() => handleResolveShareText()}
                     disabled={resolvingLink || !url.trim()}
-                    className="gcw-btn-ghost px-2 py-1 rounded text-[10px] shrink-0"
-                    title="提取抖音/平台分享文本中的短链并安全校验解析"
+                    className="gcw-btn-cyan px-2.5 py-1 rounded text-[10px] font-semibold shrink-0"
+                    title="提取抖音/平台分享文本中的短链并安全校验解析为具体作品链接"
                   >
                     {resolvingLink ? '解析中...' : '解析分享链'}
                   </button>
@@ -437,11 +501,11 @@ export default function VideoCaptureModal({
               </div>
             </div>
 
-            {/* 作者与真实统计字段（缺失留空存 NULL，前端显示 —） */}
+            {/* 作者与真实数据核对 */}
             <div className="gcw-panel p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-200">真实数据核对（缺失项请留空，严格存 NULL 不造假）</span>
-                <span className="text-[10px] text-slate-400">支持输入 18.5万 / 1.2k 等格式自动解析</span>
+                <span className="font-semibold text-slate-200">作者与真实数据核对（缺失项请留空存 NULL）</span>
+                <span className="text-[10px] text-slate-400">支持 18.5万 / 1.2k 自动解析</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -485,76 +549,7 @@ export default function VideoCaptureModal({
               </div>
             </div>
 
-            {/* 三种收录方向：A 关联当前选题 / B 关联其他已有选题 / C 新建选题 */}
-            <div className="gcw-panel p-3 space-y-2.5">
-              <div className="font-semibold text-slate-200">选择收录方向（三选一）</div>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  disabled={!currentTopicId}
-                  onClick={() => { setTargetMode('current_topic'); if (currentTopicId) setSelectedTopicId(currentTopicId); }}
-                  className={`p-2 rounded-lg text-left transition disabled:opacity-35 ${targetMode === 'current_topic' ? 'gcw-tab-active font-semibold' : 'gcw-btn-ghost'}`}
-                >
-                  <div className="text-[11px]">A. 关联当前选题</div>
-                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{currentTopicTitle || '当前候选尚未入 TopicHub'}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTargetMode('existing_topic')}
-                  className={`p-2 rounded-lg text-left transition ${targetMode === 'existing_topic' ? 'gcw-tab-active font-semibold' : 'gcw-btn-ghost'}`}
-                >
-                  <div className="text-[11px]">B. 关联其他已有选题</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">支持一视频关联多选题</div>
-                </button>
-                {candidateTopicId && (
-                  <button
-                    type="button"
-                    onClick={() => setTargetMode('candidate_topic')}
-                    className={`p-2 rounded-lg text-left transition ${targetMode === 'candidate_topic' ? 'gcw-tab-active font-semibold' : 'gcw-btn-ghost'}`}
-                  >
-                    <div className="text-[11px]">方案A · 关联当前候选选题（推荐）</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                      {currentTopicId ? `已入库 #${currentTopicId}，自动复用不改状态` : `首次收录自动存至 TopicHub（待研究）`}
-                    </div>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setTargetMode('new_topic')}
-                  className={`p-2 rounded-lg text-left transition ${targetMode === 'new_topic' ? 'gcw-tab-active font-semibold' : 'gcw-btn-ghost'}`}
-                >
-                  <div className="text-[11px]">C. 根据当前视频新建选题</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">新建选题验证等级保持 U</div>
-                </button>
-              </div>
-
-              {targetMode === 'existing_topic' && (
-                <select
-                  value={selectedTopicId}
-                  onChange={(e) => setSelectedTopicId(Number(e.target.value))}
-                  className="gcw-input w-full px-2.5 py-1.5 text-xs"
-                >
-                  <option value="">请选择 TopicHub 已有选题...</option>
-                  {topics.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      #{t.id} [{t.validation_grade}/{t.production_status_norm}] {t.topic_title}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {targetMode === 'new_topic' && (
-                <div className="space-y-1.5 pt-1">
-                  <input value={newTopicTitle} onChange={(e) => setNewTopicTitle(e.target.value)} placeholder="新选题标题 *" className="gcw-input w-full px-2.5 py-1.5 text-xs" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={newTopicQuestion} onChange={(e) => setNewTopicQuestion(e.target.value)} placeholder="核心研究问题（可选）" className="gcw-input px-2.5 py-1 text-[11px]" />
-                    <input value={newTopicAngle} onChange={(e) => setNewTopicAngle(e.target.value)} placeholder="切入角度（可选）" className="gcw-input px-2.5 py-1 text-[11px]" />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 研究标签（人工标签 + AI 建议标签）与收录原因 */}
+            {/* 研究标签与收录原因 */}
             <div className="gcw-panel p-3 space-y-2">
               <div className="flex items-center gap-1.5 font-semibold text-slate-200">
                 <Tag className="w-3.5 h-3.5 text-cyan-400" />
@@ -588,7 +583,7 @@ export default function VideoCaptureModal({
               {aiSuggestedTags.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                   <span className="text-purple-300 flex items-center gap-0.5">
-                    <Sparkles className="w-3 h-3" /> AI 建议标签（点击采纳，不覆盖已选）：
+                    <Sparkles className="w-3 h-3" /> AI 建议标签：
                   </span>
                   {aiSuggestedTags.map((st) => {
                     const adopted = userTags.includes(st);
@@ -611,7 +606,7 @@ export default function VideoCaptureModal({
                 value={captureReason}
                 onChange={(e) => setCaptureReason(e.target.value)}
                 rows={2}
-                placeholder="收录原因 / 核心亮点（例如：真实车主痛点反馈强、评论区提问集中）..."
+                placeholder="收录原因 / 核心亮点（可选）..."
                 className="gcw-input w-full px-2.5 py-1.5 text-xs"
               />
             </div>
@@ -621,7 +616,7 @@ export default function VideoCaptureModal({
         {/* 底栏 */}
         <div className="px-5 py-3 bg-[#131E36] border-t border-[#1E2E4A] flex items-center justify-between text-xs">
           <span className="text-[11px] text-slate-400">
-            确认后写入 TopicHub，作品主体全局去重，且<strong className="text-cyan-300">不会自动加入文案工坊</strong>
+            确认后写入<strong className="text-cyan-300">选题资产中心</strong>，作品全局去重，不会自动进入文案工坊
           </span>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="gcw-btn-ghost px-3 py-1.5 rounded-lg">取消</button>
@@ -631,7 +626,7 @@ export default function VideoCaptureModal({
               className="gcw-btn-cyan px-4 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 disabled:opacity-40"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              确认收录至 TopicHub
+              确认收录
             </button>
           </div>
         </div>
