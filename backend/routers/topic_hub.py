@@ -77,6 +77,7 @@ class CreateTopicBody(BaseModel):
     is_favorite: bool = False
     script_ready: bool = False
     content_ids: list[int] = []
+    comment_ids: list[int] = []
 
 
 @router.post("/topics")
@@ -591,7 +592,81 @@ def api_refresh_content_metrics(content_id: int, body: RefreshContentMetricsBody
     return res
 
 
-# ==================== FIX-04: 全文拆解 Skill 工作区（通用执行与结果保存，绝不硬编码模板） ====================
+# ==================== FIX-03-B: 公共标准库 OpenAI 兼容调用（彻底移除 httpx 依赖，分类报错不抛 500） ====================
+def _call_openai_compat_chat(
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+    messages: list[dict[str, str]],
+    temperature: float = 0.4,
+    timeout: float = 75.0,
+) -> str:
+    import json
+    import socket
+    import urllib.error
+    import urllib.request
+
+    endpoint = f"{base_url.rstrip('/')}/chat/completions"
+    payload = json.dumps(
+        {"model": model, "messages": messages, "temperature": temperature},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode("utf-8", errors="ignore")[:300]
+        except Exception:
+            pass
+        if e.code == 401:
+            raise HTTPException(401, f"模型 API Key 无效或未授权（HTTP 401），请在左下角「翻译 Key / 设置」检查配置")
+        if e.code == 402 or "insufficient" in err_body.lower() or "balance" in err_body.lower() or "quota" in err_body.lower():
+            raise HTTPException(402, f"模型账户余额不足或配额耗尽（HTTP {e.code}），请充值或切换其他已授权模型")
+        if e.code == 429:
+            raise HTTPException(429, "模型请求过于频繁（HTTP 429），请稍后重试")
+        raise HTTPException(502, f"模型接口返回错误（HTTP {e.code}）：{err_body or e.reason}")
+    except (TimeoutError, socket.timeout):
+        raise HTTPException(504, f"调用模型超时（>{int(timeout)}s），请检查网络或本地模型服务状态后重试")
+    except urllib.error.URLError as e:
+        raise HTTPException(502, f"无法连接模型服务（{base_url}）：{e.reason}")
+    except Exception as e:
+        raise HTTPException(502, f"调用模型发生异常：{e}")
+
+    try:
+        data = json.loads(raw)
+        return str((data.get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+    except Exception as e:
+        raise HTTPException(502, f"模型返回了无法解析的 JSON 响应：{e}")
+
+
+def _check_billing_policy_for_engine(engine_id: str) -> None:
+    """严禁未经用户授权自动调用付费模型。"""
+    from backend.services import translation_provider as tp_svc
+
+    overview = tp_svc.get_translation_overview()
+    billing_mode = (overview.get("policy") or {}).get("billing_mode") or "free_only"
+    is_free_local = engine_id == "hunyuan_mt3_local"
+    if billing_mode == "free_only" and not is_free_local:
+        raise HTTPException(
+            403,
+            "当前工作台处于「仅允许免费模式」，未获用户付费 API 授权，已拦截付费云端模型调用。如需使用云端模型，请在左下角「翻译 Key / 设置」中显式开启付费授权。",
+        )
+
+
+# ==================== FIX-04 / FIX-03-B: 全文拆解 Skill 工作区（禁止静默截断、原子保存） ====================
 class BreakdownRunBody(BaseModel):
     skill_id: str
     engine_id: str = ""
@@ -617,7 +692,6 @@ def api_list_breakdown_reports(content_id: int):
 def api_run_breakdown_skill(content_id: int, body: BreakdownRunBody):
     import json
     from datetime import datetime, timezone
-    import httpx
     from backend.db import get_conn
     from backend.services import translation_provider as tp_svc
 
@@ -645,36 +719,37 @@ def api_run_breakdown_skill(content_id: int, body: BreakdownRunBody):
     if not full_text:
         raise HTTPException(400, "所选文案视图为空，无法执行全文拆解")
 
+    # FIX-03-B: 禁止静默截断超过 18000 字符的原文；超限时明确报错，不把部分分析标为全文分析
+    MAX_FULLTEXT_CHARS = 18000
+    if len(full_text) > MAX_FULLTEXT_CHARS:
+        raise HTTPException(
+            400,
+            f"当前完整参考文案长度（{len(full_text)} 字）超出单次全文拆解容量上限（{MAX_FULLTEXT_CHARS} 字）。系统禁止静默截断冒充全文分析，请切换为单语视图或缩短输入后重试。",
+        )
+
     try:
         api_key, base_url, resolved_model, resolved_engine = pkg_svc._resolve_writing_llm(body.engine_id, body.model_id)
     except Exception as e:
         raise HTTPException(400, str(e))
 
+    _check_billing_policy_for_engine(resolved_engine)
+
     sys_prompt = sk.get("system_prompt") or ""
-    user_prompt = f"以下是待拆解视频的完整参考文案（模式：{body.text_mode}）：\n\n{full_text[:18000]}"
+    user_prompt = f"以下是待拆解视频的完整参考文案（模式：{body.text_mode}，共 {len(full_text)} 字）：\n\n{full_text}"
     if body.extra_requirements.strip():
         user_prompt += f"\n\n额外分析要求：\n{body.extra_requirements.strip()}"
 
-    try:
-        r = httpx.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": resolved_model,
-                "messages": [
-                    {"role": "system", "content": sys_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.4,
-            },
-            timeout=90.0,
-        )
-        r.raise_for_status()
-        data = r.json()
-        report_md = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-    except Exception as e:
-        raise HTTPException(502, f"调用模型执行拆解 Skill 失败：{e}")
-
+    report_md = _call_openai_compat_chat(
+        api_key=api_key,
+        base_url=base_url,
+        model=resolved_model,
+        messages=[
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.4,
+        timeout=90.0,
+    )
     if not report_md:
         raise HTTPException(502, "模型返回的拆解报告为空，未保存")
 
@@ -686,12 +761,15 @@ def api_run_breakdown_skill(content_id: int, body: BreakdownRunBody):
         "engine_id": resolved_engine,
         "model_id": resolved_model,
         "text_mode": body.text_mode,
+        "input_chars": len(full_text),
         "extra_requirements": body.extra_requirements.strip(),
         "report_markdown": report_md,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     conn = get_conn()
     try:
+        # FIX-03-B: 原子保存历史拆解报告，禁止并发覆盖
+        conn.execute("BEGIN IMMEDIATE")
         key = f"content_breakdown_reports_{content_id}"
         row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
         reports = json.loads(row["value"]) if row and row["value"] else []
@@ -701,12 +779,18 @@ def api_run_breakdown_skill(content_id: int, body: BreakdownRunBody):
             (key, json.dumps(reports[:30], ensure_ascii=False)),
         )
         conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(500, f"保存拆解报告失败：{e}")
     finally:
         conn.close()
     return {"ok": True, "report": item}
 
 
-# ==================== FIX-08: 高赞评论选题发现（严格基于真实评论，绝不编造评论与点赞） ====================
+# ==================== FIX-08 / FIX-03-B: 高赞评论选题发现（严格归属校验、禁止非法 ID 替换、无 httpx） ====================
 class CommentDiscoverTopicsBody(BaseModel):
     project_id: int
     content_id: int
@@ -720,7 +804,6 @@ class CommentDiscoverTopicsBody(BaseModel):
 def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
     import json
     from datetime import datetime, timezone
-    import httpx
     from backend.db import get_conn
 
     cids = [int(x) for x in (body.comment_ids or []) if int(x) > 0]
@@ -730,9 +813,25 @@ def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
 
     conn = get_conn()
     try:
-        content_row = conn.execute("SELECT id, title, url FROM contents WHERE id=?", (body.content_id,)).fetchone()
+        content_row = conn.execute("SELECT id, project_id, title, url FROM contents WHERE id=?", (body.content_id,)).fetchone()
         if not content_row:
             raise HTTPException(404, f"未找到源视频 #{body.content_id}")
+
+        # FIX-03-B (A08): 验证项目与作品真实归属（兼容一视频多项目/多选题关联）
+        belongs = int(content_row["project_id"] or 0) == int(body.project_id)
+        if not belongs:
+            link = conn.execute(
+                "SELECT 1 FROM project_content_links WHERE project_id=? AND content_id=? LIMIT 1",
+                (body.project_id, body.content_id),
+            ).fetchone()
+            ev_link = conn.execute(
+                "SELECT 1 FROM topic_evidence WHERE project_id=? AND evidence_type='content' AND ref_id=? LIMIT 1",
+                (body.project_id, body.content_id),
+            ).fetchone()
+            belongs = bool(link or ev_link)
+        if not belongs:
+            raise HTTPException(403, f"作品 #{body.content_id} 不属于当前项目 #{body.project_id}，拒绝跨项目生成选题")
+
         placeholders = ",".join("?" for _ in cids)
         rows = conn.execute(
             f"SELECT id, author, text, like_count FROM comments WHERE content_id=? AND id IN ({placeholders}) ORDER BY like_count DESC",
@@ -750,6 +849,11 @@ def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
     except Exception as e:
         raise HTTPException(400, str(e))
 
+    if resolved_engine == "hunyuan_mt3_local":
+        raise HTTPException(400, "本地混元模型属于专用机器翻译模型，不支持高赞评论选题生成，请选择具备通用文本生成能力的已配置模型")
+
+    _check_billing_policy_for_engine(resolved_engine)
+
     cmt_block = "\n".join(
         f"- [comment_id={c['id']}, likes={c.get('like_count') or 0}] {c.get('text') or ''}"
         for c in real_comments
@@ -757,38 +861,47 @@ def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
     prompt = (
         f"请严格基于以下真实用户评论，提炼 {want_n} 个短视频候选选题。\n"
         f"源视频：{content_row['title']}\n真实评论：\n{cmt_block}\n\n"
-        "严格返回 JSON 数组，每项字段为：suggested_title, user_pain_point, angle, source_comment_id（必须是上述真实 comment_id 之一）。严禁编造不存在的评论或数据。"
+        "严格返回 JSON 数组，每项字段为：suggested_title, user_pain_point, angle, source_comment_id（必须是上述真实整数 comment_id 之一）。严禁编造不存在的评论或数据。"
+    )
+    raw_txt = _call_openai_compat_chat(
+        api_key=api_key,
+        base_url=base_url,
+        model=resolved_model,
+        messages=[
+            {"role": "system", "content": "你是严谨的内容选题研究助手，只输出合法 JSON 数组，严禁编造评论与互动数据。"},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.5,
+        timeout=60.0,
     )
     try:
-        r = httpx.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": resolved_model,
-                "messages": [
-                    {"role": "system", "content": "你是严谨的内容选题研究助手，只输出合法 JSON 数组，严禁编造评论与互动数据。"},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.5,
-            },
-            timeout=60.0,
-        )
-        r.raise_for_status()
-        raw_txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
         s_idx = raw_txt.find("[")
         e_idx = raw_txt.rfind("]")
-        parsed = json.loads(raw_txt[s_idx : e_idx + 1]) if s_idx >= 0 and e_idx > s_idx else []
+        if s_idx < 0 or e_idx <= s_idx:
+            raise ValueError("响应中未找到 JSON 数组")
+        parsed = json.loads(raw_txt[s_idx : e_idx + 1])
+        if not isinstance(parsed, list):
+            raise ValueError("解析结果不是列表")
     except Exception as e:
-        raise HTTPException(502, f"调用模型生成候选选题失败：{e}")
+        raise HTTPException(502, f"模型返回内容 JSON 解析失败：{e}")
 
     by_id = {int(c["id"]): c for c in real_comments}
     now_iso = datetime.now(timezone.utc).isoformat()
     candidates = []
-    for idx, item in enumerate(parsed[:want_n]):
+    skipped_invalid_id = 0
+    for item in parsed[:want_n]:
         if not isinstance(item, dict) or not str(item.get("suggested_title") or "").strip():
             continue
-        scid = int(item.get("source_comment_id") or real_comments[idx % len(real_comments)]["id"])
-        src_c = by_id.get(scid) or real_comments[0]
+        # FIX-03-B (A01 & A02): 安全解析 source_comment_id 并严格校验属于用户所选真实评论集合，绝不静默替换为其他评论
+        raw_scid = item.get("source_comment_id")
+        try:
+            scid = int(str(raw_scid).strip()) if raw_scid is not None and str(raw_scid).strip() != "" else None
+        except (ValueError, TypeError):
+            scid = None
+        if scid is None or scid not in by_id:
+            skipped_invalid_id += 1
+            continue
+        src_c = by_id[scid]
         candidates.append({
             "suggested_title": str(item.get("suggested_title") or "").strip()[:140],
             "user_pain_point": str(item.get("user_pain_point") or "").strip()[:300],
@@ -804,5 +917,8 @@ def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
             "generated_at": now_iso,
         })
     if not candidates:
-        raise HTTPException(502, "模型未能生成有效的候选选题，请重试")
+        raise HTTPException(
+            502,
+            f"模型未返回关联到所选真实评论 ID 的有效候选选题（已拒绝 {skipped_invalid_id} 条非法评论归属项），请重试",
+        )
     return {"ok": True, "candidates": candidates}

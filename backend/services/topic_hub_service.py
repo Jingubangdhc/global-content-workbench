@@ -683,8 +683,9 @@ def create_manual_topic(project_id: int, payload: dict[str, Any]) -> dict[str, A
         )
         tid = cur.lastrowid
         _record_history(conn, tid, project_id, "production_status", "", prod_status, "人工创建原创选题（市场验证等级保持 U）")
-        # 若同时传入了已归属本项目的 content_ids，校验后建立关联
+        # 若同时传入了已归属本项目的 content_ids / comment_ids，校验后在同一事务内原子建立结构化证据关联
         content_ids = payload.get("content_ids") or []
+        comment_ids = payload.get("comment_ids") or []
         if content_ids:
             chk = mv_svc.validate_evidence_ids(conn, project_id, content_ids, [])
             for cid in chk["valid_content_ids"]:
@@ -694,9 +695,32 @@ def create_manual_topic(project_id: int, payload: dict[str, Any]) -> dict[str, A
                        VALUES (?, ?, 'content', ?, ?, ?, 'manual_link')""",
                     (tid, project_id, cid, c_row["url"] if c_row else "", (c_row["title"] or "")[:180] if c_row else ""),
                 )
+        if comment_ids:
+            for raw_cmid in comment_ids:
+                try:
+                    cmid = int(raw_cmid)
+                except Exception:
+                    continue
+                cm_row = conn.execute(
+                    "SELECT cm.id, cm.text, cm.content_id, c.url FROM comments cm JOIN contents c ON c.id = cm.content_id WHERE cm.id = ?",
+                    (cmid,),
+                ).fetchone()
+                if not cm_row:
+                    continue
+                conn.execute(
+                    """INSERT OR IGNORE INTO topic_evidence(topic_id, project_id, evidence_type, ref_id, ref_url, snippet, provenance)
+                       VALUES (?, ?, 'comment', ?, ?, ?, 'comment_discovery')""",
+                    (tid, project_id, cmid, cm_row["url"] or "", (cm_row["text"] or "")[:240]),
+                )
         conn.commit()
         row = conn.execute("SELECT * FROM topics WHERE id = ?", (tid,)).fetchone()
         return {"ok": True, "topic": _format_topic_row(conn, row)}
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
     finally:
         conn.close()
 

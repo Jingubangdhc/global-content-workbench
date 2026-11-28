@@ -29,6 +29,6 @@
 - 付费云端 API（需用户主动授权）生成原创文案的风格满意度需用户亲测。
 
 ## 4. 版本与测试证据
-- 本地候选版本：`v0.2.2-rc`（上一恢复点：`v0.2.1-rc`）
-- 本轮 FIX-01 ~ FIX-10 真实 Electron 端到端验收日志：`docs/gcw_workspace_v2_fix_02/GCW_WORKSPACE_V2_FIX_02_TEST_RESULTS.json`（10 次往返 0 重叠、紧凑数据条 79px、二创正文与原子修订号 409 全通过；未提供正式拆解 Skill 标 `BLOCKED`，未授权付费模型标 `NOT TESTED`）。
+- 本地候选版本：`v0.2.3-rc`（上一恢复点：`v0.2.2-rc`）
+- 本轮 FIX-03-A 诊断与 FIX-03-B 修复验收证据：`docs/gcw_workspace_v2_fix_03/GCW_FIX_03_ROOT_CAUSE_REPORT.md`、`GCW_FIX_03_REPRODUCTION.json`、`GCW_FIX_03_B_TEST_RESULTS.json`、`GCW_FIX_03_B_CODE_CHANGE_REPORT.md`（彻底移除 `httpx` 依赖改用标准库 `urllib.request`，真实调用返回 200；A01–A08 全修复；全文拆解重做为三层布局且四档字号零横向溢出；用户正式拆解 Skill 标 `BLOCKED`）。
 - 远程审查分支最终 Commit SHA 见本轮交付卡与 `git rev-parse origin/review/gcw-uat-r4`。

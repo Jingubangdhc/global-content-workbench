@@ -680,6 +680,8 @@ export default function TopicHub({
                       <div className="gcw-panel h-full overflow-hidden">
                         <FullTextBreakdownPane
                           contentId={activeVideo ? Number(activeVideo.content_id || activeVideo.id) : null}
+                          subData={subData}
+                          onSwitchToReference={() => setLeftCopySubTab('reference')}
                         />
                       </div>
                     )}

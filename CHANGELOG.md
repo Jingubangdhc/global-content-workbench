@@ -1,5 +1,10 @@
 # Global Content Workbench · 变更日志 (CHANGELOG.md)
 
+## [v0.2.3-rc] - 2026-11-28（GCW-WORKSPACE-V2-FIX-03-B）
+- **高赞评论生成选题 500 根治**：彻底移除 `backend/routers/topic_hub.py` 中的 `import httpx`（本机 `.venv` 未安装导致 `ModuleNotFoundError` 500），改用标准库 `urllib.request` 封装 `_call_openai_compat_chat`，按 401/402/429/504/网络/JSON 异常分类返回清晰中文业务错误。
+- **独立审查缺陷 A01–A08 全修复**：区分模型 `configured`/`connected`/`text_generation_capable`/`is_translation_only` 并 400 拒绝专用翻译模型；安全校验 `source_comment_id` 禁止静默替换；校验项目/作品/评论多关联归属（跨项目 403）；修复 `origin_type='content_comment_discovery'` 并单事务原子落库 `content` + `comment` 结构化证据；全文拆解超 18000 字禁止静默截断且 `BEGIN IMMEDIATE` 原子保存历史；新增 `free_only` 费用授权拦截。
+- **全文拆解 UI 三层重做**：重做 `FullTextBreakdownPane.tsx` 为标题与历史按需展开 → 5 行独立纵向配置区 → 独立报告阅读区（生成后自动折叠配置区，额外分析要求默认折叠），四档字号零横向溢出。
+
 ## [v0.2.2-rc] - 2026-11-28（GCW-WORKSPACE-V2-FIX-02）
 - **FIX-01 / FIX-09（P0）**：`desktop/main.js` 新增 `set-active-view` 全局单一活动视图令牌（先同步隐藏再异步暂停），`App.tsx` 改用按需首次挂载 + `hidden` 页面保活，`EmbeddedVideoWorkspace` 增加 `lastNavigatedUrlRef` 防返回页面重复加载视频；10 次往返实测 `overlapCount = 0`。
 - **FIX-03 / FIX-06（P0）**：修复二创正文 `content_markdown` 与模型 `configured/ready` 契约错配，空正文严禁标成功，历史版本展示字数/正文预览并标记异常空版本；UI 统一改名「二创文案」「生成二创文案」。

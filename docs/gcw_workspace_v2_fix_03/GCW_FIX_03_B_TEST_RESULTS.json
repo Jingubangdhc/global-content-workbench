@@ -1,0 +1,40 @@
+{
+  "version": "v0.2.3-rc (GCW-WORKSPACE-V2-FIX-03-B)",
+  "tested_at": "2026-11-28T10:53:21.961Z",
+  "tests": {
+    "backend_comment_discovery_and_structured_evidence": {
+      "type": "real_backend_sqlite_test",
+      "actual": {
+        "hunyuanExcludedFromWritingModels": true,
+        "hunyuanDiscoverStatus": 400,
+        "hunyuanDiscoverDetail": "引擎「腾讯混元 Hy-MT3-1.8B（本地免费离线 · GPU加速）」属于专用机器翻译接口，不支持文案 Skill 生成",
+        "crossProjectStatus": 403,
+        "realCommentDiscoverStatus": 200,
+        "realCommentDiscoverNote": "本机已开启 authorized_paid，使用 urllib.request 调用 env_default_llm (deepseek-chat) 真实返回 HTTP 200，原 500 ModuleNotFoundError 已根治",
+        "createdTopicId": 47,
+        "createdOriginType": "content_comment_discovery",
+        "createdStatus": "待研究",
+        "createdValidation": "U",
+        "hasContentEv": true,
+        "hasCommentEv": true,
+        "testTopicCleanedUp": true
+      },
+      "pass": true
+    },
+    "fulltext_breakdown_ui_and_4_font_scales": {
+      "type": "real_electron_e2e",
+      "screenshot": "docs/gcw_workspace_v2_fix_03/screenshots/after_fulltext_breakdown_v2.png",
+      "overflowByScale": {
+        "紧凑": false,
+        "标准": false,
+        "舒适": false,
+        "大字": false
+      },
+      "pass": true
+    }
+  },
+  "blocked_or_not_tested": [
+    "使用用户正式拆解 Skill 执行全文拆解：用户尚未提供正式拆解 Skill，标记 BLOCKED（未虚构分析结果）"
+  ],
+  "all_executed_pass": true
+}

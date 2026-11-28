@@ -1,0 +1,46 @@
+{
+  "task": "GCW-WORKSPACE-V2-FIX-03-A",
+  "mode": "read_only_diagnosis",
+  "baseline": {
+    "local_branch": "feat/koubo-p2-chatcut-antigravity",
+    "local_commit": "d4308a3c757061fccd8b0a4672890e5364298f35",
+    "local_tag": "v0.2.2-rc",
+    "remote_review_branch": "review/gcw-uat-r4",
+    "remote_review_commit": "27b4cd3a7f467ad621e846cb75f83236cb959e78"
+  },
+  "reproduction": {
+    "request_url": "POST http://127.0.0.1:8000/api/topic-hub/comments/discover-topics",
+    "sanitized_request_body": {
+      "project_id": 1,
+      "content_id": 39,
+      "comment_ids": [129],
+      "count": 1,
+      "engine_id": "hunyuan_mt3_local",
+      "model_id": "hy-mt3-1.8b"
+    },
+    "http_status": 500,
+    "response_body": "Internal Server Error",
+    "exception_type": "ModuleNotFoundError",
+    "exception_message": "No module named 'httpx'",
+    "exception_location": "backend/routers/topic_hub.py:723 (api_discover_topics_from_comments)",
+    "same_root_cause_elsewhere": "backend/routers/topic_hub.py:618 (api_run_breakdown_skill)",
+    "paid_model_called": false
+  },
+  "sqlite_verification": {
+    "content_id": 39,
+    "comments_count": 12,
+    "comments_columns": ["id", "content_id", "platform_comment_id", "author", "text", "like_count", "is_question", "is_pain_point", "created_at", "translated_zh"],
+    "topic_evidence_supports_comment_type": true
+  },
+  "chatgpt_audit_checks": {
+    "A01_unhandled_int_cast_L790": "CONFIRMED",
+    "A02_invalid_comment_id_silent_fallback_L790_791": "CONFIRMED",
+    "A03_configured_equals_ready": "CONFIRMED",
+    "A04_frontend_missing_async_isolation": "CONFIRMED",
+    "A05_missing_structured_comment_evidence": "CONFIRMED",
+    "A06_origin_type_enum_mismatch": "CONFIRMED",
+    "A07_prev_test_only_checked_button_existence": "CONFIRMED",
+    "A08_missing_project_content_ownership_check": "CONFIRMED"
+  },
+  "paid_model_test_status": "BLOCKED (未经用户授权禁止调用付费模型)"
+}

@@ -1,10 +1,10 @@
 /**
- * FIX-08 · 高赞评论选题发现面板
- * - 支持单条评论生成选题、多选评论批量生成候选选题
- * - 支持选择已配置 AI 模型、自定义生成数量、预览编辑候选选题
- * - 仅在用户确认点击「加入选题库」后创建正式「待研究」未验证选题，并保留来源视频与评论证据关联
+ * FIX-08 / FIX-03-B · 高赞评论选题发现面板
+ * - 修复 origin_type 为后端合法枚举 content_comment_discovery，入库时透传 comment_ids 写入结构化 topic_evidence
+ * - 增加 reqSeqRef + projectId/contentId 归属守卫，防止快速切换项目/作品时旧请求污染当前界面
+ * - 区分模型已配置、专用翻译模型与通用文案生成能力
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Loader2, Plus, Sparkles } from 'lucide-react';
 import { api, fmtNum } from '../../api';
 
@@ -26,24 +26,35 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
   const [msg, setMsg] = useState('');
   const [errMsg, setErrMsg] = useState('');
 
+  const reqSeqRef = useRef(0);
+  const activeScopeRef = useRef({ projectId, contentId });
+  activeScopeRef.current = { projectId, contentId };
+
   useEffect(() => {
     api
       .listWritingModels()
       .then((r) => {
         const list = r?.models || [];
         setModels(list);
-        const ready = list.find((m: any) => m.configured || m.ready) || list[0];
+        const ready =
+          list.find((m: any) => m.ready && m.text_generation_capable) ||
+          list.find((m: any) => m.configured && !m.is_translation_only) ||
+          list[0];
         if (ready) setSelectedModelKey(`${ready.engine_id}::${ready.model_id}`);
       })
       .catch(() => {});
   }, []);
 
+  // FIX-03-B (A04): 切换项目或作品时立即递增序号并清理旧结果与旧加载状态
   useEffect(() => {
+    reqSeqRef.current += 1;
+    setGenerating(false);
+    setAddingIdx(null);
     setSelectedIds([]);
     setCandidates([]);
     setMsg('');
     setErrMsg('');
-  }, [contentId]);
+  }, [projectId, contentId]);
 
   const toggleId = (id: number) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -51,19 +62,29 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
 
   const runDiscover = async (ids: number[], n: number) => {
     if (!contentId || !ids.length || generating) return;
+    const targetPid = projectId;
+    const targetCid = contentId;
+    const seq = ++reqSeqRef.current;
     const [engineId, modelId] = (selectedModelKey || '::').split('::');
     setGenerating(true);
     setErrMsg('');
     setMsg('正在基于所选真实评论提炼候选选题...');
     try {
       const res = await api.topicHubDiscoverTopicsFromComments({
-        project_id: projectId,
-        content_id: contentId,
+        project_id: targetPid,
+        content_id: targetCid,
         comment_ids: ids,
         count: n,
         engine_id: engineId || '',
         model_id: modelId || '',
       });
+      if (
+        seq !== reqSeqRef.current ||
+        activeScopeRef.current.projectId !== targetPid ||
+        activeScopeRef.current.contentId !== targetCid
+      ) {
+        return;
+      }
       if (res?.ok && Array.isArray(res.candidates)) {
         setCandidates(res.candidates);
         setMsg(`✅ 已基于 ${ids.length} 条真实评论生成 ${res.candidates.length} 个候选选题（请预览编辑后确认加入选题库）`);
@@ -72,37 +93,49 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
         setMsg('');
       }
     } catch (e: any) {
+      if (
+        seq !== reqSeqRef.current ||
+        activeScopeRef.current.projectId !== targetPid ||
+        activeScopeRef.current.contentId !== targetCid
+      ) {
+        return;
+      }
       setErrMsg(`生成候选选题失败：${e?.message || e}`);
       setMsg('');
     } finally {
-      setGenerating(false);
+      if (seq === reqSeqRef.current) setGenerating(false);
     }
   };
 
   const handleAddToLibrary = async (idx: number) => {
     const c = candidates[idx];
     if (!c || !c.suggested_title?.trim() || addingIdx !== null) return;
+    const targetPid = projectId;
+    const targetCid = contentId;
     setAddingIdx(idx);
     setErrMsg('');
     try {
       const res = await api.topicHubCreate({
-        project_id: projectId,
+        project_id: targetPid,
         topic_title: c.suggested_title.trim(),
         research_question: c.user_pain_point || '',
         angle: c.angle || '',
-        origin_type: 'comment_discovery',
+        origin_type: 'content_comment_discovery',
         production_status: '待研究',
         discovery_reason: `来源真实高赞评论 #${c.source_comment_id}（赞 ${c.comment_likes ?? 0}）：${(c.source_comment_text || '').slice(0, 180)} | 模型：${c.model_id}`,
-        content_ids: contentId ? [contentId] : [],
+        content_ids: targetCid ? [targetCid] : [],
+        comment_ids: c.source_comment_id ? [Number(c.source_comment_id)] : [],
       });
+      if (activeScopeRef.current.projectId !== targetPid || activeScopeRef.current.contentId !== targetCid) return;
       if (res?.ok && res.topic?.id) {
         setCandidates((prev) => prev.map((x, i) => (i === idx ? { ...x, added_topic_id: res.topic.id } : x)));
-        setMsg(`✅ 已加入选题库：#${res.topic.id}「${res.topic.topic_title}」（状态：待研究 · 未验证）`);
+        setMsg(`✅ 已加入选题库：#${res.topic.id}「${res.topic.topic_title}」（状态：待研究 · U级未验证 · 已写入结构化视频与评论证据）`);
         onTopicAdded?.(res.topic.id);
       } else {
         setErrMsg(res?.error || '加入选题库失败');
       }
     } catch (e: any) {
+      if (activeScopeRef.current.projectId !== targetPid || activeScopeRef.current.contentId !== targetCid) return;
       setErrMsg(`加入选题库失败：${e?.message || e}`);
     } finally {
       setAddingIdx(null);
@@ -118,11 +151,12 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
           <select
             value={selectedModelKey}
             onChange={(e) => setSelectedModelKey(e.target.value)}
-            className="gcw-input px-2 py-1 gcw-text-tag max-w-[220px]"
+            className="gcw-input px-2 py-1 gcw-text-tag max-w-[240px]"
           >
             {models.map((m) => (
               <option key={`${m.engine_id}::${m.model_id}`} value={`${m.engine_id}::${m.model_id}`}>
-                {m.label || m.name}{m.configured || m.ready ? '' : '（未就绪）'}
+                {m.label || m.name}
+                {m.is_translation_only ? '（仅限翻译）' : m.configured ? '' : '（未配置）'}
               </option>
             ))}
           </select>
@@ -152,7 +186,7 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
           <CheckCircle2 className="w-4 h-4 shrink-0" /> {msg}
         </div>
       )}
-      {errMsg && <div className="gcw-text-tag text-rose-300">{errMsg}</div>}
+      {errMsg && <div className="gcw-text-tag text-rose-300 break-words">{errMsg}</div>}
 
       {/* 候选选题预览与编辑区 */}
       {candidates.length > 0 && (

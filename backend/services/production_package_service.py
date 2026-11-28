@@ -218,17 +218,24 @@ def list_available_writing_models() -> list[dict[str, Any]]:
             continue
         pcfg = p.get("config") or {}
         is_local = proto == "local_openai_compatible"
+        is_translation_only = p["engine_id"] == "hunyuan_mt3_local"
+        configured = bool(p.get("configured"))
+        connected = bool(p.get("last_test_ok")) if is_local else configured
+        text_gen_capable = not is_translation_only
         models.append({
             "engine_id": p["engine_id"],
             "name": p["name"],
             "label": f"{p['name']} ({pcfg.get('model_id') or p.get('default_model') or ''})",
             "model_id": pcfg.get("model_id") or p.get("default_model") or "",
-            "configured": bool(p.get("configured")),
-            "ready": bool(p.get("configured")),
+            "configured": configured,
+            "connected": connected,
+            "text_generation_capable": text_gen_capable,
+            "is_translation_only": is_translation_only,
+            "ready": configured and text_gen_capable,
             "is_paid": p.get("billing_category") != "free_local",
             "is_local": is_local,
             "base_url": pcfg.get("local_endpoint") if is_local else (pcfg.get("base_url") or p.get("default_base_url") or ""),
-            "note": p.get("notes") or "",
+            "note": ("专用翻译模型（非通用文案生成模型）" if is_translation_only else (p.get("notes") or "")),
         })
     # 若 .env 中配置了通用 LLM_API_KEY 且未出现在上述已配置列表中，补充 .env 默认模型入口
     env_key = os.getenv("LLM_API_KEY", "").strip()
@@ -240,6 +247,9 @@ def list_available_writing_models() -> list[dict[str, Any]]:
             "label": f"工作台默认大模型 ({env.get('llm_model') or 'deepseek-chat'})",
             "model_id": env.get("llm_model") or "deepseek-chat",
             "configured": True,
+            "connected": True,
+            "text_generation_capable": True,
+            "is_translation_only": False,
             "ready": True,
             "is_paid": True,
             "is_local": False,
