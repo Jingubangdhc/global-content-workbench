@@ -1,0 +1,55 @@
+{
+  "version": "v0.2.4-rc (GCW-WORKSPACE-V2-FIX-03-C)",
+  "tested_at": "2026-11-28T11:14:51.803Z",
+  "tests": {
+    "comment_discovery_and_evidence_integrity": {
+      "pass": true,
+      "actual": {
+        "envModelUntested": true,
+        "hyExcluded": true,
+        "singleStatus": 200,
+        "singleCount": 1,
+        "multiStatus": 200,
+        "multiCount": 2,
+        "mixedInvalidStatus": 400,
+        "badCrossProjStatus": 403,
+        "badNoCommentStatus": 400,
+        "badHunyuanStatus": 400,
+        "zeroResidualAfterRollback": true,
+        "freeOnlyCheck": "BLOCKED_403",
+        "persistedBoth": true
+      }
+    },
+    "fulltext_breakdown_test_skill_and_markdown": {
+      "pass": true,
+      "actual": {
+        "skillCreated": true,
+        "skillId": "custom_be0bc9ca",
+        "runStatus": 200,
+        "hasMarkdown": true,
+        "reportId": "bd_1795864507127",
+        "historyCount": 1,
+        "cleanedUp": true
+      }
+    },
+    "ui_4_scales_and_regression": {
+      "pass": true,
+      "screenshot": "docs/gcw_workspace_v2_fix_03_c/screenshots/after_breakdown_markdown.png",
+      "actual": {
+        "overflowByScale": {
+          "紧凑": false,
+          "标准": false,
+          "舒适": false,
+          "大字": false
+        },
+        "hasRenderedTable": true,
+        "hasDraftStudio": true,
+        "hasSubtitleBar": true
+      }
+    }
+  },
+  "blocked_or_not_tested": [
+    "使用用户正式拆解 Skill 执行全文拆解：用户尚未提供正式拆解 Skill，本轮仅使用明确标记的 [TEST-ONLY] 临时测试 Skill 验证通用执行与 Markdown 渲染，正式拆解 Skill 仍标记 BLOCKED"
+  ],
+  "all_executed_pass": true
+}

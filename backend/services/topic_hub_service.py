@@ -683,35 +683,30 @@ def create_manual_topic(project_id: int, payload: dict[str, Any]) -> dict[str, A
         )
         tid = cur.lastrowid
         _record_history(conn, tid, project_id, "production_status", "", prod_status, "人工创建原创选题（市场验证等级保持 U）")
-        # 若同时传入了已归属本项目的 content_ids / comment_ids，校验后在同一事务内原子建立结构化证据关联
+        # FIX-C01: 创建前严格校验项目、作品与评论的结构化证据归属，任何无效证据均回滚整个事务，绝不静默跳过
         content_ids = payload.get("content_ids") or []
         comment_ids = payload.get("comment_ids") or []
-        if content_ids:
-            chk = mv_svc.validate_evidence_ids(conn, project_id, content_ids, [])
-            for cid in chk["valid_content_ids"]:
-                c_row = conn.execute("SELECT url, title FROM contents WHERE id = ?", (cid,)).fetchone()
-                conn.execute(
-                    """INSERT OR IGNORE INTO topic_evidence(topic_id, project_id, evidence_type, ref_id, ref_url, snippet, provenance)
-                       VALUES (?, ?, 'content', ?, ?, ?, 'manual_link')""",
-                    (tid, project_id, cid, c_row["url"] if c_row else "", (c_row["title"] or "")[:180] if c_row else ""),
-                )
-        if comment_ids:
-            for raw_cmid in comment_ids:
-                try:
-                    cmid = int(raw_cmid)
-                except Exception:
-                    continue
-                cm_row = conn.execute(
-                    "SELECT cm.id, cm.text, cm.content_id, c.url FROM comments cm JOIN contents c ON c.id = cm.content_id WHERE cm.id = ?",
-                    (cmid,),
-                ).fetchone()
-                if not cm_row:
-                    continue
-                conn.execute(
-                    """INSERT OR IGNORE INTO topic_evidence(topic_id, project_id, evidence_type, ref_id, ref_url, snippet, provenance)
-                       VALUES (?, ?, 'comment', ?, ?, ?, 'comment_discovery')""",
-                    (tid, project_id, cmid, cm_row["url"] or "", (cm_row["text"] or "")[:240]),
-                )
+        validated = validate_topic_evidence_scope(
+            conn,
+            project_id,
+            content_ids,
+            comment_ids,
+            require_comment_in_contents=bool(content_ids and comment_ids),
+        )
+        for cid in validated["content_ids"]:
+            c_row = validated["content_map"][cid]
+            conn.execute(
+                """INSERT OR IGNORE INTO topic_evidence(topic_id, project_id, evidence_type, ref_id, ref_url, snippet, provenance)
+                   VALUES (?, ?, 'content', ?, ?, ?, 'manual_link')""",
+                (tid, project_id, cid, c_row["url"] or "", (c_row["title"] or "")[:180]),
+            )
+        for cmid in validated["comment_ids"]:
+            cm_row = validated["comment_map"][cmid]
+            conn.execute(
+                """INSERT OR IGNORE INTO topic_evidence(topic_id, project_id, evidence_type, ref_id, ref_url, snippet, provenance)
+                   VALUES (?, ?, 'comment', ?, ?, ?, 'comment_discovery')""",
+                (tid, project_id, cmid, cm_row["content_url"] or "", (cm_row["text"] or "")[:240]),
+            )
         conn.commit()
         row = conn.execute("SELECT * FROM topics WHERE id = ?", (tid,)).fetchone()
         return {"ok": True, "topic": _format_topic_row(conn, row)}
@@ -723,6 +718,101 @@ def create_manual_topic(project_id: int, payload: dict[str, Any]) -> dict[str, A
         raise
     finally:
         conn.close()
+
+
+def _content_belongs_to_project(conn, project_id: int, content_id: int, content_project_id: int | None) -> bool:
+    """统一判断作品是否归属当前项目或具有合法共享关联（不破坏全局去重与多选题关联）。"""
+    if int(content_project_id or 0) == int(project_id):
+        return True
+    link = conn.execute(
+        "SELECT 1 FROM project_content_links WHERE project_id=? AND content_id=? LIMIT 1",
+        (project_id, content_id),
+    ).fetchone()
+    if link:
+        return True
+    ev_link = conn.execute(
+        "SELECT 1 FROM topic_evidence WHERE project_id=? AND evidence_type='content' AND ref_id=? LIMIT 1",
+        (project_id, content_id),
+    ).fetchone()
+    return bool(ev_link)
+
+
+def validate_topic_evidence_scope(
+    conn,
+    project_id: int,
+    content_ids: list[Any] | None = None,
+    comment_ids: list[Any] | None = None,
+    *,
+    require_comment_in_contents: bool = False,
+) -> dict[str, Any]:
+    """FIX-C01: 统一校验项目、作品、评论的真实存在性与归属范围；任何非法证据直接抛 ValueError，绝不静默跳过。"""
+    proj = conn.execute("SELECT id FROM projects WHERE id = ?", (int(project_id),)).fetchone()
+    if not proj:
+        raise ValueError(f"项目 #{project_id} 不存在，拒绝写入证据")
+
+    norm_cids: list[int] = []
+    seen_c: set[int] = set()
+    for raw in content_ids or []:
+        try:
+            cid = int(raw)
+        except Exception:
+            raise ValueError(f"非法的作品 ID：{raw}")
+        if cid <= 0:
+            raise ValueError(f"非法的作品 ID：{raw}")
+        if cid not in seen_c:
+            seen_c.add(cid)
+            norm_cids.append(cid)
+
+    norm_cmids: list[int] = []
+    seen_cm: set[int] = set()
+    for raw in comment_ids or []:
+        try:
+            cmid = int(raw)
+        except Exception:
+            raise ValueError(f"非法的评论 ID：{raw}")
+        if cmid <= 0:
+            raise ValueError(f"非法的评论 ID：{raw}")
+        if cmid not in seen_cm:
+            seen_cm.add(cmid)
+            norm_cmids.append(cmid)
+
+    content_map: dict[int, dict[str, Any]] = {}
+    for cid in norm_cids:
+        c_row = conn.execute(
+            "SELECT id, project_id, title, url FROM contents WHERE id = ?",
+            (cid,),
+        ).fetchone()
+        if not c_row:
+            raise ValueError(f"作品 #{cid} 不存在，拒绝创建关联")
+        if not _content_belongs_to_project(conn, int(project_id), cid, c_row["project_id"]):
+            raise ValueError(f"作品 #{cid} 不属于当前项目 #{project_id}，拒绝跨项目写入证据")
+        content_map[cid] = dict(c_row)
+
+    comment_map: dict[int, dict[str, Any]] = {}
+    for cmid in norm_cmids:
+        cm_row = conn.execute(
+            """SELECT cm.id, cm.author, cm.text, cm.like_count, cm.content_id,
+                      c.project_id AS content_project_id, c.url AS content_url, c.title AS content_title
+               FROM comments cm
+               JOIN contents c ON c.id = cm.content_id
+               WHERE cm.id = ?""",
+            (cmid,),
+        ).fetchone()
+        if not cm_row:
+            raise ValueError(f"评论 #{cmid} 不存在，拒绝写入无效评论证据")
+        cm_cid = int(cm_row["content_id"])
+        if require_comment_in_contents and cm_cid not in content_map:
+            raise ValueError(f"评论 #{cmid} 不属于本次指定的作品，拒绝跨作品混用证据")
+        if not _content_belongs_to_project(conn, int(project_id), cm_cid, cm_row["content_project_id"]):
+            raise ValueError(f"评论 #{cmid} 所属作品 #{cm_cid} 不属于当前项目 #{project_id}，拒绝跨项目写入证据")
+        comment_map[cmid] = dict(cm_row)
+
+    return {
+        "content_ids": norm_cids,
+        "comment_ids": norm_cmids,
+        "content_map": content_map,
+        "comment_map": comment_map,
+    }
 
 
 def get_topic_detail(topic_id: int, project_id: int | None = None) -> dict[str, Any]:

@@ -1,10 +1,10 @@
 /**
- * FIX-04 / FIX-03-B · 全文拆解 Skill 工作区（三层清晰布局，绝不拥挤，绝不缩小全局字体）
+ * FIX-04 / FIX-03-B / FIX-C03 / FIX-C04 · 全文拆解 Skill 工作区（三层清晰布局，绝不拥挤，绝不缩小全局字体）
  * 第一层：工作区标题 + 历史报告按需展开入口 + 配置区折叠/展开按钮
- * 第二层：独立分析配置区（5 行纵向排布：1.拆解Skill选择与导入 2.AI模型选择与真实可用状态 3.参考文案来源与原文/译文/双语切换 4.默认折叠的额外分析要求 5.醒目开始全文拆解主按钮）
- * 第三层：独立全文拆解报告阅读区（生成报告后自动折叠配置区，占主要可用空间，支持安全 Markdown 分段渲染、复制与导出）
+ * 第二层：独立分析配置区（5 行纵向排布，小高度支持内部滚动；导入 Skill 可选用途；模型显示真实连接态不伪造）
+ * 第三层：独立全文拆解报告阅读区（生成后自动折叠配置区；安全 Markdown 渲染标题/表格/列表/引用/粗体，严禁原始 HTML）
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Check,
@@ -28,11 +28,203 @@ interface Props {
   onSwitchToReference?: () => void;
 }
 
+/** 安全行内渲染：仅解析 **粗体** 与 `代码`，全部以 React 文本节点输出，严禁执行原始 HTML */
+function renderInlineSafe(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let k = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const tok = match[0];
+    if (tok.startsWith('**') && tok.endsWith('**')) {
+      parts.push(
+        <strong key={k++} className="font-semibold text-slate-100">
+          {tok.slice(2, -2)}
+        </strong>
+      );
+    } else if (tok.startsWith('`') && tok.endsWith('`')) {
+      parts.push(
+        <code key={k++} className="px-1 py-0.5 rounded bg-[#16233d] text-cyan-200 font-mono-num">
+          {tok.slice(1, -1)}
+        </code>
+      );
+    }
+    last = match.index + tok.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+/** FIX-C04: 安全 Markdown 块级渲染（标题 / 表格 / 列表 / 引用 / 粗体，严禁 dangerouslySetInnerHTML） */
+function SafeMarkdownView({ markdown }: { markdown: string }) {
+  const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
+
+    // 标题
+    const hMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (hMatch) {
+      const level = hMatch[1].length;
+      const cls =
+        level === 1
+          ? 'text-lg font-bold text-cyan-200 pt-2 pb-1 border-b border-[#1e2e4a]'
+          : level === 2
+          ? 'text-base font-bold text-slate-100 pt-2'
+          : 'gcw-text-btn font-semibold text-slate-100 pt-1.5';
+      blocks.push(
+        <div key={key++} className={cls}>
+          {renderInlineSafe(hMatch[2])}
+        </div>
+      );
+      i += 1;
+      continue;
+    }
+
+    // 表格（首行含 | 且次行为 --- 分隔行）
+    if (
+      trimmed.includes('|') &&
+      i + 1 < lines.length &&
+      /^\s*\|?[\s:-]+\|[\s|:-]*$/.test(lines[i + 1])
+    ) {
+      const parseRow = (r: string) =>
+        r
+          .trim()
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((c) => c.trim());
+      const headers = parseRow(lines[i]);
+      i += 2;
+      const bodyRows: string[][] = [];
+      while (i < lines.length && lines[i].trim().includes('|')) {
+        bodyRows.push(parseRow(lines[i]));
+        i += 1;
+      }
+      blocks.push(
+        <div key={key++} className="overflow-x-auto my-2 rounded-lg border border-[#1e2e4a]">
+          <table className="w-full text-left border-collapse gcw-text-tag">
+            <thead>
+              <tr className="bg-[#111c33] text-cyan-200 border-b border-[#1e2e4a]">
+                {headers.map((h, hi) => (
+                  <th key={hi} className="px-2.5 py-1.5 font-semibold">
+                    {renderInlineSafe(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {bodyRows.map((row, ri) => (
+                <tr key={ri} className="border-b border-[#1e2e4a]/60 last:border-b-0">
+                  {headers.map((_, ci) => (
+                    <td key={ci} className="px-2.5 py-1.5 text-slate-200 align-top">
+                      {renderInlineSafe(row[ci] ?? '')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // 引用块
+    if (trimmed.startsWith('>')) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('>')) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
+        i += 1;
+      }
+      blocks.push(
+        <blockquote
+          key={key++}
+          className="border-l-2 border-cyan-500/60 bg-[#101a30] px-3 py-1.5 rounded-r-lg text-slate-300 gcw-text-base space-y-1"
+        >
+          {quoteLines.map((ql, qi) => (
+            <div key={qi}>{renderInlineSafe(ql)}</div>
+          ))}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // 无序列表
+    if (/^[-*+]\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[-*+]\s+/, ''));
+        i += 1;
+      }
+      blocks.push(
+        <ul key={key++} className="list-disc pl-5 space-y-1 gcw-text-base text-slate-200">
+          {items.map((it, ii) => (
+            <li key={ii}>{renderInlineSafe(it)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // 有序列表
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
+        i += 1;
+      }
+      blocks.push(
+        <ol key={key++} className="list-decimal pl-5 space-y-1 gcw-text-base text-slate-200">
+          {items.map((it, ii) => (
+            <li key={ii}>{renderInlineSafe(it)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    // 普通段落
+    blocks.push(
+      <p key={key++} className="gcw-text-base text-slate-200 leading-relaxed break-words">
+        {renderInlineSafe(line)}
+      </p>
+    );
+    i += 1;
+  }
+
+  return <div className="space-y-2">{blocks}</div>;
+}
+
+function modelConnLabel(m: any | null): { text: string; cls: string } {
+  if (!m) return { text: '未选择', cls: 'bg-slate-500/15 border-slate-500/40 text-slate-300' };
+  if (m.is_translation_only) return { text: '仅限翻译', cls: 'bg-amber-500/15 border-amber-500/40 text-amber-300' };
+  if (!m.configured) return { text: '未配置', cls: 'bg-rose-500/15 border-rose-500/40 text-rose-300' };
+  if (m.connection_status === 'connected' || m.connected) {
+    return { text: '已连接', cls: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' };
+  }
+  if (m.connection_status === 'failed') {
+    return { text: '连接失败', cls: 'bg-rose-500/15 border-rose-500/40 text-rose-300' };
+  }
+  return { text: '未检测', cls: 'bg-sky-500/15 border-sky-500/40 text-sky-300' };
+}
+
 export default function FullTextBreakdownPane({ contentId, subData = null, onSwitchToReference }: Props) {
   const [skills, setSkills] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
   const [selectedSkillId, setSelectedSkillId] = useState('');
   const [selectedModelKey, setSelectedModelKey] = useState('');
+  const [importPurpose, setImportPurpose] = useState<'breakdown' | 'general' | 'rewrite'>('breakdown');
   const [textMode, setTextMode] = useState<'original' | 'zh' | 'bilingual'>('original');
   const [extraReq, setExtraReq] = useState('');
 
@@ -57,7 +249,10 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
   const loadSkillsAndModels = async () => {
     try {
       const [skRes, mdRes] = await Promise.all([api.topicHubScriptSkills(), api.listWritingModels()]);
-      const customSkills = (skRes?.skills || []).filter((s: any) => !s.is_builtin);
+      // FIX-C04: 兼容历史未标注 skill_purpose 的 Skill（默认视为 general），仅过滤掉明确标为 rewrite 的 Skill
+      const customSkills = (skRes?.skills || []).filter(
+        (s: any) => !s.is_builtin && (s.skill_purpose || 'general') !== 'rewrite'
+      );
       setSkills(customSkills);
       if (customSkills.length && !customSkills.some((s: any) => s.skill_id === selectedSkillId)) {
         setSelectedSkillId(customSkills[0].skill_id);
@@ -65,11 +260,14 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
       const mdList = mdRes?.models || [];
       setModels(mdList);
       if (mdList.length && !selectedModelKey) {
-        const ready = mdList.find((m: any) => m.ready && m.text_generation_capable) || mdList.find((m: any) => m.configured) || mdList[0];
-        if (ready) setSelectedModelKey(`${ready.engine_id}::${ready.model_id}`);
+        const usable =
+          mdList.find((m: any) => m.ready && m.text_generation_capable) ||
+          mdList.find((m: any) => m.configured && !m.is_translation_only) ||
+          mdList[0];
+        if (usable) setSelectedModelKey(`${usable.engine_id}::${usable.model_id}`);
       }
-    } catch {
-      // ignore
+    } catch (e: any) {
+      setErrMsg(`加载拆解 Skill 或可用模型列表失败：${e?.message || e}`);
     }
   };
 
@@ -77,7 +275,7 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
     loadSkillsAndModels();
   }, []);
 
-  // FIX-03-B: 切换作品时彻底隔离旧请求与状态
+  // FIX-03-B / FIX-C04: 切换作品时彻底隔离旧请求与状态，且加载历史报告失败显式提示不吞异常
   useEffect(() => {
     const seq = ++reqSeqRef.current;
     runSeqRef.current += 1;
@@ -101,7 +299,10 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
           setConfigCollapsed(true);
         }
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        if (seq !== reqSeqRef.current || activeContentIdRef.current !== targetCid) return;
+        setErrMsg(`加载历史拆解报告失败：${e?.message || e}`);
+      });
   }, [contentId]);
 
   const refStats = useMemo(() => {
@@ -120,30 +321,39 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
     return models.find((m) => m.engine_id === eid && m.model_id === mid) || null;
   }, [models, selectedModelKey]);
 
+  const badge = modelConnLabel(selectedModel);
+
   const handleImportSkill = async (file: File) => {
     try {
       const text = await file.text();
       const baseName = file.name.replace(/\.(md|txt|json)$/i, '');
-      let name = `[拆解] ${baseName}`;
-      let description = `从 ${file.name} 导入的全文拆解 Skill`;
+      let name = baseName;
+      let description = `从 ${file.name} 导入的自定义 Skill`;
       let system_prompt = text;
+      let purpose: 'breakdown' | 'general' | 'rewrite' = importPurpose;
       if (file.name.toLowerCase().endsWith('.json')) {
         const parsed = JSON.parse(text);
         name = parsed.name || name;
         description = parsed.description || description;
         system_prompt = parsed.system_prompt || parsed.prompt || text;
+        if (parsed.skill_purpose && ['breakdown', 'general', 'rewrite'].includes(parsed.skill_purpose)) {
+          purpose = parsed.skill_purpose;
+        }
       }
       const res = await api.saveCustomScriptSkill({
         name,
         description,
         system_prompt,
         source_format: file.name.split('.').pop() || 'md',
-      });
+        skill_purpose: purpose,
+      } as any);
       if (res?.ok) {
         await loadSkillsAndModels();
-        if (res.skill?.skill_id) setSelectedSkillId(res.skill.skill_id);
-        setMsg(`✅ 已导入拆解 Skill「${name}」`);
+        if (res.skill?.skill_id && purpose !== 'rewrite') setSelectedSkillId(res.skill.skill_id);
+        setMsg(`✅ 已导入自定义 Skill「${name}」（用途：${purpose === 'breakdown' ? '全文拆解' : purpose === 'rewrite' ? '二创文案' : '通用'}）`);
         setErrMsg('');
+      } else {
+        setErrMsg(res?.error || '导入自定义 Skill 失败');
       }
     } catch (e: any) {
       setErrMsg(`导入拆解 Skill 失败：${e?.message || e}`);
@@ -170,7 +380,7 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
       if (res?.ok && res.report) {
         setReports((prev) => [res.report, ...prev]);
         setActiveReport(res.report);
-        setConfigCollapsed(true); // 生成报告后自动折叠配置区，释放阅读空间
+        setConfigCollapsed(true);
         setHistoryOpen(false);
         setMsg('✅ 全文拆解完成并已原子保存（未修改参考文案与二创文案）');
       } else {
@@ -242,9 +452,9 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
         </div>
       </div>
 
-      {/* 第二层：独立分析配置区（5 行纵向排布，绝不挤在一行） */}
+      {/* 第二层：独立分析配置区（5 行纵向排布，小高度支持内部滚动） */}
       {!configCollapsed && (
-        <div className="p-3.5 border-b border-[#1e2e4a] bg-[#0d1526] space-y-2.5 shrink-0">
+        <div className="p-3.5 border-b border-[#1e2e4a] bg-[#0d1526] space-y-2.5 shrink-0 max-h-[60%] overflow-y-auto">
           <input
             ref={fileInputRef}
             type="file"
@@ -257,12 +467,12 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
             }}
           />
 
-          {/* 第一行：拆解 Skill 选择与导入按钮 */}
+          {/* 第一行：拆解 Skill 选择、用途标注与导入按钮 */}
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={selectedSkillId}
               onChange={(e) => setSelectedSkillId(e.target.value)}
-              className="gcw-input flex-1 min-w-[180px] px-3 py-1.5 gcw-text-btn"
+              className="gcw-input flex-1 min-w-[160px] px-3 py-1.5 gcw-text-btn"
             >
               {skills.length === 0 ? (
                 <option value="">待导入拆解 Skill（尚未导入）</option>
@@ -270,9 +480,20 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
                 skills.map((s) => (
                   <option key={s.skill_id} value={s.skill_id}>
                     {s.name}
+                    {s.skill_purpose === 'breakdown' ? ' [拆解]' : s.skill_purpose === 'general' ? ' [通用]' : ''}
                   </option>
                 ))
               )}
+            </select>
+            <select
+              value={importPurpose}
+              onChange={(e) => setImportPurpose(e.target.value as any)}
+              title="导入 Skill 时由用户指定用途"
+              className="gcw-input px-2 py-1.5 gcw-text-tag shrink-0"
+            >
+              <option value="breakdown">用途：全文拆解</option>
+              <option value="general">用途：通用</option>
+              <option value="rewrite">用途：二创文案</option>
             </select>
             <button
               type="button"
@@ -283,35 +504,30 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
             </button>
           </div>
 
-          {/* 第二行：AI 模型选择与真实可用状态 */}
+          {/* 第二行：AI 模型选择与真实可用状态（不伪造已连接） */}
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={selectedModelKey}
               onChange={(e) => setSelectedModelKey(e.target.value)}
               className="gcw-input flex-1 min-w-[180px] px-3 py-1.5 gcw-text-btn"
             >
+              {models.length === 0 && <option value="">暂无可用文本生成模型</option>}
               {models.map((m) => (
                 <option key={`${m.engine_id}::${m.model_id}`} value={`${m.engine_id}::${m.model_id}`}>
                   {m.label || m.name}
-                  {m.is_translation_only ? '（专用翻译模型）' : m.configured ? '' : '（未配置）'}
+                  {m.is_translation_only
+                    ? '（仅限翻译）'
+                    : !m.configured
+                    ? '（未配置）'
+                    : m.connection_status === 'connected' || m.connected
+                    ? '（已连接）'
+                    : m.connection_status === 'failed'
+                    ? '（连接失败）'
+                    : '（未检测）'}
                 </option>
               ))}
             </select>
-            <span
-              className={`px-2.5 py-1 rounded-lg gcw-text-tag shrink-0 border ${
-                selectedModel?.is_translation_only
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                  : selectedModel?.configured
-                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                  : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-              }`}
-            >
-              {selectedModel?.is_translation_only
-                ? '仅限翻译'
-                : selectedModel?.configured
-                ? '已配置'
-                : '未配置'}
-            </span>
+            <span className={`px-2.5 py-1 rounded-lg gcw-text-tag shrink-0 border ${badge.cls}`}>{badge.text}</span>
           </div>
 
           {/* 第三行：完整参考文案来源、原文/译文/双语切换及原文查看入口 */}
@@ -417,7 +633,9 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
                     : 'bg-[#111a2e] border-[#1e2e4a] text-slate-300 hover:border-[#2c4268]'
                 }`}
               >
-                <div className="gcw-text-tag font-semibold truncate">{r.skill_name} · {r.model_id}</div>
+                <div className="gcw-text-tag font-semibold truncate">
+                  {r.skill_name} · {r.model_id}
+                </div>
                 <div className="gcw-text-meta text-slate-400 font-mono-num">
                   {formatLocalDateTime(r.created_at)} · 输入：{r.text_mode}
                 </div>
@@ -427,7 +645,7 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
         </div>
       )}
 
-      {/* 第三层：独立全文拆解报告阅读区（占主要可用空间） */}
+      {/* 第三层：独立全文拆解报告阅读区（占主要可用空间，安全 Markdown 渲染） */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-2.5 min-w-0">
         {activeReport ? (
           <>
@@ -436,17 +654,25 @@ export default function FullTextBreakdownPane({ contentId, subData = null, onSwi
                 Skill：{activeReport.skill_name} · 模型：{activeReport.model_id} · {formatLocalDateTime(activeReport.created_at)}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button type="button" onClick={handleCopy} className="gcw-btn-ghost px-2.5 py-1 rounded-lg gcw-text-tag inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="gcw-btn-ghost px-2.5 py-1 rounded-lg gcw-text-tag inline-flex items-center gap-1"
+                >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? '已复制' : '复制'}
                 </button>
-                <button type="button" onClick={handleExport} className="gcw-btn-ghost px-2.5 py-1 rounded-lg gcw-text-tag inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="gcw-btn-ghost px-2.5 py-1 rounded-lg gcw-text-tag inline-flex items-center gap-1"
+                >
                   <Download className="w-3.5 h-3.5" /> 导出
                 </button>
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-[#0c1424] border border-[#1e2e4a] gcw-text-base text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
-              {activeReport.report_markdown}
+            <div className="p-3.5 rounded-xl bg-[#0c1424] border border-[#1e2e4a]">
+              <SafeMarkdownView markdown={activeReport.report_markdown} />
             </div>
           </>
         ) : skills.length === 0 ? (

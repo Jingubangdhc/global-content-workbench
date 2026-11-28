@@ -29,6 +29,6 @@
 - 付费云端 API（需用户主动授权）生成原创文案的风格满意度需用户亲测。
 
 ## 4. 版本与测试证据
-- 本地候选版本：`v0.2.3-rc`（上一恢复点：`v0.2.2-rc`）
-- 本轮 FIX-03-A 诊断与 FIX-03-B 修复验收证据：`docs/gcw_workspace_v2_fix_03/GCW_FIX_03_ROOT_CAUSE_REPORT.md`、`GCW_FIX_03_REPRODUCTION.json`、`GCW_FIX_03_B_TEST_RESULTS.json`、`GCW_FIX_03_B_CODE_CHANGE_REPORT.md`（彻底移除 `httpx` 依赖改用标准库 `urllib.request`，真实调用返回 200；A01–A08 全修复；全文拆解重做为三层布局且四档字号零横向溢出；用户正式拆解 Skill 标 `BLOCKED`）。
+- 本地候选版本：`v0.2.4-rc`（上一恢复点：`v0.2.3-rc`）
+- 本轮 FIX-03-C 验收证据：`docs/gcw_workspace_v2_fix_03_c/verify_fix03c_e2e.js`、`GCW_FIX_03_C_TEST_RESULTS.json`、`GCW_FIX_03_C_CODE_CHANGE_REPORT.md`（单/多条评论生成、混合无效评论 400、跨项目/无效评论入库拒绝且事务零残留回滚、`free_only` 隔离拦截 403、`[TEST-ONLY]` Skill 拆解安全 Markdown 表格渲染与四档字号回归全绿；用户正式拆解 Skill 仍标 `BLOCKED`）。
 - 远程审查分支最终 Commit SHA 见本轮交付卡与 `git rev-parse origin/review/gcw-uat-r4`。

@@ -1,5 +1,11 @@
 # Global Content Workbench · 变更日志 (CHANGELOG.md)
 
+## [v0.2.4-rc] - 2026-11-28（GCW-WORKSPACE-V2-FIX-03-C）
+- **FIX-C01（P0）**：`topic_hub_service.py` 抽离统一 `validate_topic_evidence_scope`，生成接口与入库接口共享一致的项目/作品/评论归属校验规则，任何无效证据均完整回滚事务且无残留选题或状态历史。
+- **FIX-C02（P0）**：`CommentTopicDiscoveryPane.tsx` 改用稳定唯一 `candidate_uid` 及生成/入库独立双序列号与作用域守卫；后端严格拒绝混合有效/无效评论 ID 请求。
+- **FIX-C03（P1）**：`production_package_service.py` 修复 `last_test_ok` 读取层级，区分 `connected`/`untested`/`failed`/`unconfigured`；`_check_billing_policy_for_engine` 按真实 `billing_category` 判断免费与付费。
+- **FIX-C04（P1）**：`FullTextBreakdownPane.tsx` 保留三层 UI，新增安全 Markdown 渲染（标题/表格/列表/引用/粗体，禁原始 HTML）、导入 Skill 用途选择、异常显式提示与小高度滚动；取消导入 Skill 12000 字符静默截断。
+
 ## [v0.2.3-rc] - 2026-11-28（GCW-WORKSPACE-V2-FIX-03-B）
 - **高赞评论生成选题 500 根治**：彻底移除 `backend/routers/topic_hub.py` 中的 `import httpx`（本机 `.venv` 未安装导致 `ModuleNotFoundError` 500），改用标准库 `urllib.request` 封装 `_call_openai_compat_chat`，按 401/402/429/504/网络/JSON 异常分类返回清晰中文业务错误。
 - **独立审查缺陷 A01–A08 全修复**：区分模型 `configured`/`connected`/`text_generation_capable`/`is_translation_only` 并 400 拒绝专用翻译模型；安全校验 `source_comment_id` 禁止静默替换；校验项目/作品/评论多关联归属（跨项目 403）；修复 `origin_type='content_comment_discovery'` 并单事务原子落库 `content` + `comment` 结构化证据；全文拆解超 18000 字禁止静默截断且 `BEGIN IMMEDIATE` 原子保存历史；新增 `free_only` 费用授权拦截。

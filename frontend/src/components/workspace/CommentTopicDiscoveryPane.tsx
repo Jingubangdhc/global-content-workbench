@@ -1,8 +1,9 @@
 /**
- * FIX-08 / FIX-03-B · 高赞评论选题发现面板
- * - 修复 origin_type 为后端合法枚举 content_comment_discovery，入库时透传 comment_ids 写入结构化 topic_evidence
- * - 增加 reqSeqRef + projectId/contentId 归属守卫，防止快速切换项目/作品时旧请求污染当前界面
- * - 区分模型已配置、专用翻译模型与通用文案生成能力
+ * FIX-08 / FIX-03-B / FIX-C02 / FIX-C03 · 高赞评论选题发现面板
+ * - 候选选题分配稳定唯一 candidate_uid，绝不以数组下标作为异步入库结果标识
+ * - 生成（genSeqRef）与入库（addSeqRef）分别维护独立请求序列号与 projectId/contentId 守卫
+ * - 严格展示模型真实连接状态（已连接 / 未检测 / 连接失败 / 未配置 / 仅限翻译），不伪造已连接
+ * - 加载模型失败显式提示，不静默吞异常
  */
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Loader2, Plus, Sparkles } from 'lucide-react';
@@ -15,6 +16,14 @@ interface Props {
   onTopicAdded?: (topicId: number) => void;
 }
 
+function modelStatusSuffix(m: any): string {
+  if (m.is_translation_only) return '（仅限翻译）';
+  if (!m.configured) return '（未配置）';
+  if (m.connection_status === 'connected' || m.connected) return '（已连接）';
+  if (m.connection_status === 'failed') return '（连接失败）';
+  return '（已配置 · 未检测）';
+}
+
 export default function CommentTopicDiscoveryPane({ projectId, contentId, comments, onTopicAdded }: Props) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [models, setModels] = useState<any[]>([]);
@@ -22,34 +31,44 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
   const [count, setCount] = useState(3);
   const [generating, setGenerating] = useState(false);
   const [candidates, setCandidates] = useState<any[]>([]);
-  const [addingIdx, setAddingIdx] = useState<number | null>(null);
+  const [addingUid, setAddingUid] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [errMsg, setErrMsg] = useState('');
 
-  const reqSeqRef = useRef(0);
+  // FIX-C02: 生成与入库分别维护独立请求序列号 + 作用域守卫
+  const genSeqRef = useRef(0);
+  const addSeqRef = useRef(0);
   const activeScopeRef = useRef({ projectId, contentId });
   activeScopeRef.current = { projectId, contentId };
 
   useEffect(() => {
+    let cancelled = false;
     api
       .listWritingModels()
       .then((r) => {
+        if (cancelled) return;
         const list = r?.models || [];
         setModels(list);
-        const ready =
+        const usable =
           list.find((m: any) => m.ready && m.text_generation_capable) ||
           list.find((m: any) => m.configured && !m.is_translation_only) ||
           list[0];
-        if (ready) setSelectedModelKey(`${ready.engine_id}::${ready.model_id}`);
+        if (usable) setSelectedModelKey(`${usable.engine_id}::${usable.model_id}`);
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        if (!cancelled) setErrMsg(`加载可用 AI 模型列表失败：${e?.message || e}`);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // FIX-03-B (A04): 切换项目或作品时立即递增序号并清理旧结果与旧加载状态
+  // FIX-C02: 切换项目或作品时同时递增生成与入库双序列号，防止 A->B->A 或旧 finally 污染当前视图
   useEffect(() => {
-    reqSeqRef.current += 1;
+    genSeqRef.current += 1;
+    addSeqRef.current += 1;
     setGenerating(false);
-    setAddingIdx(null);
+    setAddingUid(null);
     setSelectedIds([]);
     setCandidates([]);
     setMsg('');
@@ -64,7 +83,10 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
     if (!contentId || !ids.length || generating) return;
     const targetPid = projectId;
     const targetCid = contentId;
-    const seq = ++reqSeqRef.current;
+    const seq = ++genSeqRef.current;
+    // 重新生成时使旧入库请求失效，防止旧候选入库回调写入新候选列表
+    addSeqRef.current += 1;
+    setAddingUid(null);
     const [engineId, modelId] = (selectedModelKey || '::').split('::');
     setGenerating(true);
     setErrMsg('');
@@ -79,22 +101,26 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
         model_id: modelId || '',
       });
       if (
-        seq !== reqSeqRef.current ||
+        seq !== genSeqRef.current ||
         activeScopeRef.current.projectId !== targetPid ||
         activeScopeRef.current.contentId !== targetCid
       ) {
         return;
       }
       if (res?.ok && Array.isArray(res.candidates)) {
-        setCandidates(res.candidates);
-        setMsg(`✅ 已基于 ${ids.length} 条真实评论生成 ${res.candidates.length} 个候选选题（请预览编辑后确认加入选题库）`);
+        const stamped = res.candidates.map((c: any, i: number) => ({
+          ...c,
+          candidate_uid: `cand_${targetPid}_${targetCid}_${seq}_${i}_${c.source_comment_id}`,
+        }));
+        setCandidates(stamped);
+        setMsg(`✅ 已基于 ${ids.length} 条真实评论生成 ${stamped.length} 个候选选题（请预览编辑后确认加入选题库）`);
       } else {
         setErrMsg(res?.error || '生成候选选题失败');
         setMsg('');
       }
     } catch (e: any) {
       if (
-        seq !== reqSeqRef.current ||
+        seq !== genSeqRef.current ||
         activeScopeRef.current.projectId !== targetPid ||
         activeScopeRef.current.contentId !== targetCid
       ) {
@@ -103,16 +129,24 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
       setErrMsg(`生成候选选题失败：${e?.message || e}`);
       setMsg('');
     } finally {
-      if (seq === reqSeqRef.current) setGenerating(false);
+      if (
+        seq === genSeqRef.current &&
+        activeScopeRef.current.projectId === targetPid &&
+        activeScopeRef.current.contentId === targetCid
+      ) {
+        setGenerating(false);
+      }
     }
   };
 
-  const handleAddToLibrary = async (idx: number) => {
-    const c = candidates[idx];
-    if (!c || !c.suggested_title?.trim() || addingIdx !== null) return;
+  const handleAddToLibrary = async (candidateUid: string) => {
+    const c = candidates.find((x) => x.candidate_uid === candidateUid);
+    if (!c || !c.suggested_title?.trim() || addingUid !== null) return;
     const targetPid = projectId;
     const targetCid = contentId;
-    setAddingIdx(idx);
+    const genSeqSnapshot = genSeqRef.current;
+    const addSeq = ++addSeqRef.current;
+    setAddingUid(candidateUid);
     setErrMsg('');
     try {
       const res = await api.topicHubCreate({
@@ -126,19 +160,43 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
         content_ids: targetCid ? [targetCid] : [],
         comment_ids: c.source_comment_id ? [Number(c.source_comment_id)] : [],
       });
-      if (activeScopeRef.current.projectId !== targetPid || activeScopeRef.current.contentId !== targetCid) return;
+      if (
+        addSeq !== addSeqRef.current ||
+        genSeqSnapshot !== genSeqRef.current ||
+        activeScopeRef.current.projectId !== targetPid ||
+        activeScopeRef.current.contentId !== targetCid
+      ) {
+        return;
+      }
       if (res?.ok && res.topic?.id) {
-        setCandidates((prev) => prev.map((x, i) => (i === idx ? { ...x, added_topic_id: res.topic.id } : x)));
-        setMsg(`✅ 已加入选题库：#${res.topic.id}「${res.topic.topic_title}」（状态：待研究 · U级未验证 · 已写入结构化视频与评论证据）`);
+        setCandidates((prev) =>
+          prev.map((x) => (x.candidate_uid === candidateUid ? { ...x, added_topic_id: res.topic.id } : x))
+        );
+        setMsg(
+          `✅ 已加入选题库：#${res.topic.id}「${res.topic.topic_title}」（状态：待研究 · U级未验证 · 已写入结构化视频与评论证据）`
+        );
         onTopicAdded?.(res.topic.id);
       } else {
         setErrMsg(res?.error || '加入选题库失败');
       }
     } catch (e: any) {
-      if (activeScopeRef.current.projectId !== targetPid || activeScopeRef.current.contentId !== targetCid) return;
+      if (
+        addSeq !== addSeqRef.current ||
+        genSeqSnapshot !== genSeqRef.current ||
+        activeScopeRef.current.projectId !== targetPid ||
+        activeScopeRef.current.contentId !== targetCid
+      ) {
+        return;
+      }
       setErrMsg(`加入选题库失败：${e?.message || e}`);
     } finally {
-      setAddingIdx(null);
+      if (
+        addSeq === addSeqRef.current &&
+        activeScopeRef.current.projectId === targetPid &&
+        activeScopeRef.current.contentId === targetCid
+      ) {
+        setAddingUid(null);
+      }
     }
   };
 
@@ -151,12 +209,12 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
           <select
             value={selectedModelKey}
             onChange={(e) => setSelectedModelKey(e.target.value)}
-            className="gcw-input px-2 py-1 gcw-text-tag max-w-[240px]"
+            className="gcw-input px-2 py-1 gcw-text-tag max-w-[260px]"
           >
             {models.map((m) => (
               <option key={`${m.engine_id}::${m.model_id}`} value={`${m.engine_id}::${m.model_id}`}>
                 {m.label || m.name}
-                {m.is_translation_only ? '（仅限翻译）' : m.configured ? '' : '（未配置）'}
+                {modelStatusSuffix(m)}
               </option>
             ))}
           </select>
@@ -192,12 +250,16 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
       {candidates.length > 0 && (
         <div className="p-3 rounded-xl bg-[#0e172a] border border-cyan-500/40 space-y-2.5">
           <div className="gcw-text-btn font-semibold text-cyan-300">候选选题预览（可编辑后确认加入选题库）</div>
-          {candidates.map((c, idx) => (
-            <div key={idx} className="p-2.5 rounded-lg bg-[#0c1424] border border-[#1e2e4a] space-y-1.5">
+          {candidates.map((c) => (
+            <div key={c.candidate_uid} className="p-2.5 rounded-lg bg-[#0c1424] border border-[#1e2e4a] space-y-1.5">
               <div className="flex items-center gap-2">
                 <input
                   value={c.suggested_title}
-                  onChange={(e) => setCandidates((prev) => prev.map((x, i) => (i === idx ? { ...x, suggested_title: e.target.value } : x)))}
+                  onChange={(e) =>
+                    setCandidates((prev) =>
+                      prev.map((x) => (x.candidate_uid === c.candidate_uid ? { ...x, suggested_title: e.target.value } : x))
+                    )
+                  }
                   className="gcw-input flex-1 px-2.5 py-1 gcw-text-btn font-semibold"
                 />
                 {c.added_topic_id ? (
@@ -207,11 +269,12 @@ export default function CommentTopicDiscoveryPane({ projectId, contentId, commen
                 ) : (
                   <button
                     type="button"
-                    onClick={() => handleAddToLibrary(idx)}
-                    disabled={addingIdx !== null}
+                    onClick={() => handleAddToLibrary(c.candidate_uid)}
+                    disabled={addingUid !== null}
                     className="gcw-btn-cyan px-3 py-1 rounded-lg gcw-text-tag font-semibold inline-flex items-center gap-1 shrink-0"
                   >
-                    <Plus className="w-3.5 h-3.5" /> 加入选题库
+                    {addingUid === c.candidate_uid ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    加入选题库
                   </button>
                 )}
               </div>

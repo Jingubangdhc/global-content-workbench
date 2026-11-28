@@ -1,6 +1,6 @@
 # Global Content Workbench · 项目当前状态 (PROJECT_STATUS.md)
 
-- **当前本机候选版本**：`v0.2.3-rc`（`GCW-WORKSPACE-V2-FIX-03-B`：高赞评论生成选题 500 根治 + A01–A08 缺陷修复 + 全文拆解三层 UI 重做）
+- **当前本机候选版本**：`v0.2.4-rc`（`GCW-WORKSPACE-V2-FIX-03-C`：结构化证据入库强校验 + 异步入库双序列号隔离 + 模型真实连接态 + 全文拆解安全 Markdown 渲染与收尾）
 - **开发分支**：`feat/koubo-p2-chatcut-antigravity`
 - **GitHub 独立审查分支**：`review/gcw-uat-r4`（不触碰 `main`，待 ChatGPT 独立审查与用户最终验收）
 - **当前状态**：等待独立审查与最终验收（未标记正式稳定版，未打包 EXE）

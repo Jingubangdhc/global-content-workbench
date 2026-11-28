@@ -82,7 +82,12 @@ class CreateTopicBody(BaseModel):
 
 @router.post("/topics")
 def api_topic_hub_create(body: CreateTopicBody):
-    res = svc.create_manual_topic(body.project_id, body.model_dump())
+    try:
+        res = svc.create_manual_topic(body.project_id, body.model_dump())
+    except ValueError as e:
+        msg = str(e)
+        code = 403 if "不属于当前项目" in msg else 400
+        raise HTTPException(code, msg)
     if not res.get("ok"):
         raise HTTPException(400, res.get("error") or "创建选题失败")
     return res
@@ -275,6 +280,7 @@ class CustomSkillBody(BaseModel):
     skill_id: str = ""
     default_version_kind: str = "ai_draft"
     source_format: str = "manual"
+    skill_purpose: str = "general"
 
 
 @router.post("/script-skills/custom")
@@ -286,6 +292,7 @@ def api_save_custom_script_skill(body: CustomSkillBody):
         skill_id=body.skill_id,
         default_version_kind=body.default_version_kind,
         source_format=body.source_format,
+        skill_purpose=body.skill_purpose,
     )
     if not res.get("ok"):
         raise HTTPException(400, res.get("error") or "保存自定义 Skill 失败")
@@ -653,13 +660,21 @@ def _call_openai_compat_chat(
 
 
 def _check_billing_policy_for_engine(engine_id: str) -> None:
-    """严禁未经用户授权自动调用付费模型。"""
+    """FIX-C03: 依据实际引擎类别判断免费与付费，严禁硬编码只有混元免费，严禁未经用户授权调用付费模型。"""
     from backend.services import translation_provider as tp_svc
 
     overview = tp_svc.get_translation_overview()
     billing_mode = (overview.get("policy") or {}).get("billing_mode") or "free_only"
-    is_free_local = engine_id == "hunyuan_mt3_local"
-    if billing_mode == "free_only" and not is_free_local:
+    providers = overview.get("providers") or []
+    matched = next((p for p in providers if p.get("engine_id") == engine_id), None)
+    if matched is not None:
+        billing_cat = matched.get("billing_category") or (
+            "free_local" if matched.get("protocol") == "local_openai_compatible" else "paid_cloud"
+        )
+        is_free = billing_cat in ("free_local", "free_cloud")
+    else:
+        is_free = False
+    if billing_mode == "free_only" and not is_free:
         raise HTTPException(
             403,
             "当前工作台处于「仅允许免费模式」，未获用户付费 API 授权，已拦截付费云端模型调用。如需使用云端模型，请在左下角「翻译 Key / 设置」中显式开启付费授权。",
@@ -813,31 +828,25 @@ def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
 
     conn = get_conn()
     try:
-        content_row = conn.execute("SELECT id, project_id, title, url FROM contents WHERE id=?", (body.content_id,)).fetchone()
-        if not content_row:
-            raise HTTPException(404, f"未找到源视频 #{body.content_id}")
-
-        # FIX-03-B (A08): 验证项目与作品真实归属（兼容一视频多项目/多选题关联）
-        belongs = int(content_row["project_id"] or 0) == int(body.project_id)
-        if not belongs:
-            link = conn.execute(
-                "SELECT 1 FROM project_content_links WHERE project_id=? AND content_id=? LIMIT 1",
-                (body.project_id, body.content_id),
-            ).fetchone()
-            ev_link = conn.execute(
-                "SELECT 1 FROM topic_evidence WHERE project_id=? AND evidence_type='content' AND ref_id=? LIMIT 1",
-                (body.project_id, body.content_id),
-            ).fetchone()
-            belongs = bool(link or ev_link)
-        if not belongs:
-            raise HTTPException(403, f"作品 #{body.content_id} 不属于当前项目 #{body.project_id}，拒绝跨项目生成选题")
-
-        placeholders = ",".join("?" for _ in cids)
-        rows = conn.execute(
-            f"SELECT id, author, text, like_count FROM comments WHERE content_id=? AND id IN ({placeholders}) ORDER BY like_count DESC",
-            (body.content_id, *cids),
-        ).fetchall()
-        real_comments = [dict(r) for r in rows]
+        # FIX-C01 & FIX-C02: 复用统一证据归属校验，严格校验项目、作品及所有传入评论（禁止静默忽略混合无效评论 ID）
+        try:
+            validated = svc.validate_topic_evidence_scope(
+                conn,
+                body.project_id,
+                [body.content_id],
+                cids,
+                require_comment_in_contents=True,
+            )
+        except ValueError as e:
+            msg = str(e)
+            code = 403 if "不属于当前项目" in msg else (404 if "不存在" in msg and "作品" in msg else 400)
+            raise HTTPException(code, msg)
+        content_row = validated["content_map"][int(body.content_id)]
+        real_comments = sorted(
+            validated["comment_map"].values(),
+            key=lambda r: int(r.get("like_count") or 0),
+            reverse=True,
+        )
     finally:
         conn.close()
 

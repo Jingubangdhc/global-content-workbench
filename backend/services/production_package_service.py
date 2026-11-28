@@ -152,14 +152,17 @@ def save_custom_script_skill(
     skill_id: str = "",
     default_version_kind: str = "ai_draft",
     source_format: str = "manual",
+    skill_purpose: str = "general",
 ) -> dict[str, Any]:
-    """新建、导入或更新自定义原创文案 Skill（支持 Markdown / JSON / 纯文本导入）。"""
+    """新建、导入或更新自定义文案 Skill（支持 Markdown / JSON / 纯文本导入，禁止静默截断）。"""
     clean_name = (name or "").strip()
     clean_prompt = (system_prompt or "").strip()
     if not clean_name:
         return {"ok": False, "error": "Skill 名称不能为空"}
     if not clean_prompt:
         return {"ok": False, "error": "Skill 创作指令（Prompt）不能为空"}
+    if len(clean_prompt) > 50000:
+        return {"ok": False, "error": f"Skill 内容长度（{len(clean_prompt)} 字）超过 50000 字上限，系统禁止静默截断，请精简后再导入"}
     if default_version_kind not in VERSION_KIND_LABELS:
         default_version_kind = "ai_draft"
 
@@ -173,8 +176,9 @@ def save_custom_script_skill(
     item = {
         "skill_id": sid,
         "name": clean_name[:80],
-        "description": (description or "").strip()[:300] or "用户导入的自定义原创文案 Skill",
-        "system_prompt": clean_prompt[:12000],
+        "description": (description or "").strip()[:300] or "用户导入的自定义文案 Skill",
+        "system_prompt": clean_prompt,
+        "skill_purpose": (skill_purpose if skill_purpose in ("breakdown", "rewrite", "general") else "general"),
         "requires_llm": True,
         "default_version_kind": default_version_kind,
         "is_builtin": False,
@@ -220,8 +224,20 @@ def list_available_writing_models() -> list[dict[str, Any]]:
         is_local = proto == "local_openai_compatible"
         is_translation_only = p["engine_id"] == "hunyuan_mt3_local"
         configured = bool(p.get("configured"))
-        connected = bool(p.get("last_test_ok")) if is_local else configured
+        # FIX-C03: 修复 last_test_ok 读取层级，严禁 configured 直接等同 connected/ready
+        raw_test_ok = pcfg.get("last_test_ok") if "last_test_ok" in pcfg else p.get("last_test_ok")
+        connected = raw_test_ok is True
+        if not configured:
+            conn_status = "unconfigured"
+        elif raw_test_ok is True:
+            conn_status = "connected"
+        elif raw_test_ok is False:
+            conn_status = "failed"
+        else:
+            conn_status = "untested"
         text_gen_capable = not is_translation_only
+        billing_cat = p.get("billing_category") or ("free_local" if is_local else "paid_cloud")
+        is_paid = billing_cat not in ("free_local", "free_cloud")
         models.append({
             "engine_id": p["engine_id"],
             "name": p["name"],
@@ -229,10 +245,13 @@ def list_available_writing_models() -> list[dict[str, Any]]:
             "model_id": pcfg.get("model_id") or p.get("default_model") or "",
             "configured": configured,
             "connected": connected,
+            "connection_status": conn_status,
+            "last_test_ok": raw_test_ok,
             "text_generation_capable": text_gen_capable,
             "is_translation_only": is_translation_only,
-            "ready": configured and text_gen_capable,
-            "is_paid": p.get("billing_category") != "free_local",
+            "ready": bool(configured and text_gen_capable and raw_test_ok is not False),
+            "billing_category": billing_cat,
+            "is_paid": is_paid,
             "is_local": is_local,
             "base_url": pcfg.get("local_endpoint") if is_local else (pcfg.get("base_url") or p.get("default_base_url") or ""),
             "note": ("专用翻译模型（非通用文案生成模型）" if is_translation_only else (p.get("notes") or "")),
@@ -247,14 +266,17 @@ def list_available_writing_models() -> list[dict[str, Any]]:
             "label": f"工作台默认大模型 ({env.get('llm_model') or 'deepseek-chat'})",
             "model_id": env.get("llm_model") or "deepseek-chat",
             "configured": True,
-            "connected": True,
+            "connected": False,
+            "connection_status": "untested",
+            "last_test_ok": None,
             "text_generation_capable": True,
             "is_translation_only": False,
             "ready": True,
+            "billing_category": "paid_cloud",
             "is_paid": True,
             "is_local": False,
             "base_url": env.get("llm_base_url") or "https://api.deepseek.com/v1",
-            "note": "读取自本地 .env LLM_API_KEY",
+            "note": "读取自本地 .env LLM_API_KEY（未检测）",
         })
     return models
 
