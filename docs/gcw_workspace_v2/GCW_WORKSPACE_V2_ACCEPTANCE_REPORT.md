@@ -16,8 +16,9 @@
 | GCW-WORKSPACE-06（选题时间管理） | 后端排序 + 前端渲染 | 通过：默认最新创建优先，支持 4 种排序与日期范围筛选，本机时区转换，缺失显示「未知」 |
 | GCW-UI-02（全局字体与可读性） | `getComputedStyle` 四档实测 | 通过：紧凑 `14px` / 标准 `15px` / 舒适 `16px`（默认）/ 大字 `18px` 真实逐档变化，1920×1080 与 2560×1440 均 0 横向溢出 |
 
-## 3. 证据文件清单
+## 3. 证据文件清单与 FIX-06 真实性更正说明
+- **旧基线日志更正说明**：`docs/gcw_workspace_v2/GCW_WORKSPACE_V2_TEST_RESULTS.json` 中 `original_draft_edit_and_autosave.pass = false` 为 v0.2.0-rc 原始运行记录，现完整保留不予篡改；此前报告误将该项标为通过已予以纠正。
+- **FIX-01 ~ FIX-05 修复后新测试日志**：`docs/gcw_workspace_v2/GCW_WORKSPACE_V2_FIX_01_TEST_RESULTS.json`（含后端修订号 409 防覆盖、刷新身份 409 拦截、异常爆款倍数严格基准、Electron 900ms 内快速输入切选题直接查库核对完整文本、5 次快速开关设置弹窗防遮挡；未授权付费模型如实标 `NOT TESTED`）。
 - 改前 1920×1080 截图：`docs/gcw_workspace_v2/screenshots/before/`（本机保存）
 - 改后 1920×1080 截图：`docs/gcw_workspace_v2/screenshots/after/`（本机保存）
 - 真实操作录屏：`docs/gcw_workspace_v2/evidence/gcw_workspace_v2_uat_demo.mp4`（543KB，本机保存）
-- 结构化测试结果：`docs/gcw_workspace_v2/GCW_WORKSPACE_V2_TEST_RESULTS.json`

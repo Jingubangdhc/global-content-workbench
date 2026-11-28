@@ -1,0 +1,61 @@
+{
+  "version": "v0.2.1-rc (GCW-WORKSPACE-V2-FIX-01)",
+  "tested_at": "2026-11-28T09:41:07.880Z",
+  "previous_failed_baseline_preserved": "docs/gcw_workspace_v2/GCW_WORKSPACE_V2_TEST_RESULTS.json (original_draft_edit_and_autosave.pass = false 原始记录已完整保留，未篡改)",
+  "backend_and_db_tests": {
+    "fix01_draft_revision_guard": {
+      "type": "real_backend_sqlite_test",
+      "put_rev1_status": 200,
+      "put_rev2_status": 200,
+      "stale_rev1_status": 409,
+      "db_content_verified": "第二版最新草稿内容_完整核对",
+      "db_revision_verified": 2,
+      "pass": true
+    },
+    "fix02_metrics_identity_guard": {
+      "type": "real_backend_test",
+      "get_status": 200,
+      "missing_identity_status": 409,
+      "wrong_item_id_status": 409,
+      "wrong_platform_status": 409,
+      "views_unchanged": true,
+      "pass": true
+    },
+    "fix03_outlier_strict_baseline": {
+      "type": "real_backend_sqlite_test",
+      "cur_with_3_prior_multiple": 3.0,
+      "cur_basis": "当前播放量 / 发布前 3 条其他历史作品均值（2,000；仅基于本库人工收录样本，代表性有限）",
+      "first_with_0_prior_multiple": null,
+      "first_basis": "未知（该作者发布前可验证有效其他作品仅 0 条，需 ≥3 条）",
+      "pass": true
+    },
+    "isolated_backup_restore_check": {
+      "type": "isolated_recovery_test",
+      "integrity_check": "ok",
+      "contents_count": 105,
+      "pass": true
+    }
+  },
+  "electron_e2e_tests": {
+    "fix01_900ms_fast_switch_flush": {
+      "type": "real_electron_e2e_db_verified",
+      "ok": true,
+      "tid1": 25,
+      "expected": "FIX01_FAST_SWITCH_DRAFT_1795858863680",
+      "dbContent": "FIX01_FAST_SWITCH_DRAFT_1795858863680",
+      "dbRev": 1,
+      "pass": true
+    },
+    "fix05_rapid_modal_toggle_no_overlap": {
+      "type": "real_electron_e2e",
+      "cycles": 5,
+      "hiddenHintWhenOpen": true,
+      "pass": true
+    }
+  },
+  "paid_cloud_model_skill_test": {
+    "status": "NOT TESTED",
+    "reason": "当前处于仅免费模式，未获用户付费 API 调用授权，按规范不发起付费调用并如实标记 NOT TESTED"
+  },
+  "all_executed_pass": true
+}

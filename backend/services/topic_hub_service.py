@@ -330,27 +330,69 @@ def list_topics_hub(
 
 
 def get_topic_original_draft(topic_id: int) -> dict[str, Any]:
-    """GCW-WORKSPACE-05: 读取选题级原创文案草稿（与参考原文、译文、正式版本严格隔离）。"""
+    """GCW-WORKSPACE-05 / FIX-01: 读取选题级原创文案草稿（含单调递增 revision 修订号）。"""
     conn = get_conn()
     try:
         key = f"topic_original_draft_{int(topic_id)}"
         row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
         if not row or not row["value"]:
-            return {"ok": True, "topic_id": topic_id, "draft": {"title": "", "content": "", "extra_requirements": "", "skill_id": "", "engine_id": "", "model_id": "", "updated_at": None}}
+            return {
+                "ok": True,
+                "topic_id": topic_id,
+                "draft": {
+                    "title": "",
+                    "content": "",
+                    "extra_requirements": "",
+                    "skill_id": "",
+                    "engine_id": "",
+                    "model_id": "",
+                    "revision": 0,
+                    "updated_at": None,
+                },
+            }
         try:
             data = json.loads(row["value"])
         except Exception:
-            data = {"title": "", "content": str(row["value"]), "updated_at": None}
+            data = {"title": "", "content": str(row["value"]), "revision": 0, "updated_at": None}
+        if "revision" not in data or not isinstance(data.get("revision"), int):
+            data["revision"] = 1
         return {"ok": True, "topic_id": topic_id, "draft": data}
     finally:
         conn.close()
 
 
 def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """GCW-WORKSPACE-05: 持久化选题级原创文案草稿（零表结构变更，兼容旧版回滚）。"""
+    """GCW-WORKSPACE-05 / FIX-01: 持久化选题级原创文案草稿，带 revision 修订号防旧请求覆盖新版本。"""
     conn = get_conn()
     try:
         from datetime import datetime, timezone
+        key = f"topic_original_draft_{int(topic_id)}"
+        existing_rev = 0
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        if row and row["value"]:
+            try:
+                old_data = json.loads(row["value"])
+                existing_rev = int(old_data.get("revision") or 0)
+            except Exception:
+                existing_rev = 0
+
+        client_rev = payload.get("client_rev")
+        if client_rev is not None:
+            try:
+                c_rev = int(client_rev)
+            except Exception:
+                c_rev = 0
+            if c_rev < existing_rev:
+                return {
+                    "ok": False,
+                    "stale_rejected": True,
+                    "current_revision": existing_rev,
+                    "error": f"检测到过期草稿保存请求（client_rev={c_rev} < current={existing_rev}），已拒绝覆盖最新草稿",
+                }
+            next_rev = max(existing_rev + 1, c_rev)
+        else:
+            next_rev = existing_rev + 1
+
         now_iso = datetime.now(timezone.utc).isoformat()
         draft = {
             "title": str(payload.get("title") or "")[:200],
@@ -359,9 +401,9 @@ def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[st
             "skill_id": str(payload.get("skill_id") or "")[:120],
             "engine_id": str(payload.get("engine_id") or "")[:120],
             "model_id": str(payload.get("model_id") or "")[:160],
+            "revision": next_rev,
             "updated_at": now_iso,
         }
-        key = f"topic_original_draft_{int(topic_id)}"
         conn.execute(
             "INSERT INTO app_settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, json.dumps(draft, ensure_ascii=False)),
@@ -374,12 +416,31 @@ def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[st
         conn.close()
 
 
+def _parse_iso_ts(raw: Any) -> float | None:
+    """尝试解析可验证的发布时间；无法解析返回 None，绝不伪造时间顺序。"""
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if not s or len(s) < 8:
+        return None
+    from datetime import datetime
+    try:
+        norm = s.replace("Z", "+00:00")
+        if len(norm) == 10 and norm[4] == "-" and norm[7] == "-":
+            return datetime.fromisoformat(norm + "T00:00:00+00:00").timestamp()
+        if " " in norm and "T" not in norm:
+            norm = norm.replace(" ", "T")
+        return datetime.fromisoformat(norm).timestamp()
+    except Exception:
+        return None
+
+
 def get_content_metrics_detail(content_id: int) -> dict[str, Any]:
-    """GCW-WORKSPACE-03: 返回当前作品真实数据面板（严格区分 NULL 与 0、互动率口径与同作者历史爆款倍数基准）。"""
+    """GCW-WORKSPACE-03 / FIX-03: 返回当前作品真实数据面板（异常爆款倍数严格排除当前作品、去重、要求发布前可靠历史样本 >=3）。"""
     conn = get_conn()
     try:
         row = conn.execute(
-            """SELECT c.*, cr.name AS creator_name, cr.followers AS creator_followers
+            """SELECT c.*, cr.name AS creator_name, cr.follower_count AS creator_followers
                FROM contents c
                LEFT JOIN creators cr ON cr.id = c.creator_id
                WHERE c.id = ?""",
@@ -409,31 +470,58 @@ def get_content_metrics_detail(content_id: int) -> dict[str, Any]:
             engagement_rate = None
             engagement_formula = "缺少有效播放量或互动指标，暂不计算互动率"
 
-        # 异常爆款倍数：必须有可靠同作者同平台历史作品基准（至少 3 条有效播放量作品），绝不以播放/粉丝比冒充
+        # FIX-03 异常爆款倍数：
+        # 1) 严格排除当前 content_id；2) 按 platform_item_id 去重；3) 仅同作者同平台有效播放量作品；
+        # 4) 必须可验证发布时间且早于当前作品发布时间；5) 至少 3 条其他历史作品；6) 明确标注人工收录样本限制
         outlier_multiple = None
-        outlier_basis = "缺少同作者有效历史作品基准（需至少 3 条含播放量作品），不计算爆款倍数"
+        outlier_basis = "未知（缺少同作者发布前可靠历史作品基准，需 ≥3 条其他作品）"
         creator_id = d.get("creator_id")
-        platform = d.get("platform") or ""
-        if creator_id and views is not None and int(views) > 0:
-            hist = conn.execute(
-                """SELECT view_count FROM contents
-                   WHERE creator_id = ? AND platform = ? AND view_count IS NOT NULL AND view_count > 0""",
-                (creator_id, platform),
+        platform = (d.get("platform") or "").strip().lower()
+        cur_item_id = (d.get("platform_item_id") or "").strip()
+        cur_pub_ts = _parse_iso_ts(d.get("published_at"))
+
+        if not creator_id or views is None or int(views) <= 0:
+            outlier_basis = "未知（缺少有效作者归属或播放量）"
+        elif cur_pub_ts is None:
+            outlier_basis = "未知（当前作品原始发布时间无法验证，不冒充发布前历史基准）"
+        else:
+            hist_rows = conn.execute(
+                """SELECT id, platform_item_id, view_count, published_at, data_source
+                   FROM contents
+                   WHERE creator_id = ? AND lower(platform) = ? AND id != ?
+                     AND view_count IS NOT NULL AND view_count > 0""",
+                (creator_id, platform, content_id),
             ).fetchall()
-            hist_views = [int(r["view_count"]) for r in hist]
-            if len(hist_views) >= 3:
-                avg_views = sum(hist_views) / len(hist_views)
+            seen_item_ids: set[str] = {cur_item_id} if cur_item_id else set()
+            valid_prior_views: list[int] = []
+            manual_only = True
+            for hr in hist_rows:
+                hid = (hr["platform_item_id"] or "").strip()
+                if hid and hid in seen_item_ids:
+                    continue
+                hts = _parse_iso_ts(hr["published_at"])
+                if hts is None or hts >= cur_pub_ts:
+                    continue
+                if hid:
+                    seen_item_ids.add(hid)
+                valid_prior_views.append(int(hr["view_count"]))
+                if (hr["data_source"] or "") not in ("electron_readonly_capture", "manual", ""):
+                    manual_only = False
+
+            if len(valid_prior_views) >= 3:
+                avg_views = sum(valid_prior_views) / len(valid_prior_views)
                 if avg_views > 0:
                     outlier_multiple = round(int(views) / avg_views, 2)
-                    outlier_basis = f"当前播放量 / 该作者同平台 {len(hist_views)} 条历史作品均值（{int(round(avg_views)):,}）"
+                    scope_note = "仅基于本库人工收录样本，代表性有限" if manual_only else "基于本库同作者历史样本"
+                    outlier_basis = f"当前播放量 / 发布前 {len(valid_prior_views)} 条其他历史作品均值（{int(round(avg_views)):,}；{scope_note}）"
             else:
-                outlier_basis = f"该作者同平台仅 {len(hist_views)} 条含播放量作品（需 ≥3 条可靠基准），暂不计算"
+                outlier_basis = f"未知（该作者发布前可验证有效其他作品仅 {len(valid_prior_views)} 条，需 ≥3 条）"
 
         return {
             "ok": True,
             "content_id": int(d["id"]),
             "platform": platform,
-            "platform_item_id": d.get("platform_item_id") or "",
+            "platform_item_id": cur_item_id,
             "title": d.get("title") or "",
             "url": d.get("url") or "",
             "author_name": d.get("author_name") or d.get("creator_name") or "",
@@ -460,7 +548,7 @@ def get_content_metrics_detail(content_id: int) -> dict[str, Any]:
 
 
 def refresh_content_metrics(content_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """GCW-WORKSPACE-03: 仅在用户主动点击刷新时更新非空有效字段，绝不以 0 覆盖已有有效数据。"""
+    """GCW-WORKSPACE-03 / FIX-02: 刷新前强制校验平台与平台作品 ID，绝不允许跨视频错写或以 0 覆盖有效数据。"""
     from backend.services.video_capture_service import parse_human_count
     from datetime import datetime, timezone
 
@@ -470,12 +558,37 @@ def refresh_content_metrics(content_id: int, payload: dict[str, Any]) -> dict[st
         if not row:
             return {"ok": False, "error": f"未找到作品 #{content_id}"}
         cur = dict(row)
+
+        # FIX-02 后端强身份校验：校验平台与真实平台作品 ID
+        db_platform = (cur.get("platform") or "").strip().lower()
+        db_item_id = (cur.get("platform_item_id") or "").strip()
+        exp_platform = (payload.get("expected_platform") or "").strip().lower()
+        exp_item_id = (payload.get("expected_platform_item_id") or "").strip()
+
+        if not exp_platform or not exp_item_id:
+            return {
+                "ok": False,
+                "identity_mismatch": True,
+                "error": "刷新拒绝：缺少播放器当前作品的平台或真实作品 ID，无法核验身份（已保留原有有效数据）",
+            }
+        if db_platform and exp_platform != db_platform:
+            return {
+                "ok": False,
+                "identity_mismatch": True,
+                "error": f"刷新拒绝：播放器当前平台（{exp_platform}）与目标作品平台（{db_platform}）不一致，禁止跨视频写入",
+            }
+        if db_item_id and exp_item_id != db_item_id:
+            return {
+                "ok": False,
+                "identity_mismatch": True,
+                "error": f"刷新拒绝：播放器当前作品 ID（{exp_item_id}）与目标作品 ID（{db_item_id}）不一致，禁止将其他视频数据更新至原作品",
+            }
+
         updates: dict[str, Any] = {}
         for field in ("view_count", "like_count", "comment_count", "favorite_count", "share_count", "author_follower_count"):
             raw = payload.get(field)
             parsed = parse_human_count(raw)
             if parsed is not None:
-                # 绝不以 0 覆盖原有大于 0 的有效数据
                 if parsed == 0 and (cur.get(field) or 0) > 0:
                     continue
                 updates[field] = parsed

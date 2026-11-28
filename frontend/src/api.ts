@@ -469,7 +469,7 @@ export const api = {
     req(`/api/topic-hub/topics/${topicId}/re-search`, { method: 'POST', body: JSON.stringify(body) }),
   topicHubGetDraft: (topicId: number) =>
     req(`/api/topic-hub/topics/${topicId}/draft`),
-  topicHubSaveDraft: (topicId: number, body: { title?: string; content?: string; extra_requirements?: string; skill_id?: string; engine_id?: string; model_id?: string }) =>
+  topicHubSaveDraft: (topicId: number, body: { title?: string; content?: string; extra_requirements?: string; skill_id?: string; engine_id?: string; model_id?: string; client_rev?: number }) =>
     req(`/api/topic-hub/topics/${topicId}/draft`, { method: 'PUT', body: JSON.stringify(body) }),
   topicHubContentMetrics: (contentId: number) =>
     req(`/api/topic-hub/contents/${contentId}/metrics`),

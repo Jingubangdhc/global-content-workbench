@@ -208,16 +208,22 @@ export default function TopicHub({
     loadDetail(activeTopicId);
   }, [activeTopicId]);
 
-  // 加载当前作品的高赞评论
+  // FIX-04: 加载当前作品的高赞评论（带序号防旧响应覆盖新作品）
+  const commentsReqSeqRef = useRef(0);
   useEffect(() => {
-    if (!activeContentId) {
-      setComments([]);
-      return;
-    }
+    const seq = ++commentsReqSeqRef.current;
+    setComments([]);
+    if (!activeContentId) return;
     api
       .listComments(activeContentId, false)
-      .then((r) => setComments(r?.comments || []))
-      .catch(() => setComments([]));
+      .then((r) => {
+        if (seq !== commentsReqSeqRef.current) return;
+        setComments(r?.comments || []);
+      })
+      .catch(() => {
+        if (seq !== commentsReqSeqRef.current) return;
+        setComments([]);
+      });
   }, [activeContentId]);
 
   const topicContents: any[] = useMemo(() => detail?.contents || detail?.evidence?.contents || [], [detail]);

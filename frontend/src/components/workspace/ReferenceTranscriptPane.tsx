@@ -62,10 +62,15 @@ export default function ReferenceTranscriptPane({
   const listRef = useRef<HTMLDivElement | null>(null);
   const activeRowRef = useRef<HTMLDivElement | null>(null);
   const reqSeqRef = useRef(0);
+  const activeContentIdRef = useRef<number | null>(contentId);
+  activeContentIdRef.current = contentId;
 
-  // 切换作品时清理旧状态
+  // FIX-04: 切换作品时立即清理所有旧异步任务与编辑态，防止旧状态残留
   useEffect(() => {
     reqSeqRef.current += 1;
+    setExtracting(false);
+    setTranslating(false);
+    setSavingEdit(false);
     setEditingIdx(null);
     setEditingText('');
     setErrMsg('');
@@ -133,15 +138,19 @@ export default function ReferenceTranscriptPane({
 
   const handleSaveManualEdit = async (segIdx: number) => {
     if (!contentId || savingEdit) return;
+    const targetCid = contentId;
+    const seq = ++reqSeqRef.current;
     setSavingEdit(true);
     setErrMsg('');
     try {
-      const res = await api.translationUpdateSegment(contentId, segIdx, {
+      const res = await api.translationUpdateSegment(targetCid, segIdx, {
         target_lang: 'zh-CN',
         translated_text: editingText,
       });
+      if (seq !== reqSeqRef.current || activeContentIdRef.current !== targetCid) return;
       if (res?.ok) {
-        const fresh = await api.translationGetSubtitles(contentId, 'zh-CN');
+        const fresh = await api.translationGetSubtitles(targetCid, 'zh-CN');
+        if (seq !== reqSeqRef.current || activeContentIdRef.current !== targetCid) return;
         onSubDataChange(fresh);
         setEditingIdx(null);
         setStatusMsg(`已保存第 #${segIdx + 1} 段人工修订译文`);
@@ -149,9 +158,10 @@ export default function ReferenceTranscriptPane({
         setErrMsg(res?.error || '保存人工修订失败');
       }
     } catch (e: any) {
+      if (seq !== reqSeqRef.current || activeContentIdRef.current !== targetCid) return;
       setErrMsg(`保存人工修订失败：${e?.message || e}`);
     } finally {
-      setSavingEdit(false);
+      if (seq === reqSeqRef.current && activeContentIdRef.current === targetCid) setSavingEdit(false);
     }
   };
 

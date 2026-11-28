@@ -1,5 +1,13 @@
 # Global Content Workbench · 变更日志 (CHANGELOG.md)
 
+## [v0.2.1-rc] - 2026-11-28（GCW-WORKSPACE-V2-FIX-01）
+- **FIX-01（P0）**：`OriginalCopyStudioPane.tsx` 与 `topic_hub_service.py` 引入单调递增 `client_rev` 修订号防旧请求覆盖；切选题/切标签页/最大化/卸载/关闭前强制 flush 未保存草稿；加载期锁定编辑区；加载失败明确报错并保护已有数据；保存失败提供重试按钮；生成期间继续编辑不覆盖最新草稿。
+- **FIX-02（P0）**：`VideoMetricsBar.tsx` 与 `topic_hub_service.py` 刷新视频数据前执行前后端双重身份校验（`content_id`、`platform`、`platform_item_id`），拦截跨视频错写并修复 `cr.follower_count` 列名。
+- **FIX-03（P1）**：`get_content_metrics_detail` 异常爆款倍数严格排除当前 `content_id`、去重、校验发布前历史时间、最低 3 条其他作品、标注人工收录样本代表性限制、无可靠基准显示「未知」。
+- **FIX-04（P1）**：`ReferenceTranscriptPane.tsx`、`EmbeddedVideoWorkspace.tsx`、`VideoMetricsBar.tsx`、`TopicHub.tsx` 补齐切视频立即清旧字幕/旧数据与全部异步请求目标标识+版本号校验。
+- **FIX-05（P1）**：`EmbeddedVideoWorkspace.tsx` 引入 `boundsOpSeqRef` + `overlayHiddenRef` 根治异步 `setBounds` 在弹窗打开后重新显示播放器的竞态。
+- **FIX-06**：保留旧 `GCW_WORKSPACE_V2_TEST_RESULTS.json` 原始失败记录不篡改，新增 `GCW_WORKSPACE_V2_FIX_01_TEST_RESULTS.json` 如实记录修复前后差异与未授权付费模型 `NOT TESTED`。
+
 ## [v0.2.0-rc] - 2026-11-28（GCW-WORKSPACE-V2）
 - **新增**：`frontend/src/components/workspace/` 下 4 个高内聚公共工作区组件（`EmbeddedVideoWorkspace.tsx`、`VideoMetricsBar.tsx`、`ReferenceTranscriptPane.tsx`、`OriginalCopyStudioPane.tsx`）。
 - **新增**：Electron `gcw-browser:seek-video` 受控 IPC；后端 `GET/PUT /api/topic-hub/topics/{topic_id}/draft`、`GET /api/topic-hub/contents/{content_id}/metrics`、`POST /api/topic-hub/contents/{content_id}/refresh-metrics`。

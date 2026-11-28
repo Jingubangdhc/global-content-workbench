@@ -39,64 +39,95 @@ export default function VideoMetricsBar({ contentId, playerBrowser, fallbackItem
   const [refreshing, setRefreshing] = useState(false);
   const [refreshErr, setRefreshErr] = useState('');
   const reqSeqRef = useRef(0);
+  const refreshSeqRef = useRef(0);
+  const activeContentIdRef = useRef<number | null>(contentId);
+  activeContentIdRef.current = contentId;
 
   useEffect(() => {
     const seq = ++reqSeqRef.current;
+    refreshSeqRef.current += 1;
+    // FIX-02 & FIX-04: 切换作品时立即隔离旧数据和旧请求状态
+    setData(null);
     setRefreshErr('');
+    setRefreshing(false);
     if (!contentId) {
-      setData(null);
+      setLoading(false);
       return;
     }
+    const targetCid = contentId;
     setLoading(true);
     api
-      .topicHubContentMetrics(contentId)
+      .topicHubContentMetrics(targetCid)
       .then((res) => {
-        if (seq !== reqSeqRef.current) return;
+        if (seq !== reqSeqRef.current || activeContentIdRef.current !== targetCid) return;
         if (res?.ok) setData(res);
       })
       .catch(() => {
-        if (seq !== reqSeqRef.current) return;
+        if (seq !== reqSeqRef.current || activeContentIdRef.current !== targetCid) return;
         setData(null);
       })
       .finally(() => {
-        if (seq === reqSeqRef.current) setLoading(false);
+        if (seq === reqSeqRef.current && activeContentIdRef.current === targetCid) setLoading(false);
       });
   }, [contentId]);
 
   const handleRefresh = async () => {
     if (!contentId || refreshing) return;
+    const targetCid = contentId;
+    const rSeq = ++refreshSeqRef.current;
     setRefreshing(true);
     setRefreshErr('');
     try {
-      let payload: any = {};
-      if (playerBrowser?.extractVideoMeta) {
-        const snap = await playerBrowser.extractVideoMeta();
-        if (!snap || snap.ok === false || snap.extract_status === 'script_error') {
-          throw new Error(snap?.error_message || '当前播放器页面未能提取到有效数据');
-        }
-        const rm = snap.raw_metrics || {};
-        payload = {
-          view_count: rm.views || null,
-          like_count: rm.likes || null,
-          comment_count: rm.comments || null,
-          favorite_count: rm.favorites || null,
-          share_count: rm.shares || null,
-          author_follower_count: rm.followers || null,
-          duration_sec: snap.duration_sec ?? null,
-          author_name: snap.author || undefined,
-          published_at: snap.published_at || undefined,
-        };
+      if (!playerBrowser?.extractVideoMeta) {
+        throw new Error('当前非桌面端内嵌播放器，无法核验播放器当前作品身份');
       }
-      const res = await api.topicHubRefreshContentMetrics(contentId, payload);
+      const snap = await playerBrowser.extractVideoMeta();
+      if (rSeq !== refreshSeqRef.current || activeContentIdRef.current !== targetCid) return;
+      if (!snap || snap.ok === false || snap.extract_status === 'script_error') {
+        throw new Error(snap?.error_message || '当前播放器页面未能提取到有效数据');
+      }
+      // FIX-02 前端强身份校验：核对播放器当前平台与真实平台作品 ID
+      const expectedPlatform = String(data?.platform || fallbackItem?.platform || '').trim().toLowerCase();
+      const expectedItemId = String(data?.platform_item_id || fallbackItem?.platform_item_id || '').trim();
+      const livePlatform = String(snap.platform || '').trim().toLowerCase();
+      const liveItemId = String(snap.platform_item_id || '').trim();
+
+      if (!livePlatform || !liveItemId) {
+        throw new Error('播放器当前页面无法确认真实平台作品 ID，拒绝刷新（已保留原有有效数据）');
+      }
+      if (expectedPlatform && livePlatform !== expectedPlatform) {
+        throw new Error(`播放器当前平台（${livePlatform}）与目标作品（${expectedPlatform}）不一致，禁止跨视频更新`);
+      }
+      if (expectedItemId && liveItemId !== expectedItemId) {
+        throw new Error(`播放器当前已切换至其他视频（${liveItemId} ≠ ${expectedItemId}），已拦截刷新以保护原作品数据`);
+      }
+
+      const rm = snap.raw_metrics || {};
+      const payload = {
+        expected_platform: livePlatform,
+        expected_platform_item_id: liveItemId,
+        view_count: rm.views || null,
+        like_count: rm.likes || null,
+        comment_count: rm.comments || null,
+        favorite_count: rm.favorites || null,
+        share_count: rm.shares || null,
+        author_follower_count: rm.followers || null,
+        duration_sec: snap.duration_sec ?? null,
+        author_name: snap.author || undefined,
+        published_at: snap.published_at || undefined,
+      };
+      const res = await api.topicHubRefreshContentMetrics(targetCid, payload);
+      if (rSeq !== refreshSeqRef.current || activeContentIdRef.current !== targetCid) return;
       if (res?.ok) {
         setData(res);
       } else {
         setRefreshErr(res?.error || '刷新失败，已保留上一次成功获取的数据');
       }
     } catch (e: any) {
+      if (rSeq !== refreshSeqRef.current || activeContentIdRef.current !== targetCid) return;
       setRefreshErr(`刷新失败（已保留原有有效数据）：${e?.message || e}`);
     } finally {
-      setRefreshing(false);
+      if (rSeq === refreshSeqRef.current && activeContentIdRef.current === targetCid) setRefreshing(false);
     }
   };
 
@@ -127,8 +158,8 @@ export default function VideoMetricsBar({ contentId, playerBrowser, fallbackItem
     },
     {
       label: '异常爆款倍数',
-      value: m.outlier_multiple != null ? `${m.outlier_multiple}x` : '—',
-      tip: m.outlier_basis || '无可靠作者历史作品基准',
+      value: m.outlier_multiple != null ? `${m.outlier_multiple}x` : '未知',
+      tip: m.outlier_basis || '未知（无可靠作者发布前历史作品基准）',
       accent: m.outlier_multiple != null ? 'text-amber-300' : 'text-slate-400',
     },
   ];

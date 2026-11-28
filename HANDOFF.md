@@ -29,6 +29,7 @@
 - 付费云端 API（需用户主动授权）生成原创文案的风格满意度需用户亲测。
 
 ## 4. 版本与测试证据
-- 本地候选版本：`v0.2.0-rc`（上一恢复点：`v0.1.15-rc`）
-- 详细验收材料目录：`docs/gcw_workspace_v2/`（含 `GCW_WORKSPACE_V2_ACCEPTANCE_REPORT.md`、`GCW_WORKSPACE_V2_CODE_CHANGE_REPORT.md`、`GCW_WORKSPACE_V2_TEST_RESULTS.json`、`GCW_WORKSPACE_V2_VERSION_MAPPING.md`、本机对比截图与录屏）
+- 本地候选版本：`v0.2.1-rc`（上一恢复点：`v0.2.0-rc`）
+- 本轮 FIX-01 ~ FIX-06 专项修复均已通过后端 + Electron 真机实测（直接核对 SQLite 完整草稿文本），新增测试日志：`docs/gcw_workspace_v2/GCW_WORKSPACE_V2_FIX_01_TEST_RESULTS.json`；旧日志 `GCW_WORKSPACE_V2_TEST_RESULTS.json` 原始失败项完整保留未篡改。
+- 未获用户授权的付费云端模型测试如实标记 `NOT TESTED`。
 - 远程审查分支最终 Commit SHA 见本轮交付卡与 `git rev-parse origin/review/gcw-uat-r4`。

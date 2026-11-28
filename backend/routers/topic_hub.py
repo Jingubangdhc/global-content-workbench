@@ -543,6 +543,7 @@ class TopicDraftBody(BaseModel):
     skill_id: str = ""
     engine_id: str = ""
     model_id: str = ""
+    client_rev: Optional[int] = None
 
 
 @router.get("/topics/{topic_id}/draft")
@@ -554,7 +555,8 @@ def api_get_topic_draft(topic_id: int):
 def api_save_topic_draft(topic_id: int, body: TopicDraftBody):
     res = svc.save_topic_original_draft(topic_id, body.model_dump())
     if not res.get("ok"):
-        raise HTTPException(500, res.get("error") or "保存草稿失败")
+        code = 409 if res.get("stale_rejected") else 500
+        raise HTTPException(code, res.get("error") or "保存草稿失败")
     return res
 
 
@@ -567,6 +569,8 @@ def api_get_content_metrics(content_id: int):
 
 
 class RefreshContentMetricsBody(BaseModel):
+    expected_platform: str = ""
+    expected_platform_item_id: str = ""
     view_count: Optional[Any] = None
     like_count: Optional[Any] = None
     comment_count: Optional[Any] = None
@@ -582,5 +586,6 @@ class RefreshContentMetricsBody(BaseModel):
 def api_refresh_content_metrics(content_id: int, body: RefreshContentMetricsBody):
     res = svc.refresh_content_metrics(content_id, body.model_dump(exclude_unset=True))
     if not res.get("ok"):
-        raise HTTPException(400, res.get("error") or "刷新作品数据失败")
+        code = 409 if res.get("identity_mismatch") else 400
+        raise HTTPException(code, res.get("error") or "刷新作品数据失败")
     return res

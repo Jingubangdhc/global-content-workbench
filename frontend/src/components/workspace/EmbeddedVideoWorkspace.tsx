@@ -52,6 +52,11 @@ export default function EmbeddedVideoWorkspace({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const autoTransRunIdRef = useRef(0);
   const playbackReqSeqRef = useRef(0);
+  const boundsOpSeqRef = useRef(0);
+  const overlayHiddenRef = useRef(overlayHidden);
+  const activeVideoRef = useRef(activeVideo);
+  overlayHiddenRef.current = overlayHidden;
+  activeVideoRef.current = activeVideo;
 
   const [subMode, setSubMode] = useState<SubtitleMode>('bilingual');
   const [subLoading, setSubLoading] = useState(false);
@@ -80,12 +85,13 @@ export default function EmbeddedVideoWorkspace({
     playerBrowser.navigate(activeVideo.url).catch(() => {});
   }, [activeVideo?.content_id, activeVideo?.url, playerBrowser]);
 
-  // 2. 精准同步 WebContentsView 坐标与显隐（兼容窗口缩放、DPI、滚动与分隔线拖动）
+  // 2. FIX-05: 精准同步 WebContentsView 坐标与显隐（带 boundsOpSeqRef + overlayHiddenRef 防旧异步 setBounds 在弹窗打开后重新显示播放器）
   useEffect(() => {
     if (!playerBrowser) return;
     const syncBounds = () => {
+      const opSeq = ++boundsOpSeqRef.current;
       const el = hostRef.current;
-      if (!el || !activeVideo?.url || overlayHidden) {
+      if (!el || !activeVideoRef.current?.url || overlayHiddenRef.current) {
         playerBrowser.setVisible(false).catch(() => {});
         return;
       }
@@ -101,7 +107,12 @@ export default function EmbeddedVideoWorkspace({
           width: Math.round(r.width),
           height: Math.round(r.height),
         })
-        .then(() => playerBrowser.setVisible(true))
+        .then(() => {
+          if (opSeq !== boundsOpSeqRef.current || overlayHiddenRef.current || !activeVideoRef.current?.url) {
+            return;
+          }
+          return playerBrowser.setVisible(true);
+        })
         .catch(() => {});
     };
 
@@ -112,6 +123,7 @@ export default function EmbeddedVideoWorkspace({
     window.addEventListener('scroll', syncBounds, true);
     const t1 = setTimeout(syncBounds, 80);
     return () => {
+      boundsOpSeqRef.current += 1;
       clearTimeout(t1);
       ro.disconnect();
       window.removeEventListener('resize', syncBounds);
@@ -126,14 +138,28 @@ export default function EmbeddedVideoWorkspace({
     };
   }, [playerBrowser]);
 
-  // 3. 自动加载字幕与外语视频本地混元自动翻译闭环（0-Token 缓存优先，切视频自动取消旧任务）
+  // 3. FIX-04: 切换视频时立即清空旧字幕与播放时间，避免旧字幕残留；自动加载字幕与外语视频本地混元自动翻译闭环
   useEffect(() => {
     const runId = ++autoTransRunIdRef.current;
     playbackReqSeqRef.current += 1;
+    onSubDataChange(null);
+    onActiveSegmentIdxChange?.(null);
+    setPlayback({
+      hasVideo: false,
+      isAd: false,
+      buffering: false,
+      currentTime: 0,
+      duration: 0,
+      paused: true,
+      ended: false,
+      playbackRate: 1,
+      url: '',
+    });
     setSubError('');
     setSubProgressMsg('');
+    setSubLoading(false);
+    setSubTranslating(false);
     if (!activeVideo?.content_id) {
-      onSubDataChange(null);
       return;
     }
     const contentId = activeVideo.content_id;
