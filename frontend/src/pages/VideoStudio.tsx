@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import type { ContentItem } from '../api';
+import AiSmartEditPanel from '../components/AiSmartEditPanel';
 
 interface Props {
   projectId: number;
@@ -46,7 +47,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
   const [lintRes, setLintRes] = useState<any>(null);
 
   const [iframeNonce, setIframeNonce] = useState(0);
-  const [studioMode, setStudioMode] = useState<'overlay' | 'motion_lab'>('overlay');
+  const [studioMode, setStudioMode] = useState<'ai_smart_edit' | 'overlay' | 'motion_lab'>('ai_smart_edit');
   const [drawerTab, setDrawerTab] = useState<null | 'versions' | 'feedback' | 'lint' | 'exports'>(null);
 
   const [newProjModal, setNewProjModal] = useState(false);
@@ -174,7 +175,13 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
       setLintRes(r.lint);
       await openProject(activeProj.id);
       pushDocToNativeEngine(r.doc, activeProj.title);
-      showToast(`✅ AI 已编排 v${r.version_no}（${r.doc.cards?.length || 0} 张卡）并自动载入下方原版编辑台`);
+      const labCnt = r.doc?.lab_cards?.length || 0;
+      const mode = r.meta?.execution_mode || 'degraded_rule_fallback';
+      if (r.meta?.degraded || mode !== 'real_llm') {
+        showToast(`⚠ 模型调用已降级（${r.meta?.fallback_reason || mode}），规则生成 v${r.version_no}（原版 ${r.doc.cards?.length || 0} 卡）`);
+      } else {
+        showToast(`✅ 真实模型 (${r.meta?.model}) 编排 v${r.version_no}：原版 ${r.doc.cards?.length || 0} 卡 + 工坊 ${labCnt} 卡（DNA v${r.meta?.dna_version}）`);
+      }
     } catch (e: any) {
       showToast('AI 编排失败：' + e.message);
     } finally {
@@ -255,8 +262,17 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
       {/* 顶部 44px 轻量工作台工程交接栏（绝不挤压下方原版完整编辑器） */}
       <div className="h-11 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl px-3 flex items-center justify-between gap-2 overflow-x-auto">
         <div className="flex items-center gap-2 shrink-0">
-          {/* 双工作台同源切换胶囊：原版 Overlay Studio v1.4.0 vs AI Motion & Style Lab */}
+          {/* 三模式切换胶囊：AI 智能剪辑（默认） | 原版编排台 | AI 动效工坊 */}
           <div className="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-0.5 text-[11px]">
+            <button
+              onClick={() => setStudioMode('ai_smart_edit')}
+              className={`px-2 py-0.5 rounded-md font-medium transition ${
+                studioMode === 'ai_smart_edit' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="AI 智能剪辑：ChatCut Desktop + Google Antigravity 原生导演（默认入口）"
+            >
+              ✨ AI智能剪辑
+            </button>
             <button
               onClick={() => setStudioMode('overlay')}
               className={`px-2 py-0.5 rounded-md font-medium transition ${
@@ -381,9 +397,16 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
         </div>
       )}
 
-      {/* 主体全屏区：双引擎按需独占渲染（零主线程抢占、100% 保留原版 Overlay Studio v1.4.0 + 同源 AI Motion & Style Lab） */}
+      {/* 主体全屏区：三模式按需独占渲染（AI智能剪辑默认入口 + 100% 保留原版 Overlay Studio v1.4.0 + AI Motion & Style Lab） */}
       <div className="flex-1 bg-[#0b1120] border border-slate-800 rounded-xl overflow-hidden flex flex-col relative min-h-0">
-        {studioMode === 'overlay' ? (
+        {studioMode === 'ai_smart_edit' ? (
+          <AiSmartEditPanel
+            projectId={projectId}
+            videoProjectId={activeProj?.id}
+            contents={contents}
+            onJumpPublish={onJumpPublish}
+          />
+        ) : studioMode === 'overlay' ? (
           engine?.reachable ? (
             <iframe
               key={iframeNonce}

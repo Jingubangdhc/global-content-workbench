@@ -8,6 +8,7 @@ import {
   Flame,
   FolderKanban,
   Inbox,
+  Layers,
   Plus,
   Radio,
   Search,
@@ -17,7 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { api } from './api';
-import type { Project, ScriptTemplate } from './api';
+import type { Project } from './api';
 import RevenueCalculatorDrawer from './components/RevenueCalculatorDrawer';
 import SettingsModal from './components/SettingsModal';
 import ContentAuthors from './pages/ContentAuthors';
@@ -27,21 +28,34 @@ import PublishHub from './pages/PublishHub';
 import ResourceDirectory from './pages/ResourceDirectory';
 import RevenueRadar from './pages/RevenueRadar';
 import SearchHub from './pages/SearchHub';
+import TopicHub from './pages/TopicHub';
 import TranscriptStudio from './pages/TranscriptStudio';
 import VideoStudio from './pages/VideoStudio';
 
-type PageKey = 'search' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'video' | 'publish' | 'revenue' | 'directory';
+type PageKey = 'search' | 'topics' | 'trends' | 'tracker' | 'contents' | 'transcript' | 'video' | 'publish' | 'revenue' | 'directory';
+type FontScaleKey = 'compact' | 'standard' | 'comfortable' | 'large';
+
+const FONT_SCALE_OPTIONS: { key: FontScaleKey; label: string; px: string }[] = [
+  { key: 'compact', label: '紧凑', px: '14' },
+  { key: 'standard', label: '标准', px: '15' },
+  { key: 'comfortable', label: '舒适', px: '16' },
+  { key: 'large', label: '大字', px: '18' },
+];
 
 export default function App() {
   const [boot, setBoot] = useState<any>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number>(1);
-  const [templates, setTemplates] = useState<ScriptTemplate[]>([]);
 
   const [page, setPage] = useState<PageKey>('search');
   const [searchSeedKw, setSearchSeedKw] = useState<string | null>(null);
   const [activeContentId, setActiveContentId] = useState<number | null>(null);
+  const [autoExtractToken, setAutoExtractToken] = useState<number>(0);
   const [xrayTarget, setXrayTarget] = useState<{ query: string; platform: string } | null>(null);
+  const [fontScale, setFontScale] = useState<FontScaleKey>(() => {
+    const saved = (localStorage.getItem('gcw_font_scale') || 'standard') as FontScaleKey;
+    return ['compact', 'standard', 'comfortable', 'large'].includes(saved) ? saved : 'standard';
+  });
 
   const [calcOpen, setCalcOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -52,7 +66,11 @@ export default function App() {
   const loadBoot = async (preferProjectId?: number) => {
     const data = await api.bootstrap();
     setBoot(data);
-    setTemplates(data.script_templates || []);
+    const serverScale = data?.settings?.ui_font_scale as FontScaleKey | undefined;
+    if (serverScale && ['compact', 'standard', 'comfortable', 'large'].includes(serverScale)) {
+      setFontScale(serverScale);
+      localStorage.setItem('gcw_font_scale', serverScale);
+    }
     const list: Project[] = data.projects || [];
     setProjects(list);
     if (preferProjectId && list.some((p) => p.id === preferProjectId)) {
@@ -94,12 +112,36 @@ export default function App() {
     loadBoot();
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.fontScale = fontScale;
+  }, [fontScale]);
+
+  useEffect(() => {
+    const handler = () => setSettingsOpen(true);
+    window.addEventListener('gcw:open-translation-settings', handler);
+    return () => window.removeEventListener('gcw:open-translation-settings', handler);
+  }, []);
+
+  // FIX-A02: 切换到不需要内置浏览器的页面时，自动暂停并隐藏所有 WebContentsView（不销毁实例）
+  useEffect(() => {
+    if (page !== 'search' && page !== 'topics') {
+      (window.gcwDesktopBrowser as any)?.hideAll?.().catch?.(() => {});
+    }
+  }, [page]);
+
+  const handleChangeFontScale = (next: FontScaleKey) => {
+    setFontScale(next);
+    localStorage.setItem('gcw_font_scale', next);
+    api.saveSettings({ ui_font_scale: next }).catch(() => {});
+  };
+
   const navItems: { key: PageKey; label: string; sub: string; icon: any }[] = [
     { key: 'search', label: '关键词搜爆款', sub: '10大平台 + YT排序直拉', icon: Search },
+    { key: 'topics', label: '选题资产中心', sub: '验证档案 · 证据 · 制作看板', icon: Layers },
     { key: 'trends', label: '全网实时热榜', sub: '8大平台热搜实时看', icon: Radio },
     { key: 'tracker', label: '爆款博主追踪', sub: '贴主页直看视频与倍数', icon: Flame },
     { key: 'contents', label: '素材与作者库', sub: '收录 + 变现指纹', icon: Inbox },
-    { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 二创', icon: FileText },
+    { key: 'transcript', label: '文案提取工坊', sub: '五级提取 + 原创文案', icon: FileText },
     ...(boot?.settings?.feature_video_studio !== '0'
       ? [{ key: 'video' as PageKey, label: '智能视频制作', sub: '25卡动效 + 透明层导出', icon: Clapperboard }]
       : []),
@@ -212,8 +254,30 @@ export default function App() {
           })}
         </nav>
 
-        {/* 底部常驻工具按钮 */}
+        {/* 底部常驻工具按钮 + 4 档字号切换（重启持久保持，禁止整窗缩放） */}
         <div className="p-2.5 border-t border-slate-800/90 space-y-1.5">
+          <div className="px-1.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 space-y-1">
+            <div className="text-[10px] text-slate-400 flex justify-between items-center">
+              <span>界面字号</span>
+              <span className="font-mono-num text-cyan-400">{FONT_SCALE_OPTIONS.find((x) => x.key === fontScale)?.px}px</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {FONT_SCALE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => handleChangeFontScale(opt.key)}
+                  className={`py-0.5 rounded text-[11px] font-medium transition ${
+                    fontScale === opt.key
+                      ? 'bg-cyan-500/20 border border-cyan-400/60 text-cyan-300'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={`${opt.label} (${opt.px}px)`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             onClick={() => setCalcOpen(true)}
             className="w-full py-2 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-medium flex items-center gap-2"
@@ -239,11 +303,31 @@ export default function App() {
         {page === 'search' && (
           <SearchHub
             projectId={projectId}
+            projectName={projects.find((p) => p.id === projectId)?.name || ''}
+            projects={projects}
             lowFollowerThreshold={lowThreshold}
             externalQuery={searchSeedKw}
             onOpenTranscript={(cid) => {
               setActiveContentId(cid);
               setPage('transcript');
+            }}
+            onGoTopicHub={(targetPid) => {
+              if (targetPid && targetPid !== projectId) setProjectId(targetPid);
+              setPage('topics');
+            }}
+          />
+        )}
+        {page === 'topics' && (
+          <TopicHub
+            projectId={projectId}
+            onOpenTranscript={(cid) => {
+              setActiveContentId(cid);
+              setAutoExtractToken((t) => t + 1);
+              setPage('transcript');
+            }}
+            onJumpSearch={(kw) => {
+              setSearchSeedKw(kw);
+              setPage('search');
             }}
           />
         )}
@@ -284,9 +368,10 @@ export default function App() {
         )}
         {page === 'transcript' && (
           <TranscriptStudio
+            projectId={projectId}
             activeContentId={activeContentId}
+            autoExtractToken={autoExtractToken}
             onSelectContent={setActiveContentId}
-            templates={templates}
           />
         )}
         {page === 'video' && <VideoStudio projectId={projectId} onJumpPublish={() => setPage('publish')} />}

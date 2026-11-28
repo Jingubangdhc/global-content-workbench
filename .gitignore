@@ -1,22 +1,49 @@
-# 密钥与本地环境
+# 密钥、凭据与本地环境（严禁提交至 Git）
 .env
+.env.*
+*.env
+*cookies*
+*cookie*.json
+*secret*.json
+*credentials*.json
+*oauth*.json
 .venv/
 __pycache__/
 *.py[cod]
 
-# 本地数据库与临时音视频
+# 本地数据库、加密保险箱、日志与临时音视频
 data/
+logs/
+*.db
+*.sqlite
+*.sqlite3
 phase0/tmp_audio/
 phase0/results*.json
 
-# 前端依赖与构建产物
+# 前端与桌面外壳依赖及构建产物
 frontend/node_modules/
 frontend/dist/
+desktop/node_modules/
+node_modules/
 # 外部独立引擎（受独立许可证约束，不纳入主仓库）
 engines/
 # 实验台临时导出的大体积透明视频与超大离线单页备份
 motion-lab-m2-experiment/exports/
 atlas-p1b-experiment/*.html
 atlas-p1a-experiment/
+docs/uat_fix_03_r3/_frames/
 .DS_Store
 Thumbs.db
+
+data/credential_vault.json
+data/translation_configs.json
+
+# GCW-R4-C-FINAL: 本地翻译模型权重、推理运行环境与缓存（Git 仅保存清单、许可证与配置，严禁提交权重）
+*.gguf
+*.bin
+models/*.gguf
+models/**/*.gguf
+models/**/cache/
+runtime/
+
+

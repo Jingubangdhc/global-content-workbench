@@ -354,6 +354,526 @@ CREATE TABLE IF NOT EXISTS publish_tasks (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ==================== R1: 统一动效注册中心增量表（可执行资产与参考资料严格分离） ====================
+CREATE TABLE IF NOT EXISTS motion_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id TEXT NOT NULL UNIQUE,
+    version TEXT NOT NULL DEFAULT '1.0.0',
+    name TEXT NOT NULL,
+    engine_type TEXT NOT NULL,            -- overlay_native | motion_lab_builtin | motion_lab_dsl | motion_lab_sandbox_js
+    group_id TEXT NOT NULL DEFAULT 'G01', -- 对应 28 组分类 G01..G28
+    skeleton_spec_json TEXT NOT NULL DEFAULT '{}',
+    params_schema_json TEXT NOT NULL DEFAULT '{}',
+    narrative_purposes_json TEXT NOT NULL DEFAULT '[]',
+    default_content_json TEXT NOT NULL DEFAULT '{}',
+    default_skin_json TEXT NOT NULL DEFAULT '{}',
+    sound_cues_json TEXT NOT NULL DEFAULT '[]',
+    timeline_behavior_json TEXT NOT NULL DEFAULT '{}',
+    capabilities_json TEXT NOT NULL DEFAULT '{}',
+    source_type TEXT NOT NULL DEFAULT 'manual', -- overlay_v1.4 | lab_builtin | ai_config_combo | ai_dsl_original | reference_reverse
+    license_note TEXT NOT NULL DEFAULT 'Internal',
+    status TEXT NOT NULL DEFAULT 'draft', -- draft | sandbox_passed | approved | deprecated
+    is_executable INTEGER NOT NULL DEFAULT 1,
+    usage_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS motion_asset_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id TEXT NOT NULL REFERENCES motion_assets(asset_id) ON DELETE CASCADE,
+    version TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    change_note TEXT,
+    gate_report_json TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(asset_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS motion_dev_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_uid TEXT NOT NULL UNIQUE,
+    video_project_id INTEGER REFERENCES video_projects(id) ON DELETE SET NULL,
+    group_id TEXT DEFAULT 'G05',
+    title TEXT NOT NULL,
+    requirement_prompt TEXT NOT NULL,
+    suggested_structure_json TEXT DEFAULT '{}',
+    time_range_json TEXT DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'open',  -- open | in_progress | verified | closed
+    linked_asset_id TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== R5: 统一个人风格 DNA 增量表（审批/版本/项目覆盖/锁定/回滚） ====================
+CREATE TABLE IF NOT EXISTS style_dna_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL DEFAULT 'global', -- global | project
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'draft', -- draft | approved | locked | archived
+    theme TEXT NOT NULL DEFAULT 'dark',
+    motion_intensity REAL NOT NULL DEFAULT 1.0,
+    radius_scale REAL NOT NULL DEFAULT 1.0,
+    accent_primary TEXT NOT NULL DEFAULT '#3b82f6',
+    pacing_density TEXT NOT NULL DEFAULT 'balanced', -- dense | balanced | minimal
+    approved_rules_json TEXT NOT NULL DEFAULT '[]',
+    palette_json TEXT NOT NULL DEFAULT '[]',
+    note TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS style_dna_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL DEFAULT 'global',
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    event_source TEXT NOT NULL,           -- lab_feedback | editor_diff | reference_pick | asset_usage
+    action TEXT NOT NULL,                 -- like | dislike | diff_rule | select | use
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    approval_status TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== KOUBO-SKILL-P2: AI 智能剪辑任务、不可变成片版本与 ChatCut 工程锁 ====================
+CREATE TABLE IF NOT EXISTS ai_video_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL UNIQUE,
+    idempotency_key TEXT,
+    video_project_id INTEGER REFERENCES video_projects(id) ON DELETE SET NULL,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    agent_id TEXT NOT NULL DEFAULT 'antigravity-native',
+    engine_id TEXT NOT NULL DEFAULT 'chatcut_desktop',
+    skill_id TEXT NOT NULL DEFAULT 'premium-talk-edit',
+    skill_version TEXT NOT NULL DEFAULT '0.2.0',
+    execution_mode TEXT NOT NULL DEFAULT 'mode_a_external_agent',
+    input_manifest_json TEXT NOT NULL DEFAULT '{}',
+    visual_plan_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'WaitingForAgent',
+    output_manifest_json TEXT NOT NULL DEFAULT '{}',
+    external_project_id TEXT,
+    external_project_path TEXT,
+    output_video_path TEXT,
+    quality_report_json TEXT,
+    cost_report_json TEXT NOT NULL DEFAULT '{}',
+    error_message TEXT DEFAULT '',
+    claim_lock_json TEXT,
+    execution_log_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ai_video_job_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL REFERENCES ai_video_jobs(job_id) ON DELETE CASCADE,
+    version_no INTEGER NOT NULL,
+    parent_version_no INTEGER,
+    edit_scope TEXT NOT NULL DEFAULT 'full', -- full | segment
+    segment_range_json TEXT NOT NULL DEFAULT '{}',
+    visual_plan_json TEXT NOT NULL DEFAULT '{}',
+    external_project_id TEXT,
+    output_video_path TEXT NOT NULL,
+    ffprobe_json TEXT NOT NULL DEFAULT '{}',
+    quality_report_json TEXT,
+    checksum TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(job_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS chatcut_project_locks (
+    external_project_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    locked_at TEXT NOT NULL,
+    expires_at REAL NOT NULL
+);
+
+-- ==================== SEARCH-PHASE-1: 通用关键词研究任务与候选词矩阵增量表 ====================
+CREATE TABLE IF NOT EXISTS research_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_uid TEXT NOT NULL UNIQUE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    seed_keyword TEXT NOT NULL,
+    entity_type TEXT DEFAULT '',
+    research_goal TEXT DEFAULT '',
+    depth_mode TEXT NOT NULL DEFAULT 'quick', -- quick(10-20) | standard(30-60) | deep(100-200)
+    target_region TEXT DEFAULT '',
+    target_language TEXT DEFAULT '',
+    filters_json TEXT NOT NULL DEFAULT '{}',
+    selected_platforms_json TEXT NOT NULL DEFAULT '[]',
+    budget_json TEXT NOT NULL DEFAULT '{}',
+    selected_dimensions_json TEXT NOT NULL DEFAULT '[]',
+    llm_meta_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'created', -- created | expanding | ready | failed | cancelled
+    error_message TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS keyword_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES research_tasks(id) ON DELETE CASCADE,
+    legacy_keyword_id INTEGER REFERENCES keywords(id) ON DELETE SET NULL,
+    query_text TEXT NOT NULL,
+    language TEXT DEFAULT 'zh',
+    dimension TEXT NOT NULL DEFAULT '通用',
+    expansion_type TEXT DEFAULT 'ai', -- synonym | hypernym | hyponym | related | question | contrast | temporal | cross_lang | user | seed
+    intent TEXT DEFAULT '',
+    platform_hint TEXT DEFAULT '',
+    origin TEXT NOT NULL DEFAULT 'ai', -- seed | ai | market | user
+    source_refs_json TEXT NOT NULL DEFAULT '[]',
+    discovery_reason TEXT DEFAULT '',
+    priority INTEGER NOT NULL DEFAULT 50,
+    is_selected INTEGER NOT NULL DEFAULT 1,
+    exec_status TEXT NOT NULL DEFAULT 'pending', -- pending | searching | done | failed | skipped
+    result_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(task_id, query_text)
+);
+
+-- ==================== SEARCH-PHASE-2: 批量真实搜索调度、多项目作品关联与指标快照增量表 ====================
+CREATE TABLE IF NOT EXISTS search_batch_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_uid TEXT NOT NULL UNIQUE,
+    task_id INTEGER REFERENCES research_tasks(id) ON DELETE SET NULL,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT '',
+    selected_platforms_json TEXT NOT NULL DEFAULT '[]',
+    budget_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'queued', -- queued | running | paused | completed | partial_failed | cancelled | failed
+    total_queries INTEGER NOT NULL DEFAULT 0,
+    completed_queries INTEGER NOT NULL DEFAULT 0,
+    failed_queries INTEGER NOT NULL DEFAULT 0,
+    skipped_queries INTEGER NOT NULL DEFAULT 0,
+    total_results INTEGER NOT NULL DEFAULT 0,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    cost_report_json TEXT NOT NULL DEFAULT '{}',
+    execution_log_json TEXT NOT NULL DEFAULT '[]',
+    error_message TEXT DEFAULT '',
+    started_at TEXT,
+    ended_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS search_query_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL REFERENCES search_batch_runs(id) ON DELETE CASCADE,
+    task_id INTEGER REFERENCES research_tasks(id) ON DELETE SET NULL,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    candidate_id INTEGER REFERENCES keyword_candidates(id) ON DELETE SET NULL,
+    keyword_text TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending | running | completed | failed | unconfigured | needs_auth | manual_only | cancelled
+    request_count INTEGER NOT NULL DEFAULT 0,
+    result_count INTEGER NOT NULL DEFAULT 0,
+    data_source TEXT DEFAULT '',
+    error_message TEXT DEFAULT '',
+    started_at TEXT,
+    ended_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(batch_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS project_content_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    task_id INTEGER REFERENCES research_tasks(id) ON DELETE SET NULL,
+    batch_id INTEGER REFERENCES search_batch_runs(id) ON DELETE SET NULL,
+    query_run_id INTEGER REFERENCES search_query_runs(id) ON DELETE SET NULL,
+    candidate_id INTEGER REFERENCES keyword_candidates(id) ON DELETE SET NULL,
+    keyword_text TEXT DEFAULT '',
+    platform TEXT NOT NULL,
+    rank_no INTEGER,
+    data_source TEXT DEFAULT '',
+    availability_status TEXT DEFAULT 'ok',
+    discovered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(project_id, content_id, query_run_id)
+);
+
+CREATE TABLE IF NOT EXISTS content_metric_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL,
+    views INTEGER,
+    likes INTEGER,
+    comments INTEGER,
+    favorites INTEGER,
+    shares INTEGER,
+    followers INTEGER,
+    outlier_score REAL,
+    baseline_sample_n INTEGER,
+    data_source TEXT DEFAULT '',
+    availability_status TEXT DEFAULT 'partial',
+    collected_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== SEARCH-PHASE-3: 市场验证、主题聚类、反向词与统一选题证据表（兼容 Phase 4 TopicHub） ====================
+CREATE TABLE IF NOT EXISTS market_validations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    batch_id INTEGER REFERENCES search_batch_runs(id) ON DELETE SET NULL,
+    task_id INTEGER REFERENCES research_tasks(id) ON DELETE SET NULL,
+    topic_id INTEGER,
+    rule_version TEXT NOT NULL DEFAULT 'gcw-mv-v1.0',
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    unique_creators_count INTEGER NOT NULL DEFAULT 0,
+    platforms_json TEXT NOT NULL DEFAULT '[]',
+    validation_grade TEXT NOT NULL DEFAULT 'U', -- U | B | A | S
+    evidence_coverage_pct REAL NOT NULL DEFAULT 0.0,
+    eight_dims_json TEXT NOT NULL DEFAULT '{}',
+    four_signals_json TEXT NOT NULL DEFAULT '{}',
+    experimental_market_score REAL,
+    production_fit_json TEXT NOT NULL DEFAULT '{}',
+    recommendation TEXT NOT NULL DEFAULT '暂时搁置', -- 优先制作 | 重点储备 | 原创试验 | 暂时搁置
+    missing_evidence_json TEXT NOT NULL DEFAULT '[]',
+    evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    conclusion TEXT DEFAULT '',
+    llm_meta_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS topic_clusters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    batch_id INTEGER REFERENCES search_batch_runs(id) ON DELETE SET NULL,
+    cluster_title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '热门内容方向',
+    summary TEXT DEFAULT '',
+    source_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    comment_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    llm_meta_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS reverse_keywords (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    batch_id INTEGER REFERENCES search_batch_runs(id) ON DELETE SET NULL,
+    task_id INTEGER REFERENCES research_tasks(id) ON DELETE SET NULL,
+    parent_keyword TEXT DEFAULT '',
+    keyword TEXT NOT NULL,
+    discovery_type TEXT NOT NULL DEFAULT 'market_discovery', -- market_discovery | ai_inspiration
+    source_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    discovery_reason TEXT DEFAULT '',
+    research_dimension TEXT DEFAULT '',
+    suggested_platforms_json TEXT NOT NULL DEFAULT '[]',
+    missing_evidence_json TEXT NOT NULL DEFAULT '[]',
+    validation_status TEXT NOT NULL DEFAULT 'unverified', -- unverified | validating | verified | insufficient
+    round_no INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    batch_id INTEGER REFERENCES search_batch_runs(id) ON DELETE SET NULL,
+    task_id INTEGER REFERENCES research_tasks(id) ON DELETE SET NULL,
+    topic_title TEXT NOT NULL,
+    research_question TEXT DEFAULT '',
+    angle TEXT DEFAULT '',
+    origin_type TEXT NOT NULL DEFAULT 'B_market_derived', -- A_original_matched | B_market_derived | C_ai_or_human_inspiration
+    discovery_reason TEXT DEFAULT '',
+    source_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    suggested_queries_json TEXT NOT NULL DEFAULT '[]',
+    missing_evidence_json TEXT NOT NULL DEFAULT '[]',
+    validation_status TEXT NOT NULL DEFAULT 'unverified', -- unverified | insufficient | validating | B | A | S
+    production_status TEXT NOT NULL DEFAULT '新发现', -- 新发现 | 待验证 | 证据不足 | 已验证 | 已收藏 | 待制作 | 制作中 | 已发布 | 已搁置
+    is_favorite INTEGER NOT NULL DEFAULT 0,
+    recommendation TEXT DEFAULT '待评估',
+    user_override_recommendation TEXT DEFAULT '',
+    production_fit_json TEXT NOT NULL DEFAULT '{}',
+    second_round_batch_id INTEGER REFERENCES search_batch_runs(id) ON DELETE SET NULL,
+    round_no INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS topic_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    evidence_type TEXT NOT NULL, -- content | comment | validation | snapshot
+    ref_id INTEGER NOT NULL,
+    ref_url TEXT DEFAULT '',
+    snippet TEXT DEFAULT '',
+    provenance TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(topic_id, evidence_type, ref_id)
+);
+
+CREATE TABLE IF NOT EXISTS topic_relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    parent_topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+    child_topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    relation_type TEXT NOT NULL DEFAULT 'derived', -- derived | second_round | similar | merged
+    parent_keyword TEXT DEFAULT '',
+    source_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    reason TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== SEARCH-PHASE-4: 选题状态历史与无损合并审计表（复用 topics，绝不建第二套选题库） ====================
+CREATE TABLE IF NOT EXISTS topic_status_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    field_name TEXT NOT NULL, -- production_status | validation_status | is_favorite | fact_check_status | script_ready | merged
+    old_value TEXT DEFAULT '',
+    new_value TEXT DEFAULT '',
+    reason TEXT DEFAULT '',
+    changed_by TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS topic_merge_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    target_topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    source_topic_id INTEGER NOT NULL,
+    source_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    merged_evidence_count INTEGER NOT NULL DEFAULT 0,
+    merged_keywords_json TEXT NOT NULL DEFAULT '[]',
+    reason TEXT DEFAULT '',
+    is_restored INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== SEARCH-PHASE-5: 原创文案多版本与标准化创作资料包导出表 ====================
+CREATE TABLE IF NOT EXISTS topic_script_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    version_no INTEGER NOT NULL DEFAULT 1,
+    version_kind TEXT NOT NULL DEFAULT 'user_final', -- reference_transcript | ai_structure | user_viewpoint | ai_draft | user_final
+    title TEXT DEFAULT '',
+    skill_name TEXT DEFAULT 'manual',
+    content_markdown TEXT NOT NULL DEFAULT '',
+    source_refs_json TEXT NOT NULL DEFAULT '[]',
+    facts_vs_opinions_json TEXT NOT NULL DEFAULT '{}',
+    llm_meta_json TEXT NOT NULL DEFAULT '{}',
+    is_final INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- GCW-UAT-R4-D: 文案工坊独立原创文案版本表（支持多篇参考文案 + 自定义 Skill + 多模型切换，绝不覆盖原始参考文案）
+CREATE TABLE IF NOT EXISTS studio_original_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL DEFAULT 1,
+    primary_content_id INTEGER REFERENCES contents(id) ON DELETE SET NULL,
+    topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+    version_no INTEGER NOT NULL DEFAULT 1,
+    title TEXT NOT NULL DEFAULT '',
+    skill_id TEXT NOT NULL DEFAULT 'manual',
+    skill_name TEXT NOT NULL DEFAULT '',
+    engine_id TEXT NOT NULL DEFAULT '',
+    model_id TEXT NOT NULL DEFAULT '',
+    reference_content_ids_json TEXT NOT NULL DEFAULT '[]',
+    extra_requirements TEXT NOT NULL DEFAULT '',
+    content_markdown TEXT NOT NULL DEFAULT '',
+    source_refs_json TEXT NOT NULL DEFAULT '[]',
+    facts_vs_opinions_json TEXT NOT NULL DEFAULT '{}',
+    llm_meta_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS production_packages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    package_uid TEXT NOT NULL UNIQUE,
+    package_version INTEGER NOT NULL DEFAULT 1,
+    schema_version TEXT NOT NULL DEFAULT 'gcw-pkg-v1.0',
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    script_version_id INTEGER REFERENCES topic_script_versions(id) ON DELETE SET NULL,
+    export_dir TEXT NOT NULL DEFAULT '',
+    md_path TEXT NOT NULL DEFAULT '',
+    zip_path TEXT NOT NULL DEFAULT '',
+    manifest_path TEXT NOT NULL DEFAULT '',
+    sha256_zip TEXT DEFAULT '',
+    completeness_report_json TEXT NOT NULL DEFAULT '{}',
+    evidence_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    missing_materials_json TEXT NOT NULL DEFAULT '[]',
+    manifest_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== GCW-UAT-FIX-02: 无限级研究维度树、候选选题假设、人工证据与最小操作日志 ====================
+CREATE TABLE IF NOT EXISTS research_tree_nodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    root_topic TEXT NOT NULL DEFAULT '',
+    parent_id INTEGER REFERENCES research_tree_nodes(id) ON DELETE CASCADE,
+    level INTEGER NOT NULL DEFAULT 0, -- 0=原始主题, 1=一级维度, 2=二级维度, 3+=多级子维度
+    name TEXT NOT NULL,
+    node_type TEXT NOT NULL DEFAULT 'dimension', -- root | dimension
+    origin TEXT NOT NULL DEFAULT 'ai', -- ai | user
+    is_selected INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS research_candidate_topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    root_node_id INTEGER REFERENCES research_tree_nodes(id) ON DELETE SET NULL,
+    selected_node_ids_json TEXT NOT NULL DEFAULT '[]',
+    selected_path_labels_json TEXT NOT NULL DEFAULT '[]',
+    title TEXT NOT NULL,
+    angle TEXT DEFAULT '',
+    research_hypothesis TEXT DEFAULT '',
+    search_queries_zh_json TEXT NOT NULL DEFAULT '[]',
+    search_queries_en_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pending', -- pending | researching | confirmed | eliminated
+    confirmed_topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+    user_notes TEXT DEFAULT '',
+    judge_reason TEXT DEFAULT '',
+    llm_meta_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS manual_research_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    candidate_topic_id INTEGER REFERENCES research_candidate_topics(id) ON DELETE CASCADE,
+    confirmed_topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+    content_id INTEGER REFERENCES contents(id) ON DELETE SET NULL,
+    evidence_type TEXT NOT NULL DEFAULT 'video', -- video | article | comment_text | data_snapshot | screenshot
+    url TEXT DEFAULT '',
+    title TEXT DEFAULT '',
+    author TEXT DEFAULT '',
+    platform TEXT DEFAULT 'web',
+    published_at TEXT DEFAULT '',
+    view_count INTEGER,
+    like_count INTEGER,
+    comment_count INTEGER,
+    share_count INTEGER,
+    favorite_count INTEGER,
+    follower_count INTEGER,
+    selected_text TEXT DEFAULT '',
+    screenshot_path TEXT DEFAULT '',
+    search_keyword TEXT DEFAULT '',
+    user_note TEXT DEFAULT '',
+    data_source TEXT DEFAULT 'manual_sidepanel',
+    capture_method TEXT DEFAULT 'manual_form', -- page_assist_confirmed | manual_form | visible_tab_screenshot
+    recorded_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS research_action_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    candidate_topic_id INTEGER REFERENCES research_candidate_topics(id) ON DELETE SET NULL,
+    action_type TEXT NOT NULL, -- dimension_select | candidate_generate | platform_open | query_edit | evidence_capture | candidate_edit | candidate_judge | topic_confirm
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -464,6 +984,33 @@ def init_db() -> dict:
     if "translated_zh" not in cm_cols:
         conn.execute("ALTER TABLE comments ADD COLUMN translated_zh TEXT")
 
+    # GCW-UAT-FIX-02 幂等迁移：为 contents 增加人工文案收录标记，严格隔离研究证据与文案工坊
+    cnt_cols = {r["name"] for r in conn.execute("PRAGMA table_info(contents)").fetchall()}
+    if "manual_transcript_collected" not in cnt_cols:
+        conn.execute("ALTER TABLE contents ADD COLUMN manual_transcript_collected INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE contents SET manual_transcript_collected = 1 WHERE id IN (SELECT DISTINCT content_id FROM transcripts)")
+
+    # SEARCH-PHASE-4 幂等迁移：为已有 topics 表补齐完整选题档案字段（零数据覆盖）
+    tp_cols = {r["name"] for r in conn.execute("PRAGMA table_info(topics)").fetchall()}
+    for col_name, col_def in [
+        ("target_audience", "TEXT DEFAULT ''"),
+        ("tags_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("keywords_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("task_ids_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("fact_check_status", "TEXT NOT NULL DEFAULT '待核实'"),
+        ("differentiation_notes", "TEXT DEFAULT ''"),
+        ("user_notes", "TEXT DEFAULT ''"),
+        ("script_ready", "INTEGER NOT NULL DEFAULT 0"),
+        ("merged_into_topic_id", "INTEGER"),
+        ("validation_rule_version", "TEXT DEFAULT 'gcw-mv-v1.0'"),
+        ("validation_reason", "TEXT DEFAULT ''"),
+        ("evidence_coverage_pct", "REAL DEFAULT 0.0"),
+        ("four_signals_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ("is_archived", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        if col_name not in tp_cols:
+            conn.execute(f"ALTER TABLE topics ADD COLUMN {col_name} {col_def}")
+
     ma_cols = {r["name"] for r in conn.execute("PRAGMA table_info(media_assets)").fetchall()}
     for col_name, col_type in [
         ("project_id", "INTEGER"),
@@ -476,6 +1023,100 @@ def init_db() -> dict:
         if col_name not in ma_cols:
             conn.execute(f"ALTER TABLE media_assets ADD COLUMN {col_name} {col_type}")
 
+    # GCW-ASSET-01 幂等迁移：复用 contents 与 topic_evidence 补齐一键视频收录字段（缺失严格为 NULL，零旧数据覆盖）
+    c_cols_ext = {r["name"] for r in conn.execute("PRAGMA table_info(contents)").fetchall()}
+    for col_name, col_def in [
+        ("favorite_count", "INTEGER"),
+        ("share_count", "INTEGER"),
+        ("author_name", "TEXT"),
+        ("author_url", "TEXT"),
+        ("author_follower_count", "INTEGER"),
+        ("engagement_rate", "REAL"),
+        ("data_source", "TEXT"),
+        ("search_keyword", "TEXT"),
+        ("research_tags_json", "TEXT DEFAULT '[]'"),
+        ("manual_captured_at", "TEXT"),
+        ("original_share_url", "TEXT DEFAULT ''"),
+        ("url_edit_history_json", "TEXT DEFAULT '[]'"),
+    ]:
+        if col_name not in c_cols_ext:
+            conn.execute(f"ALTER TABLE contents ADD COLUMN {col_name} {col_def}")
+
+    te_cols = {r["name"] for r in conn.execute("PRAGMA table_info(topic_evidence)").fetchall()}
+    for col_name, col_def in [
+        ("research_tags_json", "TEXT DEFAULT '[]'"),
+        ("capture_reason", "TEXT DEFAULT ''"),
+        ("manual_captured_at", "TEXT"),
+    ]:
+        if col_name not in te_cols:
+            conn.execute(f"ALTER TABLE topic_evidence ADD COLUMN {col_name} {col_def}")
+
+    # GCW-TRANS-01 幂等迁移：补齐 transcripts 时间覆盖/翻译元数据，并建立逐段双语译文与用量日志表
+    # GCW-UAT-R4-B 幂等迁移：为 research_candidate_topics 增加锁定标记 is_locked
+    rc_cols = {r["name"] for r in conn.execute("PRAGMA table_info(research_candidate_topics)").fetchall()}
+    if rc_cols and "is_locked" not in rc_cols:
+        conn.execute("ALTER TABLE research_candidate_topics ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0")
+
+    tr_cols_ext = {r["name"] for r in conn.execute("PRAGMA table_info(transcripts)").fetchall()}
+    for col_name, col_def in [
+        ("video_duration_sec", "REAL"),
+        ("subtitle_coverage_start", "REAL"),
+        ("subtitle_coverage_end", "REAL"),
+        ("translation_engine", "TEXT"),
+        ("translation_model", "TEXT"),
+        ("translation_source_hash", "TEXT"),
+    ]:
+        if col_name not in tr_cols_ext:
+            conn.execute(f"ALTER TABLE transcripts ADD COLUMN {col_name} {col_def}")
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS subtitle_translations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+            segment_idx INTEGER NOT NULL,
+            source_text TEXT NOT NULL,
+            translated_text TEXT DEFAULT '',
+            start_sec REAL NOT NULL,
+            end_sec REAL,
+            end_source TEXT DEFAULT 'unknown',
+            source_lang TEXT DEFAULT '',
+            target_lang TEXT NOT NULL DEFAULT 'zh-CN',
+            engine_id TEXT DEFAULT '',
+            model_id TEXT DEFAULT '',
+            source_hash TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            is_manual_edited INTEGER NOT NULL DEFAULT 0,
+            translated_at TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(content_id, segment_idx, target_lang)
+        );
+        CREATE INDEX IF NOT EXISTS idx_sub_trans_content_lang
+            ON subtitle_translations(content_id, target_lang, segment_idx);
+
+        CREATE TABLE IF NOT EXISTS translation_usage_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_id INTEGER REFERENCES contents(id) ON DELETE SET NULL,
+            engine_id TEXT NOT NULL,
+            model_id TEXT DEFAULT '',
+            billing_mode TEXT DEFAULT 'free_only',
+            operation_type TEXT NOT NULL DEFAULT 'translate_segments',
+            source_chars INTEGER DEFAULT 0,
+            target_chars INTEGER DEFAULT 0,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            estimated_cost_cny REAL DEFAULT 0.0,
+            cache_hit INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'ok',
+            error_message TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_trans_usage_created
+            ON translation_usage_logs(created_at);
+        """
+    )
+
     # 默认设置（含 Feature Flags：默认关闭，经用户逐门批准后开启）
     defaults = {
         "cookie_browser": "none",  # none / chrome / edge
@@ -485,6 +1126,11 @@ def init_db() -> dict:
         "feature_publish_hub": "1",
         "feature_performance_hub": "0",
         "feature_obsidian_check": "0",
+        "translation_auto_translate": "0",
+        "translation_billing_mode": "free_only",
+        "translation_monthly_char_limit": "500000",
+        "translation_monthly_budget_cny": "20",
+        "translation_default_target_lang": "zh-CN",
     }
     for k, v in defaults.items():
         conn.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES (?, ?)", (k, v))

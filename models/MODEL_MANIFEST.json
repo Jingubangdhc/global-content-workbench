@@ -1,0 +1,55 @@
+{
+  "schema_version": "gcw-local-model-manifest-v1.0",
+  "purpose": "Global Content Workbench 本地免费离线翻译模型清单与未来离线安装包资源索引（Git 仅保存清单与配置，模型权重与推理二进制由 .gitignore 排除）",
+  "model": {
+    "id": "hy-mt3-1.8b",
+    "display_name": "腾讯混元 Hy-MT3-1.8B (Q4_K_M GGUF)",
+    "official_repo": "https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF",
+    "official_github": "https://github.com/Tencent-Hunyuan/Hy-MT3",
+    "filename": "Hy-MT3-1.8B-Q4_K_M.gguf",
+    "relative_path": "models/hunyuan-mt/Hy-MT3-1.8B-Q4_K_M.gguf",
+    "download_url": "https://huggingface.co/tencent/Hy-MT3-1.8B-GGUF/resolve/main/Hy-MT3-1.8B-Q4_K_M.gguf",
+    "size_bytes": 1348432160,
+    "sha256": "bae6e591103654ff43ef0de7d1492f6e6df1f955505f6bb2cc52e86fc399a942",
+    "license": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "supported_languages_count": 102
+  },
+  "runtime": {
+    "framework": "llama.cpp",
+    "release_tag": "b12823",
+    "accelerator": "CUDA 12.4 (x64)",
+    "relative_dir": "runtime/llama-cpp",
+    "server_binary": "runtime/llama-cpp/llama-server.exe",
+    "packages": [
+      {
+        "name": "llama-b12823-bin-win-cuda-12.4-x64.zip",
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12823/llama-b12823-bin-win-cuda-12.4-x64.zip"
+      },
+      {
+        "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12823/cudart-llama-bin-win-cuda-12.4-x64.zip"
+      }
+    ],
+    "license": "MIT"
+  },
+  "recommended_launch_args": {
+    "host": "127.0.0.1",
+    "port": 8081,
+    "alias": "hy-mt3-1.8b",
+    "n_gpu_layers": 99,
+    "ctx_size": 4096,
+    "jinja": true
+  },
+  "recommended_sampling": {
+    "temperature": 0.3,
+    "top_p": 0.6,
+    "top_k": 20,
+    "repeat_penalty": 1.05,
+    "max_tokens": 2048,
+    "has_default_system_prompt": false
+  },
+  "offline_bundle_plan": {
+    "notes": "未来制作离线安装包时，将 models/hunyuan-mt/Hy-MT3-1.8B-Q4_K_M.gguf 与 runtime/llama-cpp/ 一并打入独立资源包，启动后按本清单校验 SHA256 即可零联网开箱使用。"
+  }
+}

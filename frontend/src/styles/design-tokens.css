@@ -1,0 +1,227 @@
+/**
+ * Global Content Workbench · 统一深蓝灰专业数据工作台 Design Tokens (GCW-UI-01)
+ * 参考基准：02_UI_REFERENCE.png
+ *
+ * 视觉体系：
+ * - 深蓝灰主画布与层级面板（#0B111E / #111A2E / #162238）
+ * - 清晰冷蓝灰 1px 模块边框（#1E2E4A / #2B4066）
+ * - 青色专业数据高亮与选中态（#06B6D4 / #22D3EE）
+ * - 紧凑信息密度、减少无意义留白、重要数据突出显示
+ */
+:root {
+  --gcw-bg-canvas: #0b111e;
+  --gcw-bg-panel: #111a2e;
+  --gcw-bg-panel-header: #131e36;
+  --gcw-bg-card: #162238;
+  --gcw-bg-card-hover: #1c2c48;
+  --gcw-bg-input: #0c1424;
+
+  --gcw-border: #1e2e4a;
+  --gcw-border-strong: #2c4268;
+  --gcw-border-cyan: #0ea5b7;
+
+  --gcw-cyan: #22d3ee;
+  --gcw-cyan-solid: #06b6d4;
+  --gcw-cyan-bg: rgba(6, 182, 212, 0.14);
+  --gcw-cyan-glow: rgba(34, 211, 238, 0.22);
+
+  --gcw-purple: #8b5cf6;
+  --gcw-purple-solid: #7c3aed;
+
+  --gcw-green: #10b981;
+  --gcw-green-bg: rgba(16, 185, 129, 0.14);
+
+  --gcw-amber: #f59e0b;
+  --gcw-amber-bg: rgba(245, 158, 11, 0.14);
+
+  --gcw-rose: #f43f5e;
+  --gcw-rose-bg: rgba(244, 63, 94, 0.14);
+
+  --gcw-text-primary: #e2e8f0;
+  --gcw-text-secondary: #94a3b8;
+  --gcw-text-muted: #64748b;
+
+  /* GCW-ASSET-02 语义字号体系（参考 Ant Design / IBM Carbon，默认标准 15px，严禁整窗缩放） */
+  --gcw-root-rem: 15px;
+  --gcw-fs-base: 15px;
+  --gcw-fs-btn: 14px;
+  --gcw-fs-video-title: 16px;
+  --gcw-fs-section: 18px;
+  --gcw-fs-page: 22px;
+  --gcw-fs-tag: 12.5px;
+  --gcw-fs-meta: 12px;
+}
+
+/* 4 档字号预设：紧凑 14px / 标准 15px / 舒适 16px / 大字体 18px */
+html[data-font-scale="compact"] {
+  --gcw-root-rem: 14px;
+  --gcw-fs-base: 14px;
+  --gcw-fs-btn: 13px;
+  --gcw-fs-video-title: 15px;
+  --gcw-fs-section: 17px;
+  --gcw-fs-page: 20px;
+  --gcw-fs-tag: 12px;
+  --gcw-fs-meta: 12px;
+}
+
+html[data-font-scale="standard"] {
+  --gcw-root-rem: 15px;
+  --gcw-fs-base: 15px;
+  --gcw-fs-btn: 14px;
+  --gcw-fs-video-title: 16px;
+  --gcw-fs-section: 18px;
+  --gcw-fs-page: 22px;
+  --gcw-fs-tag: 12.5px;
+  --gcw-fs-meta: 12px;
+}
+
+html[data-font-scale="comfortable"] {
+  --gcw-root-rem: 16px;
+  --gcw-fs-base: 16px;
+  --gcw-fs-btn: 15px;
+  --gcw-fs-video-title: 17px;
+  --gcw-fs-section: 19px;
+  --gcw-fs-page: 23px;
+  --gcw-fs-tag: 13px;
+  --gcw-fs-meta: 12.5px;
+}
+
+html[data-font-scale="large"] {
+  --gcw-root-rem: 18px;
+  --gcw-fs-base: 18px;
+  --gcw-fs-btn: 16px;
+  --gcw-fs-video-title: 19px;
+  --gcw-fs-section: 20px;
+  --gcw-fs-page: 24px;
+  --gcw-fs-tag: 13.5px;
+  --gcw-fs-meta: 13px;
+}
+
+html {
+  font-size: var(--gcw-root-rem);
+}
+
+.gcw-page-title { font-size: var(--gcw-fs-page); line-height: 1.3; font-weight: 700; }
+.gcw-section-title { font-size: var(--gcw-fs-section); line-height: 1.35; font-weight: 700; }
+.gcw-video-title { font-size: var(--gcw-fs-video-title); line-height: 1.4; font-weight: 600; }
+.gcw-text-base { font-size: var(--gcw-fs-base); line-height: 1.5; }
+.gcw-text-btn { font-size: var(--gcw-fs-btn); line-height: 1.3; }
+.gcw-text-tag { font-size: var(--gcw-fs-tag); line-height: 1.25; }
+.gcw-text-meta { font-size: var(--gcw-fs-meta); line-height: 1.35; }
+
+/* 统一工作台外壳与模块面板 */
+.gcw-workspace {
+  background-color: var(--gcw-bg-canvas);
+  color: var(--gcw-text-primary);
+  border: 1px solid var(--gcw-border);
+}
+
+.gcw-panel {
+  background-color: var(--gcw-bg-panel);
+  border: 1px solid var(--gcw-border);
+  border-radius: 0.75rem;
+}
+
+.gcw-panel-header {
+  background-color: var(--gcw-bg-panel-header);
+  border-bottom: 1px solid var(--gcw-border);
+}
+
+.gcw-card {
+  background-color: var(--gcw-bg-card);
+  border: 1px solid var(--gcw-border);
+  border-radius: 0.625rem;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.gcw-card:hover {
+  background-color: var(--gcw-bg-card-hover);
+  border-color: var(--gcw-border-strong);
+}
+
+.gcw-input {
+  background-color: var(--gcw-bg-input);
+  border: 1px solid var(--gcw-border-strong);
+  color: var(--gcw-text-primary);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.gcw-input::placeholder {
+  color: var(--gcw-text-muted);
+}
+
+.gcw-input:focus {
+  border-color: var(--gcw-cyan);
+  box-shadow: 0 0 0 1px var(--gcw-cyan-glow);
+}
+
+/* 按钮与标签页体系 */
+.gcw-btn-cyan {
+  background: linear-gradient(90deg, #0891b2 0%, #06b6d4 100%);
+  color: #ffffff;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  transition: filter 140ms ease;
+}
+
+.gcw-btn-cyan:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.gcw-btn-purple {
+  background: linear-gradient(90deg, #6d28d9 0%, #7c3aed 100%);
+  color: #ffffff;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  transition: filter 140ms ease;
+}
+
+.gcw-btn-purple:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.gcw-btn-ghost {
+  background-color: var(--gcw-bg-card);
+  color: var(--gcw-text-secondary);
+  border: 1px solid var(--gcw-border-strong);
+  transition: all 140ms ease;
+}
+
+.gcw-btn-ghost:hover:not(:disabled) {
+  color: var(--gcw-text-primary);
+  border-color: var(--gcw-cyan);
+  background-color: var(--gcw-bg-card-hover);
+}
+
+.gcw-tab-active {
+  background-color: var(--gcw-cyan-bg);
+  color: var(--gcw-cyan);
+  border: 1px solid var(--gcw-border-cyan);
+  box-shadow: inset 0 0 12px rgba(6, 182, 212, 0.12);
+}
+
+.gcw-chip {
+  background-color: var(--gcw-bg-input);
+  color: var(--gcw-text-secondary);
+  border: 1px solid var(--gcw-border-strong);
+  transition: all 140ms ease;
+}
+
+.gcw-chip:hover {
+  border-color: var(--gcw-cyan);
+  color: var(--gcw-text-primary);
+}
+
+.gcw-chip-active {
+  background-color: var(--gcw-cyan-bg);
+  color: var(--gcw-cyan);
+  border: 1px solid var(--gcw-border-cyan);
+}
+
+/* 关键异常倍数高光框（参考图右侧青色指标卡） */
+.gcw-metric-box {
+  background: linear-gradient(180deg, rgba(6, 182, 212, 0.16) 0%, rgba(11, 41, 56, 0.72) 100%);
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  color: #38bdf8;
+  border-radius: 0.5rem;
+}

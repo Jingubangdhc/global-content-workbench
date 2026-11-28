@@ -305,11 +305,20 @@ def api_stream_reference_video(vid: int):
 
 class CompileBody(BaseModel):
     use_llm: bool = True
+    simulate_llm_failure: bool = False
+
+
+class LabCardAttachBody(BaseModel):
+    asset_id: str
+    start: float = 0.0
+    end: float = 4.5
+    params: dict[str, Any] = {}
+    note: str = "从统一动效注册中心挂载工坊卡片"
 
 
 @router.post("/projects/{vid}/compile")
 def api_compile_overlay(vid: int, body: CompileBody):
-    """A01+A04：基于真实 SRT 与已批准偏好规则自动编排动效并生成不可变草稿版本。"""
+    """R4：基于真实 SRT、R1 统一注册中心已验收资产与 R5 已批准 Style DNA 执行 AI 视觉导演编排。"""
     conn = get_conn()
     proj = conn.execute("SELECT * FROM video_projects WHERE id = ?", (vid,)).fetchone()
     if not proj:
@@ -333,6 +342,9 @@ def api_compile_overlay(vid: int, body: CompileBody):
         theme=proj["theme"] or "dark",
         approved_rules=approved,
         use_llm=body.use_llm,
+        project_id=proj["project_id"],
+        video_project_id=vid,
+        simulate_llm_failure=body.simulate_llm_failure,
     )
     doc = res["doc"]
     lint_res = lint_overlay_doc(doc, duration_sec=res["duration_ms"] / 1000.0)
@@ -340,10 +352,11 @@ def api_compile_overlay(vid: int, body: CompileBody):
     checksum = sha256_text(doc_str)
 
     max_v = conn.execute("SELECT COALESCE(MAX(version_no), 0) FROM video_render_versions WHERE video_project_id = ?", (vid,)).fetchone()[0]
+    mode_label = res["meta"].get("execution_mode", "degraded_rule_fallback")
     cur = conn.execute(
         """INSERT INTO video_render_versions(video_project_id, version_no, source_type, overlay_json, checksum, note)
            VALUES (?, ?, 'ai_compile', ?, ?, ?)""",
-        (vid, max_v + 1, doc_str, checksum, f"AI 编排（模型：{res['meta'].get('model') or '规则引擎'}）"),
+        (vid, max_v + 1, doc_str, checksum, f"AI导演编排({mode_label} / {res['meta'].get('model') or '规则回退'})"),
     )
     ver_id = cur.lastrowid
     conn.execute(
@@ -352,10 +365,57 @@ def api_compile_overlay(vid: int, body: CompileBody):
            WHERE id = ?""",
         (doc_str, ver_id, json.dumps(lint_res, ensure_ascii=False), res["duration_ms"], "lint_passed" if lint_res["passed"] else "compiled", vid),
     )
-    _audit(conn, "overlay_compiled", "video_project", str(vid), "ok", f"生成版本 v{max_v + 1}，共 {len(doc['cards'])} 张卡", res["meta"])
+    _audit(conn, "overlay_compiled", "video_project", str(vid), mode_label, f"生成 v{max_v + 1}（原版 {len(doc['cards'])} 卡 + 工坊 {len(doc.get('lab_cards', []))} 卡）", res["meta"])
     conn.commit()
     conn.close()
     return {"ok": True, "version_id": ver_id, "version_no": max_v + 1, "doc": doc, "lint": lint_res, "meta": res["meta"]}
+
+
+@router.post("/projects/{vid}/lab-cards")
+def api_attach_lab_card(vid: int, body: LabCardAttachBody):
+    """R3：将统一动效注册中心中已验收的工坊卡片挂载到视频工程时间轴并生成不可变版本。"""
+    from backend.services.motion_registry import get_motion_asset_detail
+
+    asset = get_motion_asset_detail(body.asset_id)
+    if not asset or asset.get("status") != "approved":
+        raise HTTPException(400, f"资产 {body.asset_id} 不存在或尚未通过门禁批准（status 必须为 approved）")
+    if body.end <= body.start:
+        raise HTTPException(400, "结束时间必须大于开始时间")
+
+    conn = get_conn()
+    proj = conn.execute("SELECT * FROM video_projects WHERE id = ?", (vid,)).fetchone()
+    if not proj:
+        conn.close()
+        raise HTTPException(404, "未找到视频工程")
+    doc = json.loads(proj["draft_overlay_json"]) if proj["draft_overlay_json"] else {"version": 1, "ratio": "h", "theme": "dark", "exportFps": 30, "cards": [], "lab_cards": []}
+    lab_cards = list(doc.get("lab_cards") or [])
+    new_card = {
+        "id": f"lab-{uuid.uuid4().hex[:6]}",
+        "asset_id": asset["asset_id"],
+        "asset_name": asset["name"],
+        "version": asset["version"],
+        "engine_type": asset["engine_type"],
+        "start": round(float(body.start), 2),
+        "end": round(float(body.end), 2),
+        "params": {**(asset.get("default_content") or {}), **(body.params or {})},
+    }
+    lab_cards.append(new_card)
+    doc["lab_cards"] = lab_cards
+    doc_str = json.dumps(doc, ensure_ascii=False)
+    checksum = sha256_text(doc_str)
+    max_v = conn.execute("SELECT COALESCE(MAX(version_no), 0) FROM video_render_versions WHERE video_project_id = ?", (vid,)).fetchone()[0]
+    cur = conn.execute(
+        """INSERT INTO video_render_versions(video_project_id, version_no, source_type, overlay_json, checksum, note)
+           VALUES (?, ?, 'lab_card_attach', ?, ?, ?)""",
+        (vid, max_v + 1, doc_str, checksum, f"{body.note}: {asset['asset_id']}"),
+    )
+    ver_id = cur.lastrowid
+    conn.execute("UPDATE video_projects SET draft_overlay_json = ?, current_version_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (doc_str, ver_id, vid))
+    conn.execute("UPDATE motion_assets SET usage_count = usage_count + 1 WHERE asset_id = ?", (asset["asset_id"],))
+    _audit(conn, "lab_card_attached", "video_project", str(vid), "ok", f"挂载工坊卡片 {asset['asset_id']} [{new_card['start']}s-{new_card['end']}s]")
+    conn.commit()
+    conn.close()
+    return {"ok": True, "version_id": ver_id, "version_no": max_v + 1, "lab_card": new_card, "lab_cards_total": len(lab_cards)}
 
 
 class LintBody(BaseModel):

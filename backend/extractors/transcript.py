@@ -124,6 +124,74 @@ def _transcribe_with_sensevoice(audio_path: Path) -> dict | None:
     return None
 
 
+def normalize_segments(
+    segments: list[dict],
+    video_duration_sec: float | None = None,
+) -> tuple[list[dict], float | None, float | None]:
+    """规范化字幕时间轴：
+    1. 优先保留真实 start / end 及原始 end_source（platform_duration / whisper_timestamp）；
+    2. 历史缺失 end 的段落使用下一段 start 估算并标记 end_source = 'estimated_next_start'；
+    3. 末段若无真实 end，绝不无依据伪造结束时间，保持 end = None 且 end_source = 'unknown'；
+    4. 返回 (normalized_segments, coverage_start, coverage_end)。
+    """
+    if not segments:
+        return [], None, None
+    cleaned: list[dict] = []
+    for raw in segments:
+        if not isinstance(raw, dict):
+            continue
+        text = str(raw.get("text") or "").strip()
+        if not text:
+            continue
+        try:
+            start = round(float(raw.get("start", 0.0)), 2)
+        except (TypeError, ValueError):
+            start = 0.0
+        end_val = raw.get("end")
+        end_num: float | None = None
+        if end_val is not None:
+            try:
+                pe = round(float(end_val), 2)
+                if pe > start:
+                    end_num = pe
+            except (TypeError, ValueError):
+                end_num = None
+        elif raw.get("duration") is not None:
+            try:
+                dur = float(raw.get("duration"))
+                if dur > 0:
+                    end_num = round(start + dur, 2)
+            except (TypeError, ValueError):
+                end_num = None
+        end_source = str(raw.get("end_source") or "").strip()
+        if end_num is not None and not end_source:
+            end_source = "platform_duration"
+        cleaned.append(
+            {
+                "start": start,
+                "end": end_num,
+                "end_source": end_source or "unknown",
+                "text": text,
+            }
+        )
+
+    for i, seg in enumerate(cleaned):
+        if seg["end"] is None:
+            if i + 1 < len(cleaned) and cleaned[i + 1]["start"] > seg["start"]:
+                seg["end"] = round(cleaned[i + 1]["start"], 2)
+                seg["end_source"] = "estimated_next_start"
+            else:
+                seg["end"] = None
+                seg["end_source"] = "unknown"
+
+    cov_start = cleaned[0]["start"] if cleaned else None
+    last = cleaned[-1] if cleaned else None
+    cov_end = last["end"] if (last and last["end"] is not None) else (last["start"] if last else None)
+    if video_duration_sec and cov_end is not None and cov_end > video_duration_sec + 5:
+        cov_end = round(float(video_duration_sec), 2)
+    return cleaned, cov_start, cov_end
+
+
 def transcribe_local_audio(audio_path: Path, language: str | None = None) -> dict:
     """优先按用户设置选择 SenseVoice（中文极速）或 faster-whisper（RTX 4060 CUDA / CPU）。"""
     engine = os.getenv("ASR_ENGINE", "whisper").strip().lower()
@@ -139,15 +207,25 @@ def transcribe_local_audio(audio_path: Path, language: str | None = None) -> dic
     for s in segs_iter:
         t = (s.text or "").strip()
         if t:
-            segments.append({"start": round(float(s.start), 1), "text": t})
+            segments.append(
+                {
+                    "start": round(float(s.start), 2),
+                    "end": round(float(s.end), 2),
+                    "end_source": "whisper_timestamp",
+                    "text": t,
+                }
+            )
             texts.append(t)
+    norm_segs, cov_start, cov_end = normalize_segments(segments)
     full_text = "\n".join(texts)
     return {
         "ok": True,
         "extract_method": f"local_whisper_{device}",
         "language": info.language or "",
         "raw_text": full_text,
-        "segments": segments,
+        "segments": norm_segs,
+        "subtitle_coverage_start": cov_start,
+        "subtitle_coverage_end": cov_end,
         "error": "",
     }
 
@@ -160,20 +238,39 @@ def extract_transcript_pipeline(platform: str, platform_item_id: str, url: str, 
     3. 视频下载最轻音频流 -> 本地 faster-whisper 转写 -> 立即删除音频
     4. 失败返回清晰错误原因，引导前端“拖拽本地文件转写”或“手动粘贴”
     """
-    # L1：YouTube 优先走字幕秒提
+    # L1：YouTube 优先走字幕秒提（完整记录真实 start/end 与 language_code）
     if platform == "youtube" and platform_item_id:
         try:
             api = YouTubeTranscriptApi()
-            tr = api.fetch(platform_item_id, languages=["zh-Hans", "zh", "zh-CN", "en", "en-US"])
-            segments = [{"start": round(float(s.start), 1), "text": s.text.replace("\n", " ").strip()} for s in tr]
-            raw_text = "\n".join(s["text"] for s in segments if s["text"])
+            tr = api.fetch(platform_item_id, languages=["zh-Hans", "zh", "zh-CN", "en", "en-US", "en-GB"])
+            detected_lang = str(getattr(tr, "language_code", "") or "").strip() or "en"
+            segments = []
+            for s in tr:
+                txt = s.text.replace("\n", " ").strip()
+                if not txt:
+                    continue
+                start = round(float(s.start), 2)
+                dur = float(getattr(s, "duration", 0.0) or 0.0)
+                end = round(start + dur, 2) if dur > 0 else None
+                segments.append(
+                    {
+                        "start": start,
+                        "end": end,
+                        "end_source": "platform_duration" if end is not None else "unknown",
+                        "text": txt,
+                    }
+                )
+            norm_segs, cov_start, cov_end = normalize_segments(segments)
+            raw_text = "\n".join(s["text"] for s in norm_segs if s["text"])
             if raw_text:
                 return {
                     "ok": True,
                     "extract_method": "youtube_sub",
-                    "language": "auto",
+                    "language": detected_lang,
                     "raw_text": raw_text,
-                    "segments": segments,
+                    "segments": norm_segs,
+                    "subtitle_coverage_start": cov_start,
+                    "subtitle_coverage_end": cov_end,
                     "error": "",
                 }
         except Exception:

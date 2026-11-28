@@ -29,7 +29,7 @@ export default defineConfig({
       '/api/overlay-file': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       '/api/media': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       '/api/upload-demo': { target: 'http://127.0.0.1:5177', changeOrigin: true },
-      '/api/project': { target: 'http://127.0.0.1:5177', changeOrigin: true },
+      '^/api/project($|\\?|/)': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       '/api/review-log': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       '/api/choose-export-folder': { target: 'http://127.0.0.1:5177', changeOrigin: true },
       // AI Motion & Style Lab（M5/M6 独立白模解耦与 504+264 风格工坊同源代理）

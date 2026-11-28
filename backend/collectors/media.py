@@ -87,6 +87,7 @@ def get_jump_links(keyword: str) -> dict:
         {"platform": "TikTok", "badge": "海外短剧/带货", "url": f"https://www.tiktok.com/search?q={q}"},
         {"platform": "抖音", "badge": "国内短视频", "url": f"https://www.douyin.com/search/{q}"},
         {"platform": "小红书", "badge": "种草/痛点", "url": f"https://www.xiaohongshu.com/search_result?keyword={q}"},
+        {"platform": "快手", "badge": "下沉短视频", "url": f"https://www.kuaishou.com/search/video?searchKey={q}"},
         {"platform": "B站", "badge": "深度中长视频", "url": f"https://search.bilibili.com/all?keyword={q}"},
         {"platform": "Reddit", "badge": "海外真实讨论", "url": f"https://www.reddit.com/search/?q={q}&sort=relevance"},
         {"platform": "X", "badge": "全球一手观点", "url": f"https://x.com/search?q={q}&src=typed_query&f=top"},

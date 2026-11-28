@@ -221,61 +221,141 @@ def compile_overlay_from_srt(
     theme: str = "dark",
     approved_rules: Optional[list[str]] = None,
     use_llm: bool = True,
+    project_id: Optional[int] = None,
+    video_project_id: Optional[int] = None,
+    simulate_llm_failure: bool = False,
 ) -> dict[str, Any]:
-    """A01+A04：基于真实 SRT 时间码与已批准偏好，生成合法 OverlayDoc 编排。"""
+    """R4 真正的 AI 视觉导演：动态检索统一注册中心（原版 25 卡 + 工坊已验收新卡）+ 统一个人 Style DNA。"""
     if not srt_lines:
         raise ValueError("缺少有效字幕行，请先导入 SRT 或从文案提取工坊导入字幕。")
+
+    # 延迟导入避免循环依赖
+    from backend.services.motion_registry import create_dev_task, list_motion_assets
+    from backend.services.style_dna_service import get_active_approved_dna
 
     total_sec = round(max(ln["end"] for ln in srt_lines), 3)
     ratio_code = "v" if aspect_ratio == "9:16" else ("4:3" if aspect_ratio == "4:3" else "h")
     cfg = get_env_config()
-    llm_meta: dict[str, Any] = {"used_llm": False, "model": None, "total_tokens": 0, "warnings": []}
+
+    # 1. 拉取 R5 已批准个人 Style DNA（仅 approved/locked 生效）
+    active_dna = get_active_approved_dna(project_id=project_id)
+    effective_theme = active_dna.get("theme") or theme
+    merged_rules = list(active_dna.get("approved_rules") or [])
+    for r in (approved_rules or []):
+        if r and r not in merged_rules:
+            merged_rules.append(r)
+
+    # 2. 动态检索 R1 统一动效注册中心全部已验收可执行资产（不再写死 25 卡）
+    approved_assets = list_motion_assets(status="approved")
+    native_assets = [a for a in approved_assets if a["engine_type"] == "overlay_native"]
+    lab_assets = [a for a in approved_assets if a["engine_type"] != "overlay_native"]
+    lab_by_id = {a["asset_id"]: a for a in lab_assets}
+
+    llm_meta: dict[str, Any] = {
+        "used_llm": False,
+        "execution_mode": "degraded_rule_fallback",
+        "degraded": True,
+        "fallback_reason": None,
+        "model": None,
+        "total_tokens": 0,
+        "dna_version": active_dna.get("version"),
+        "dna_theme": effective_theme,
+        "dna_motion_intensity": active_dna.get("motion_intensity"),
+        "dna_accent": active_dna.get("accent_primary"),
+        "dna_pacing_density": active_dna.get("pacing_density"),
+        "available_native_count": len(native_assets),
+        "available_lab_count": len(lab_assets),
+        "used_lab_assets": [],
+        "created_dev_tasks": [],
+        "director_segments": [],
+        "warnings": [],
+    }
 
     cards: list[dict[str, Any]] = []
+    lab_cards: list[dict[str, Any]] = []
 
-    # 优先使用已配置的 DeepSeek LLM 进行语义编排
-    if use_llm and cfg.get("llm_configured"):
+    if simulate_llm_failure:
+        llm_meta["fallback_reason"] = "模拟真实模型调用失败（simulate_llm_failure=True），已降级为本地规则模式"
+        llm_meta["warnings"].append(llm_meta["fallback_reason"])
+    elif not use_llm:
+        llm_meta["fallback_reason"] = "调用方显式指定 use_llm=False（本地规则模式）"
+    elif not cfg.get("llm_configured"):
+        llm_meta["fallback_reason"] = "未配置 LLM_API_KEY，已降级为本地规则模式"
+        llm_meta["warnings"].append(llm_meta["fallback_reason"])
+    else:
         try:
             from openai import OpenAI
 
             client = OpenAI(api_key=os.getenv("LLM_API_KEY"), base_url=cfg["llm_base_url"])
-            allowed_desc = "\n".join(f"- {e['id']} ({e['group']}/{e['name']}): {e['desc']}" for e in EFFECT_CATALOG)
+            native_desc = "\n".join(
+                f"- {a['skeleton_spec'].get('native_kind')} ({a['group_id']}/{a['name']}, purposes={a['narrative_purposes']}): {a['skeleton_spec'].get('desc','')}"
+                for a in native_assets
+            )
+            lab_desc = "\n".join(
+                f"- {a['asset_id']} ({a['engine_type']}/{a['group_id']}/{a['name']}, purposes={a['narrative_purposes']}, params={list((a.get('default_content') or {}).keys())})"
+                for a in lab_assets[:25]
+            ) or "（暂无工坊新卡）"
+
+            # 长文案分段摘要（最多 120 行）
             srt_brief = "\n".join(
                 f"[{ln['index']}] {ln['start']:.2f}s-{ln['end']:.2f}s: {ln['text']}"
-                for ln in srt_lines[:80]
+                for ln in srt_lines[:120]
             )
-            pref_txt = "\n".join(f"- {r}" for r in (approved_rules or [])) or "（暂无自定义偏好）"
-            prompt = f"""你是专业口播视频动效编排导演。请严格根据以下真实字幕时间码生成动效卡片 JSON。
-硬性约束：
-1. 只能使用以下 25 种合法 kind，严禁发明新 kind：
-{allowed_desc}
-2. 每张卡的 start 和 end 必须落在 [0, {total_sec}] 真实字幕时间范围内，且 end > start + 0.8。
-3. 严禁出现 TODO/TBD/演示数据/占位文本；若台词中无真实数字，禁止使用数据图表类 kind（stat-proof/ring-metric/odometer/rank-bars/growth-curve/growth-bars/donut-split/waterfall-bridge/radar-profile/waffle-fill）。
-4. 每张卡必须包含 source_srt_index（引用真实字幕序号）与 sfx（从 pop/pop-light/chime/ding/click/whoosh-soft/impact 中选或 null）。
-5. 遵守用户已批准偏好：
+            pref_txt = "\n".join(f"- {r}" for r in merged_rules) or "（暂无自定义偏好）"
+            prompt = f"""你是专业商业分析视频的 AI 视觉导演。请基于完整字幕语义与统一动效注册中心，输出带时间码的可编辑编排 JSON。
+
+一、个人已批准 Style DNA（必须严格遵守）：
+- 主题：{effective_theme}（dark=深色编辑部 / light=麦田浅色极简）
+- 主强调色：{active_dna.get('accent_primary')}
+- 运动幅度系数：{active_dna.get('motion_intensity')}×
+- 节奏密度：{active_dna.get('pacing_density')}（minimal=少卡多留白 / balanced=均衡 / dense=高密信息）
+- 已批准偏好规则：
 {pref_txt}
+
+二、可用原版 Overlay 动效资产（写入 cards，使用 native kind）：
+{native_desc}
+
+三、可用工坊新增/原创可执行资产（写入 lab_cards，使用完整 asset_id，例如 lab:dsl_xxx；当文案涉及复杂结构如多分支关系图、步骤流程等且工坊有对应资产时，必须优先调用！）：
+{lab_desc}
+
+四、硬性导演规则：
+1. 先对字幕做段落叙事分析写入 director_segments，每段明确标注 purpose（从 real_footage / explainer_graphic / data_viz / relation_graph / transition / emotion_peak / ambient / keep_quiet 中选；务必合理安排至少 1 处 keep_quiet 留白，不要每秒都塞满卡片）。
+2. 每张卡的 start 和 end 必须在 [0, {total_sec}] 内，且 end > start + 0.8。
+3. 严禁编造数字/出处/新闻/TODO占位；若台词中无真实数字，禁止使用数据图表类卡。
+4. 若某段有特殊视觉结构需求且注册中心无合适资产，可在 missing_motion_requests 中提出研发任务单（最多 2 条）。
 
 真实字幕：
 {srt_brief}
 
-请只输出 JSON 对象：{{"chapters": ["..."], "cards": [{{"id": "card-1", "kind": "...", "start": 0.0, "end": 4.0, "source_srt_index": 1, "sfx": "pop", "params": {{...}}}}]}}"""
+请只输出严格 JSON：
+{{
+  "director_segments": [{{"start": 0.0, "end": 8.0, "purpose": "data_viz|relation_graph|keep_quiet|...", "reason": "..."}}],
+  "cards": [{{"id": "card-1", "kind": "原版kind", "start": 0.0, "end": 4.0, "source_srt_index": 1, "sfx": "pop", "params": {{}}}}],
+  "lab_cards": [{{"id": "lab-1", "asset_id": "lab:...", "start": 10.0, "end": 16.0, "source_srt_index": 4, "params": {{}}}}],
+  "missing_motion_requests": [{{"title": "...", "group_id": "G08", "requirement_prompt": "...", "start": 0.0, "end": 4.0}}]
+}}"""
 
             resp = client.chat.completions.create(
                 model=cfg["llm_model"],
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 response_format={"type": "json_object"},
-                timeout=45,
+                timeout=60,
             )
             raw_json = resp.choices[0].message.content or "{}"
             parsed = json.loads(raw_json)
             llm_meta["used_llm"] = True
+            llm_meta["execution_mode"] = "real_llm"
+            llm_meta["degraded"] = False
             llm_meta["model"] = cfg["llm_model"]
             llm_meta["total_tokens"] = getattr(resp.usage, "total_tokens", 0) or 0
+            llm_meta["director_segments"] = parsed.get("director_segments") or []
+
+            # 解析原版 25 卡
             for i, c in enumerate(parsed.get("cards", []), 1):
                 kind = str(c.get("kind") or "").strip()
                 if kind not in VALID_EFFECT_IDS:
-                    llm_meta["warnings"].append(f"已拦截 LLM 生成的未知模板 {kind}")
+                    llm_meta["warnings"].append(f"已拦截未知原版模板 {kind}")
                     continue
                 st = max(0.0, min(total_sec - 0.5, round(float(c.get("start", 0.0)), 2)))
                 en = max(st + 1.0, min(total_sec, round(float(c.get("end", st + 3.0)), 2)))
@@ -302,21 +382,59 @@ def compile_overlay_from_srt(
                     merged_params["sfx"] = c["sfx"]
                 if srt_idx is not None:
                     merged_params["source_srt_index"] = srt_idx
-                cards.append({
-                    "id": str(c.get("id") or f"card-{i}"),
-                    "kind": kind,
+                cards.append({"id": str(c.get("id") or f"card-{i}"), "kind": kind, "start": st, "end": en, "params": merged_params})
+
+            # 解析工坊新卡（lab_cards）
+            for j, lc in enumerate(parsed.get("lab_cards", []), 1):
+                aid = str(lc.get("asset_id") or "").strip()
+                asset_meta = lab_by_id.get(aid)
+                if not asset_meta:
+                    llm_meta["warnings"].append(f"已拦截未注册或未验收的工坊资产 {aid}")
+                    continue
+                st = max(0.0, min(total_sec - 0.5, round(float(lc.get("start", 0.0)), 2)))
+                en = max(st + 1.2, min(total_sec, round(float(lc.get("end", st + 4.5)), 2)))
+                lab_cards.append({
+                    "id": str(lc.get("id") or f"lab-{j}"),
+                    "asset_id": aid,
+                    "asset_name": asset_meta["name"],
+                    "version": asset_meta["version"],
+                    "engine_type": asset_meta["engine_type"],
                     "start": st,
                     "end": en,
-                    "params": merged_params,
+                    "source_srt_index": lc.get("source_srt_index"),
+                    "params": {**(asset_meta.get("default_content") or {}), **(lc.get("params") or {})},
+                    "dna_override": {
+                        "motion_intensity": active_dna.get("motion_intensity", 1.0),
+                        "radius_scale": active_dna.get("radius_scale", 1.0),
+                        "accent_override": active_dna.get("accent_primary"),
+                    },
                 })
-        except Exception as e:
-            llm_meta["warnings"].append(f"AI 编排调用回退为确定性语义规则：{e}")
+                if aid not in llm_meta["used_lab_assets"]:
+                    llm_meta["used_lab_assets"].append(aid)
 
-    # 若未启用 LLM 或 LLM 产出为空，使用确定性语义规则（零虚构，严格引用真实台词）
-    if not cards:
-        step = max(1, len(srt_lines) // 6)
-        picked = srt_lines[::step][:8]
-        # 1. 常驻章节条
+            # 缺少合适动效时自动创建 AI 动效研发任务单
+            for req_item in (parsed.get("missing_motion_requests") or [])[:2]:
+                if req_item.get("title") and req_item.get("requirement_prompt"):
+                    task = create_dev_task(
+                        title=str(req_item["title"])[:60],
+                        requirement_prompt=str(req_item["requirement_prompt"]),
+                        group_id=str(req_item.get("group_id") or "G08"),
+                        video_project_id=video_project_id,
+                        time_range={"start": req_item.get("start", 0.0), "end": req_item.get("end", 4.0)},
+                    )
+                    llm_meta["created_dev_tasks"].append(task["task_uid"])
+        except Exception as e:
+            llm_meta["used_llm"] = False
+            llm_meta["execution_mode"] = "degraded_rule_fallback"
+            llm_meta["degraded"] = True
+            llm_meta["fallback_reason"] = f"真实模型调用异常，已降级为确定性规则：{e}"
+            llm_meta["warnings"].append(llm_meta["fallback_reason"])
+
+    # 确定性规则回退（仅当未启用 LLM 或真实模型失败/产出为空时触发，严格标记 degraded=True）
+    if not cards and not lab_cards:
+        max_picks = 4 if active_dna.get("pacing_density") == "minimal" else (10 if active_dna.get("pacing_density") == "dense" else 7)
+        step = max(1, len(srt_lines) // max_picks)
+        picked = srt_lines[::step][:max_picks]
         cards.append({
             "id": "card-chapter",
             "kind": "chapter-bar",
@@ -363,10 +481,19 @@ def compile_overlay_from_srt(
     doc = {
         "version": 1,
         "ratio": ratio_code,
-        "theme": theme if theme in ("dark", "light") else "dark",
+        "theme": effective_theme if effective_theme in ("dark", "light") else "dark",
         "exportFps": 30,
+        "animSpeed": round(float(active_dna.get("motion_intensity") or 1.0), 2),
         "srt": [{"start": x["start"], "end": x["end"], "text": x["text"]} for x in srt_lines],
         "cards": cards,
+        "lab_cards": lab_cards,
+        "style_dna_applied": {
+            "version": active_dna.get("version"),
+            "theme": effective_theme,
+            "motion_intensity": active_dna.get("motion_intensity"),
+            "accent_primary": active_dna.get("accent_primary"),
+            "pacing_density": active_dna.get("pacing_density"),
+        },
     }
     return {"doc": doc, "meta": llm_meta, "duration_ms": int(round(total_sec * 1000))}
 

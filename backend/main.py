@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote_plus, urlparse
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
@@ -32,6 +32,17 @@ from backend.exporters.export import build_docx_bytes, build_markdown, build_sop
 from backend.extractors.analysis import fetch_youtube_heatmap_highlights, run_anchored_breakdown
 from backend.routers.video_studio import router as video_studio_router
 from backend.routers.publish_hub import router as publish_hub_router
+from backend.routers.motion_registry import router as motion_registry_router
+from backend.routers.style_dna import router as style_dna_router
+from backend.routers.ai_video_jobs import router as ai_video_jobs_router
+from backend.routers.search_research import router as search_research_router
+from backend.routers.topic_hub import router as topic_hub_router
+from backend.routers.research_tree import router as research_tree_router
+from backend.routers.credential_vault import router as credential_vault_router
+from backend.routers.translation import router as translation_router
+from backend.services.translation_provider import translate_content_segments
+from backend.services.motion_registry import sync_builtin_motion_assets
+from backend.services.style_dna_service import ensure_default_style_dna
 from backend.extractors.transcript import (
     _detect_whisper_device,
     extract_transcript_pipeline,
@@ -51,11 +62,21 @@ app.add_middleware(
 )
 app.include_router(video_studio_router)
 app.include_router(publish_hub_router)
+app.include_router(motion_registry_router)
+app.include_router(style_dna_router)
+app.include_router(ai_video_jobs_router)
+app.include_router(search_research_router)
+app.include_router(topic_hub_router)
+app.include_router(research_tree_router)
+app.include_router(credential_vault_router)
+app.include_router(translation_router)
 
 
 @app.on_event("startup")
 def _on_startup():
     init_db()
+    sync_builtin_motion_assets()
+    ensure_default_style_dna()
 
 
 def _get_setting(conn, key: str, default: str = "") -> str:
@@ -95,6 +116,7 @@ class SettingsUpdate(BaseModel):
     asr_engine: Optional[str] = None
     pexels_api_key: Optional[str] = None
     pixabay_api_key: Optional[str] = None
+    ui_font_scale: Optional[str] = None
 
 
 @app.get("/api/douyin-api/health")
@@ -147,13 +169,27 @@ class ProjectCreate(BaseModel):
     notes: str = ""
 
 
+def _assert_local_origin(request: Request) -> None:
+    """校验项目写接口的本地来源：无 Origin（同源/本机脚本）或合法 localhost/127.0.0.1/[::1] 放行，非法外部 Origin 拒绝。"""
+    origin = (request.headers.get("origin") or "").strip()
+    if not origin:
+        return
+    parsed = urlparse(origin)
+    if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+        raise HTTPException(403, f"仅允许从本地工作台访问此接口（已拒绝非法来源：{origin}）")
+
+
 @app.post("/api/projects")
-def api_create_project(body: ProjectCreate):
+def api_create_project(body: ProjectCreate, request: Request):
+    _assert_local_origin(request)
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "项目名称不能为空")
     conn = get_conn()
     try:
         cur = conn.execute(
             "INSERT INTO projects(name, target_country, target_audience, notes) VALUES (?, ?, ?, ?)",
-            (body.name.strip(), body.target_country, body.target_audience, body.notes),
+            (name, body.target_country, body.target_audience, body.notes),
         )
         conn.commit()
         row = dict(conn.execute("SELECT * FROM projects WHERE id = ?", (cur.lastrowid,)).fetchone())
@@ -165,8 +201,9 @@ def api_create_project(body: ProjectCreate):
 
 
 @app.delete("/api/projects/{proj_id}")
-def api_delete_project(proj_id: int):
+def api_delete_project(proj_id: int, request: Request):
     """删除项目（至少保留 1 个项目；已收录素材解除关联但不删除数据）。"""
+    _assert_local_origin(request)
     conn = get_conn()
     try:
         cnt = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
@@ -277,6 +314,11 @@ def api_youtube_outlier(body: OutlierReq):
 @app.post("/api/search/bilibili")
 def api_search_bilibili(body: SearchReq):
     items = search_bilibili(body.keyword, limit=min(body.limit, 10))
+    if body.keyword_id:
+        conn = get_conn()
+        conn.execute("UPDATE keywords SET last_searched_at = CURRENT_TIMESTAMP WHERE id = ?", (body.keyword_id,))
+        conn.commit()
+        conn.close()
     return {"keyword": body.keyword, "count": len(items), "items": items}
 
 
@@ -326,31 +368,73 @@ def _upsert_creator_and_content(conn, meta: dict, project_id: Optional[int], key
             )
 
     existing = conn.execute(
-        "SELECT id FROM contents WHERE platform = ? AND platform_item_id = ?",
+        "SELECT id, project_id, keyword_id, collect_reason FROM contents WHERE platform = ? AND platform_item_id = ?",
         (meta["platform"], meta["platform_item_id"]),
     ).fetchone()
     links_json = json.dumps(meta.get("detected_monetization") or {}, ensure_ascii=False)
 
     if existing:
         cid = existing["id"]
+        owner_pid = existing["project_id"]
+        # 强制跨项目数据污染保护：若该作品已归属其他项目，严禁覆写原项目的 project_id / keyword_id / collect_reason
+        if owner_pid is not None and project_id is not None and int(owner_pid) != int(project_id):
+            conn.execute(
+                """UPDATE contents SET
+                   creator_id = COALESCE(?, creator_id),
+                   view_count = COALESCE(?, view_count),
+                   like_count = COALESCE(?, like_count),
+                   comment_count = COALESCE(?, comment_count),
+                   views_to_followers = COALESCE(?, views_to_followers),
+                   outlier_score = COALESCE(?, outlier_score)
+                   WHERE id = ?""",
+                (
+                    creator_id, meta.get("view_count"), meta.get("like_count"),
+                    meta.get("comment_count"), meta.get("views_to_followers"), meta.get("outlier_score"),
+                    cid,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO integration_audit_events(module, event_type, entity_type, entity_id, status, summary, payload_json)
+                   VALUES ('search_hub', 'cross_project_overwrite_blocked', 'content', ?, 'protected', ?, ?)""",
+                (
+                    str(cid),
+                    f"已阻断项目#{project_id}覆盖项目#{owner_pid}的作品历史关联（仅刷新客观指标）",
+                    json.dumps({"owner_project_id": owner_pid, "incoming_project_id": project_id, "incoming_keyword_id": keyword_id}, ensure_ascii=False),
+                ),
+            )
+            conn.execute(
+                """INSERT OR IGNORE INTO project_content_links(
+                       project_id, content_id, keyword_text, platform, data_source, availability_status
+                   ) VALUES (?, ?, ?, ?, 'manual_collect_cross_project', 'ok')""",
+                (project_id, cid, reason or "跨项目收录", meta["platform"]),
+            )
+            return {
+                "id": cid,
+                "dedup": True,
+                "cross_project_protected": True,
+                "cross_project_linked": True,
+                "owner_project_id": owner_pid,
+                "warning": f"该作品已归属项目 #{owner_pid}，已为项目 #{project_id} 建立独立多项目发现关联（未覆盖原项目历史归属，已刷新最新指标）",
+            }
+
+        # 同项目重复收录：仅当旧 keyword_id 为空时才补写，不覆盖已有历史关联
         conn.execute(
             """UPDATE contents SET
-               keyword_id = COALESCE(?, keyword_id),
+               keyword_id = COALESCE(keyword_id, ?),
                creator_id = COALESCE(?, creator_id),
                view_count = COALESCE(?, view_count),
                like_count = COALESCE(?, like_count),
                comment_count = COALESCE(?, comment_count),
                views_to_followers = COALESCE(?, views_to_followers),
-               outlier_score = COALESCE(?, outlier_score),
-               collect_reason = CASE WHEN length(coalesce(?,''))>0 THEN ? ELSE collect_reason END
+               outlier_score = COALESCE(?, outlier_score)
                WHERE id = ?""",
             (
                 keyword_id, creator_id, meta.get("view_count"), meta.get("like_count"),
                 meta.get("comment_count"), meta.get("views_to_followers"), meta.get("outlier_score"),
-                reason, reason, cid,
+                cid,
             ),
         )
-        return {"id": cid, "dedup": True, "warning": meta.get("meta_warning", "")}
+        return {"id": cid, "dedup": True, "cross_project_protected": False, "warning": meta.get("meta_warning", "")}
 
     cur = conn.execute(
         """INSERT INTO contents
@@ -464,6 +548,7 @@ def api_list_contents(
     platform: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
+    only_transcript_collected: bool = False,
 ):
     conn = get_conn()
     sql = """
@@ -480,9 +565,11 @@ def api_list_contents(
         WHERE 1=1
     """
     params = []
+    if only_transcript_collected:
+        sql += " AND (COALESCE(c.manual_transcript_collected, 0) = 1 OR t.id IS NOT NULL)"
     if project_id:
-        sql += " AND (c.project_id = ? OR c.project_id IS NULL)"
-        params.append(project_id)
+        sql += " AND (c.project_id = ? OR c.project_id IS NULL OR EXISTS (SELECT 1 FROM project_content_links pcl WHERE pcl.content_id = c.id AND pcl.project_id = ?))"
+        params.extend([project_id, project_id])
     if platform and platform != "all":
         sql += " AND c.platform = ?"
         params.append(platform)
@@ -735,28 +822,46 @@ def api_extract_transcript(cid: int):
     if not c:
         conn.close()
         raise HTTPException(404, "未找到该素材")
+    # GCW-ASSET-02: 用户主动发起文案提取时，自动将该作品人工收录至文案工坊
+    conn.execute("UPDATE contents SET manual_transcript_collected = 1 WHERE id = ?", (cid,))
+    conn.commit()
     cookie_browser = _get_setting(conn, "cookie_browser", "none")
     res = extract_transcript_pipeline(c["platform"], c["platform_item_id"], c["url"], cookie_browser=cookie_browser)
 
     seg_json = json.dumps(res.get("segments") or [], ensure_ascii=False)
     conn.execute(
-        """INSERT INTO transcripts(content_id, extract_method, language, raw_text, segments_json, extract_error, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """INSERT INTO transcripts(content_id, extract_method, language, raw_text, segments_json,
+                                   video_duration_sec, subtitle_coverage_start, subtitle_coverage_end,
+                                   extract_error, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
            ON CONFLICT(content_id) DO UPDATE SET
-             extract_method=excluded.extract_method,
-             language=excluded.language,
+             extract_method=CASE WHEN length(excluded.raw_text)>0 THEN excluded.extract_method ELSE transcripts.extract_method END,
+             language=CASE WHEN length(excluded.raw_text)>0 THEN excluded.language ELSE transcripts.language END,
              raw_text=CASE WHEN length(excluded.raw_text)>0 THEN excluded.raw_text ELSE transcripts.raw_text END,
              segments_json=CASE WHEN length(excluded.raw_text)>0 THEN excluded.segments_json ELSE transcripts.segments_json END,
+             video_duration_sec=COALESCE(excluded.video_duration_sec, transcripts.video_duration_sec),
+             subtitle_coverage_start=COALESCE(excluded.subtitle_coverage_start, transcripts.subtitle_coverage_start),
+             subtitle_coverage_end=COALESCE(excluded.subtitle_coverage_end, transcripts.subtitle_coverage_end),
              extract_error=excluded.extract_error,
              updated_at=CURRENT_TIMESTAMP""",
-        (cid, res["extract_method"], res["language"], res["raw_text"], seg_json, res["error"]),
+        (
+            cid,
+            res["extract_method"],
+            res["language"],
+            res["raw_text"],
+            seg_json,
+            c["duration_sec"],
+            res.get("subtitle_coverage_start"),
+            res.get("subtitle_coverage_end"),
+            res["error"],
+        ),
     )
     if res["ok"]:
-        conn.execute("UPDATE contents SET status = 'extracted' WHERE id = ? AND status IN ('inbox','useful')", (cid,))
+        conn.execute("UPDATE contents SET status = 'extracted', manual_transcript_collected = 1 WHERE id = ? AND status IN ('inbox','useful')", (cid,))
     conn.commit()
     t = dict(conn.execute("SELECT * FROM transcripts WHERE content_id = ?", (cid,)).fetchone())
     conn.close()
-    return {"ok": res["ok"], "error": res["error"], "transcript": t}
+    return {"ok": res["ok"], "error": res["error"], "transcript": t, "content_id": cid}
 
 
 @app.post("/api/extract/upload/{cid}")
@@ -823,24 +928,52 @@ def api_save_transcript(cid: int, body: TranscriptSave):
 
 
 @app.post("/api/transcripts/{cid}/translate")
-def api_translate_transcript(cid: int):
-    """仅用户手动点击按钮触发：调用 .env 中配置的 OpenAI 兼容模型翻译原文。"""
+def api_translate_transcript(cid: int, force_retranslate: bool = Query(False), engine_id: Optional[str] = Query(None)):
+    """GCW-TRANS-01 统一翻译入口：带时间轴视频优先走统一 TranslationProvider 分批上下文翻译并缓存落库；
+    纯文章/无时间轴文本回退整篇翻译，彻底消除两套割裂翻译链。"""
     conn = get_conn()
     t = conn.execute("SELECT * FROM transcripts WHERE content_id = ?", (cid,)).fetchone()
+    conn.close()
     if not t or not (t["raw_text"] or "").strip():
-        conn.close()
         raise HTTPException(400, "原文为空，请先提取或粘贴原文。")
+    segs = json.loads(t["segments_json"] or "[]")
+    if segs:
+        try:
+            sub = translate_content_segments(
+                content_id=cid,
+                target_lang="zh-CN",
+                engine_id=engine_id,
+                force_retranslate=force_retranslate,
+            )
+            return {
+                "ok": True,
+                "translated_text": sub.get("translated_zh", ""),
+                "translated_count": sub.get("translated_count", 0),
+                "total_count": sub.get("total_count", 0),
+                "cache_hit": sub.get("cache_hit", False),
+                "engine_id": sub.get("engine_id", ""),
+                "model_id": sub.get("model_id", ""),
+                "message": sub.get("message", ""),
+                "subtitles": sub,
+            }
+        except PermissionError as e:
+            raise HTTPException(402, str(e))
+        except Exception as e:
+            raise HTTPException(400, str(e))
+
+    # 无时间轴纯文章回退
     try:
         res = translate_with_llm(t["raw_text"])
     except Exception as e:
-        conn.close()
         raise HTTPException(400, str(e))
+    conn = get_conn()
     conn.execute(
         "UPDATE transcripts SET translated_zh = ?, updated_at = CURRENT_TIMESTAMP WHERE content_id = ?",
         (res["translated_text"], cid),
     )
     conn.commit()
     conn.close()
+    return {"ok": True, "translated_text": res["translated_text"]}
     return {"ok": True, **res}
 
 
