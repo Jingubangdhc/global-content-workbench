@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BookmarkPlus,
@@ -86,8 +86,10 @@ export default function VideoCaptureModal({
   const [captureReason, setCaptureReason] = useState('');
 
   const [saving, setSaving] = useState(false);
+  const [loadingTopics, setLoadingTopics] = useState(false);
   const [errMsg, setErrMsg] = useState('');
   const [savedResult, setSavedResult] = useState<any | null>(null);
+  const topicListReqSeqRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
@@ -98,13 +100,19 @@ export default function VideoCaptureModal({
     setOriginalShareUrl(initialOriginalShareUrl || '');
   }, [open, projectId, initialOriginalShareUrl]);
 
-  // 根据所选研究项目拉取真实数据库选题列表（切换项目时自动清空旧项目关联，避免误挂到其他项目的旧选题！）
+  // 根据所选研究项目拉取真实数据库选题列表（切换项目时带请求序号与取消标志，防止慢返回的旧请求覆盖当前项目数据）
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
+    const reqSeq = ++topicListReqSeqRef.current;
     const isOrigProject = selectedProjectId === projectId;
+    setLoadingTopics(true);
+    setTopics([]);
+    setLinkedExistingTopicId('');
     api
       .topicHubList({ project_id: selectedProjectId, include_published: 'true', limit: 100 })
       .then((r) => {
+        if (cancelled || reqSeq !== topicListReqSeqRef.current) return;
         const list = r?.topics || [];
         setTopics(list);
         if (isOrigProject && currentTopicId && list.some((t: any) => t.id === currentTopicId)) {
@@ -121,9 +129,18 @@ export default function VideoCaptureModal({
         }
       })
       .catch(() => {
+        if (cancelled || reqSeq !== topicListReqSeqRef.current) return;
         setTopics([]);
         setLinkedExistingTopicId('');
+      })
+      .finally(() => {
+        if (!cancelled && reqSeq === topicListReqSeqRef.current) {
+          setLoadingTopics(false);
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [open, selectedProjectId, projectId, currentTopicId, candidateTopicId, candidateTopicTitle]);
 
   useEffect(() => {
@@ -388,7 +405,9 @@ export default function VideoCaptureModal({
                     <label className="text-[11px] font-semibold text-slate-300">
                       2. 选题名称（自动生成待研究选题，或直接选择已有选题关联）*
                     </label>
-                    {topics.length > 0 && (
+                    {loadingTopics ? (
+                      <span className="text-[10px] text-cyan-300">加载项目选题中...</span>
+                    ) : topics.length > 0 && (
                       <select
                         value={linkedExistingTopicId}
                         onChange={(e) => {
