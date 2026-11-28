@@ -629,7 +629,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
           <button onClick={() => setDimsCollapsed((v) => !v)} className="flex items-center gap-1 font-bold text-slate-100 hover:text-cyan-300 transition">
             {dimsCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-cyan-400" /> : <ChevronUp className="w-3.5 h-3.5 text-cyan-400" />}
             <span>① 研究维度</span>
-            <span className="font-mono-num text-[11px] text-cyan-300">({selectedDims.length}/{flatDims.length})</span>
+            <span className="font-mono-num gcw-text-tag text-cyan-300">({selectedDims.length}/{flatDims.length})</span>
           </button>
 
           <input
@@ -666,14 +666,14 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
             生成候选选题
           </button>
 
-          <div className="ml-auto flex items-center gap-1.5 text-[11px]">
+          <div className="ml-auto flex items-center gap-1.5 gcw-text-tag">
             <span className={`px-2 py-0.5 rounded-full border font-medium ${isElectron ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'}`}>
               {isElectron ? '● 独立研究浏览器已就绪 (researchView)' : '⚠ 浏览器模式（建议用桌面外壳）'}
             </span>
-            <button onClick={() => setCandsCollapsed((v) => !v)} className="gcw-btn-ghost px-2 py-0.5 rounded text-[11px]">
+            <button onClick={() => setCandsCollapsed((v) => !v)} className="gcw-btn-ghost px-2 py-0.5 rounded gcw-text-tag">
               {candsCollapsed ? '展开选题' : '收起选题'}
             </button>
-            <button onClick={toggleMaximize} className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 ${researchMaximized ? 'gcw-tab-active' : 'gcw-btn-ghost'}`}>
+            <button onClick={toggleMaximize} className={`px-2 py-0.5 rounded gcw-text-tag font-semibold flex items-center gap-1 ${researchMaximized ? 'gcw-tab-active' : 'gcw-btn-ghost'}`}>
               {researchMaximized ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
               {researchMaximized ? '恢复布局' : '最大化研究区'}
             </button>
@@ -681,7 +681,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
         </div>
 
         {!dimsCollapsed && (
-          <div className="pt-1.5 border-t border-[#1E2E4A] space-y-1.5 text-[11px]">
+          <div className="pt-1.5 border-t border-[#1E2E4A] space-y-1.5 gcw-text-tag">
             <div className="flex flex-wrap items-center gap-1.5">
               {flatDims.length === 0 ? (
                 <span className="text-slate-500">输入主题点击「AI 推荐维度」，平铺展示后勾选即可直接生成候选选题。</span>
@@ -697,7 +697,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                 ))
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 gcw-text-meta text-slate-400">
               <button onClick={() => handleBatchSelect('all')} className="text-cyan-400 hover:underline">全选</button>
               <button onClick={() => handleBatchSelect('none')} className="text-slate-400 hover:text-slate-200 hover:underline">全不选</button>
               <button onClick={() => handleBatchSelect('invert')} className="text-slate-400 hover:text-slate-200 hover:underline">反选</button>
@@ -713,7 +713,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                 <button key={pr.id} onClick={() => handleBatchSelect('set_ids', pr.node_ids)} className="gcw-chip px-2 py-0.2 rounded-full text-cyan-300">{pr.name}</button>
               ))}
             </div>
-            {aiRecNote && <div className="text-[10px] text-amber-300/90 pt-0.5">{aiRecNote}</div>}
+            {aiRecNote && <div className="gcw-text-meta text-amber-300/90 pt-0.5">{aiRecNote}</div>}
           </div>
         )}
       </div>
@@ -731,7 +731,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                   <button
                     onClick={() => handleRegenerateCandidates('batch', checkedCandIds)}
                     disabled={generatingCands}
-                    className="px-1.5 py-0.5 rounded bg-cyan-600/80 hover:bg-cyan-500 text-white text-[10px]"
+                    className="px-1.5 py-0.5 rounded bg-cyan-600/80 hover:bg-cyan-500 text-white gcw-text-meta"
                     title="批量重生成已勾选的未锁定选题"
                   >
                     重生成({checkedCandIds.length})
@@ -740,7 +740,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                 <button
                   onClick={() => handleRegenerateCandidates('all')}
                   disabled={generatingCands || candidates.length === 0}
-                  className="gcw-btn-ghost px-1.5 py-0.5 rounded text-[10px] disabled:opacity-40"
+                  className="gcw-btn-ghost px-1.5 py-0.5 rounded gcw-text-meta disabled:opacity-40"
                   title="全部重生成（自动保留已锁定、已收录证据及已入 TopicHub 的选题）"
                 >
                   全部重生成
@@ -750,7 +750,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-[#1A2842]">
               {candidates.length === 0 ? (
-                <div className="p-4 text-[11px] text-slate-500">勾选维度后点击上方「生成候选选题」。</div>
+                <div className="p-4 gcw-text-tag text-slate-500">勾选维度后点击上方「生成候选选题」。</div>
               ) : (
                 candidates.map((c) => {
                   const isProtected = Boolean(c.is_locked) || Boolean(c.confirmed_topic_id) || Number(c.evidence_count || 0) > 0;
@@ -760,7 +760,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                       onClick={() => selectCandidate(c)}
                       className={`p-2.5 cursor-pointer space-y-1 text-xs transition ${activeCandId === c.id ? 'bg-cyan-500/12 border-l-2 border-cyan-400' : 'hover:bg-[#162238]'}`}
                     >
-                      <div className="flex items-center justify-between gap-1 text-[10px]">
+                      <div className="flex items-center justify-between gap-1 gcw-text-meta">
                         <div className="flex items-center gap-1">
                           {!isProtected && c.status !== 'eliminated' && (
                             <input
@@ -782,7 +782,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                           <button
                             type="button"
                             onClick={() => handleToggleLockCandidate(c)}
-                            className={`px-1 rounded text-[10px] ${c.is_locked ? 'text-amber-300 bg-amber-500/15' : 'text-slate-500 hover:text-slate-200'}`}
+                            className={`px-1 rounded gcw-text-meta ${c.is_locked ? 'text-amber-300 bg-amber-500/15' : 'text-slate-500 hover:text-slate-200'}`}
                             title={c.is_locked ? '已锁定（点击解锁）' : '锁定满意选题（重生成时自动保留）'}
                           >
                             {c.is_locked ? '🔒' : '🔓'}
@@ -792,7 +792,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                               type="button"
                               onClick={() => handleRegenerateCandidates('single', [c.id])}
                               disabled={generatingCands}
-                              className="text-slate-400 hover:text-cyan-300 text-[10px] px-0.5"
+                              className="text-slate-400 hover:text-cyan-300 gcw-text-meta px-0.5"
                               title="单条重新生成此候选选题"
                             >
                               ↻
@@ -816,7 +816,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
           <div className="px-3 py-2 gcw-panel-header space-y-1.5 shrink-0">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {candsCollapsed && (
-                <button onClick={() => setCandsCollapsed(false)} className="gcw-btn-ghost px-1.5 py-0.5 rounded text-[11px] flex items-center gap-0.5">
+                <button onClick={() => setCandsCollapsed(false)} className="gcw-btn-ghost px-1.5 py-0.5 rounded gcw-text-tag flex items-center gap-0.5">
                   <ChevronRight className="w-3.5 h-3.5" /> 选题
                 </button>
               )}
@@ -831,14 +831,14 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
               />
               <button
                 onClick={openVaultModal}
-                className="px-2.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/40 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 flex items-center gap-1 shrink-0 transition"
+                className="px-2.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/40 gcw-text-tag font-semibold text-cyan-300 hover:bg-cyan-500/25 flex items-center gap-1 shrink-0 transition"
                 title="管理并复制各平台登录账号密码（本机 Windows DPAPI 加密存储）"
               >
                 <KeyRound className="w-3 h-3" /> 账号保险箱
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 gcw-text-tag">
               {platforms.map((p) => (
                 <button
                   key={p.id}
@@ -859,7 +859,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
               {isElectron ? (
                 <>
                   {/* Electron 内置浏览器导航栏：后退 / 前进 / 刷新 / 真实网址 / 一键填入右侧证据栏 */}
-                  <div className="px-2.5 py-1.5 border-b border-[#1E2E4A] bg-[#111A2E] flex items-center gap-1.5 text-[11px] shrink-0">
+                  <div className="px-2.5 py-1.5 border-b border-[#1E2E4A] bg-[#111A2E] flex items-center gap-1.5 gcw-text-tag shrink-0">
                     <button onClick={() => researchBrowser?.back()} disabled={!ebState.canGoBack} className="gcw-btn-ghost p-1 rounded disabled:opacity-30" title="后退">
                       <ArrowLeft className="w-3.5 h-3.5" />
                     </button>
@@ -904,7 +904,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                         }
                       }}
                       placeholder="粘贴网址或完整抖音分享文本（如 2.05 aAg:/ ... https://v.douyin.com/...）回车浏览..."
-                      className="gcw-input flex-1 px-2.5 py-0.5 text-[11px] font-mono-num"
+                      className="gcw-input flex-1 px-2.5 py-0.5 gcw-text-tag font-mono-num"
                     />
                     <button
                       onClick={handleOpenOneClickCapture}
@@ -934,7 +934,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                     </button>
                   </div>
                   {addressMultiLinks.length > 1 && (
-                    <div className="px-2.5 py-1.5 bg-amber-500/12 border-b border-amber-500/35 flex flex-wrap items-center gap-1.5 text-[10px] shrink-0">
+                    <div className="px-2.5 py-1.5 bg-amber-500/12 border-b border-amber-500/35 flex flex-wrap items-center gap-1.5 gcw-text-meta shrink-0">
                       <span className="text-amber-300 font-semibold">识别到多个链接，请人工选择打开：</span>
                       {addressMultiLinks.map((u) => (
                         <button
@@ -955,7 +955,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                     </div>
                   )}
                   {ebState.lastError && (
-                    <div className="px-2.5 py-1 bg-rose-500/15 border-b border-rose-500/35 text-rose-300 text-[10px] shrink-0">
+                    <div className="px-2.5 py-1 bg-rose-500/15 border-b border-rose-500/35 text-rose-300 gcw-text-meta shrink-0">
                       ⚠ {ebState.lastError}
                     </div>
                   )}
@@ -972,7 +972,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
               ) : (
                 <>
                   {/* 站内官方嵌入视频直达条（普通浏览器模式兜底：YouTube / B站） */}
-                  <div className="px-3 py-1.5 border-b border-[#1E2E4A] bg-[#111A2E] flex items-center gap-2 text-[11px]">
+                  <div className="px-3 py-1.5 border-b border-[#1E2E4A] bg-[#111A2E] flex items-center gap-2 gcw-text-tag">
                     <span className="font-semibold text-slate-300 shrink-0">站内官方播放器：</span>
                     <input
                       value={embedInputUrl}
@@ -985,7 +985,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                         }
                       }}
                       placeholder="粘贴 YouTube 或 B站视频链接即可在此主区同屏播放..."
-                      className="gcw-input flex-1 px-2.5 py-0.5 text-[11px]"
+                      className="gcw-input flex-1 px-2.5 py-0.5 gcw-text-tag"
                     />
                     <button
                       onClick={() => {
@@ -1001,7 +1001,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
 
                   {activeEmbed.embedUrl ? (
                     <div className="flex-1 flex flex-col min-h-0">
-                      <div className="px-3 py-1 bg-[#131E36] border-b border-[#1E2E4A] flex justify-between items-center text-[11px]">
+                      <div className="px-3 py-1 bg-[#131E36] border-b border-[#1E2E4A] flex justify-between items-center gcw-text-tag">
                         <span className="font-semibold text-slate-200 truncate">{activeEmbed.label} · {activeEmbed.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           <a href={activeEmbed.rawUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:underline">原网页打开 ↗</a>
@@ -1044,30 +1044,30 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
 
             {/* 右 30%：紧凑证据收录与研究笔记侧边条 */}
             <div className="w-80 shrink-0 flex flex-col overflow-hidden bg-[#111A2E]">
-              <div className="px-2.5 py-1.5 gcw-panel-header text-[11px] font-semibold flex justify-between text-slate-200">
+              <div className="px-2.5 py-1.5 gcw-panel-header gcw-text-tag font-semibold flex justify-between text-slate-200">
                 <span>证据收录与笔记 <span className="font-mono-num text-cyan-300">({evidences.length})</span></span>
-                <span className="text-[10px] text-slate-400">不自动进文案工坊</span>
+                <span className="gcw-text-meta text-slate-400">不自动进文案工坊</span>
               </div>
-              <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 text-[11px]">
+              <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 gcw-text-tag">
                 {/* 快速录入表单 */}
                 <div className="space-y-1.5 pb-2.5 border-b border-[#1E2E4A]">
                   <div className="flex gap-1">
-                    <select value={evType} onChange={(e) => setEvType(e.target.value as any)} className="gcw-input px-1.5 py-1 text-[11px]">
+                    <select value={evType} onChange={(e) => setEvType(e.target.value as any)} className="gcw-input px-1.5 py-1 gcw-text-tag">
                       <option value="video">视频</option>
                       <option value="article">文章</option>
                       <option value="comment_text">评论</option>
                       <option value="data_snapshot">数据</option>
                     </select>
-                    <input value={evPlatform} onChange={(e) => setEvPlatform(e.target.value)} placeholder="平台" className="gcw-input flex-1 px-2 py-1 text-[11px]" />
+                    <input value={evPlatform} onChange={(e) => setEvPlatform(e.target.value)} placeholder="平台" className="gcw-input flex-1 px-2 py-1 gcw-text-tag" />
                   </div>
-                  <input value={evUrl} onChange={(e) => setEvUrl(e.target.value)} placeholder="原始 URL（支持点击上方一键提取）" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
-                  <input value={evTitle} onChange={(e) => setEvTitle(e.target.value)} placeholder="标题 / 评论摘录" className="gcw-input w-full px-2 py-1 text-[11px]" />
+                  <input value={evUrl} onChange={(e) => setEvUrl(e.target.value)} placeholder="原始 URL（支持点击上方一键提取）" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
+                  <input value={evTitle} onChange={(e) => setEvTitle(e.target.value)} placeholder="标题 / 评论摘录" className="gcw-input w-full px-2 py-1 gcw-text-tag" />
                   <div className="flex gap-1">
-                    <input value={evAuthor} onChange={(e) => setEvAuthor(e.target.value)} placeholder="作者" className="gcw-input w-1/3 px-1.5 py-1 text-[11px]" />
-                    <input value={evViews} onChange={(e) => setEvViews(e.target.value)} placeholder="播放" className="gcw-input w-1/3 px-1.5 py-1 text-[11px] font-mono-num" />
-                    <input value={evLikes} onChange={(e) => setEvLikes(e.target.value)} placeholder="点赞" className="gcw-input w-1/3 px-1.5 py-1 text-[11px] font-mono-num" />
+                    <input value={evAuthor} onChange={(e) => setEvAuthor(e.target.value)} placeholder="作者" className="gcw-input w-1/3 px-1.5 py-1 gcw-text-tag" />
+                    <input value={evViews} onChange={(e) => setEvViews(e.target.value)} placeholder="播放" className="gcw-input w-1/3 px-1.5 py-1 gcw-text-tag font-mono-num" />
+                    <input value={evLikes} onChange={(e) => setEvLikes(e.target.value)} placeholder="点赞" className="gcw-input w-1/3 px-1.5 py-1 gcw-text-tag font-mono-num" />
                   </div>
-                  <textarea value={evNote} onChange={(e) => setEvNote(e.target.value)} rows={2} placeholder="研究笔记..." className="gcw-input w-full px-2 py-1 text-[11px]" />
+                  <textarea value={evNote} onChange={(e) => setEvNote(e.target.value)} rows={2} placeholder="研究笔记..." className="gcw-input w-full px-2 py-1 gcw-text-tag" />
                   <button onClick={handleCaptureEvidence} disabled={!activeCand} className="gcw-btn-cyan w-full py-1.5 rounded-lg font-semibold disabled:opacity-40">
                     收录研究证据
                   </button>
@@ -1087,16 +1087,16 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                           {emb.kind && (
                             <button
                               onClick={() => setActiveEmbed({ ...emb, rawUrl: ev.url, title: ev.title })}
-                              className="px-1.5 py-0.2 rounded bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 text-[10px] shrink-0"
+                              className="px-1.5 py-0.2 rounded bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 gcw-text-meta shrink-0"
                             >
                               ▶ 播放
                             </button>
                           )}
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono-num">
+                        <div className="gcw-text-meta text-slate-400 font-mono-num">
                           播:{ev.view_count ?? '—'} · 赞:{ev.like_count ?? '—'}
                         </div>
-                        {ev.user_note && <div className="text-[10px] text-slate-300">{ev.user_note}</div>}
+                        {ev.user_note && <div className="gcw-text-meta text-slate-300">{ev.user_note}</div>}
                       </div>
                     );
                   })}
@@ -1104,7 +1104,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
               </div>
 
               {/* 底部确认与淘汰 */}
-              <div className="p-2 border-t border-[#1E2E4A] bg-[#131E36] space-y-1.5 text-[11px]">
+              <div className="p-2 border-t border-[#1E2E4A] bg-[#131E36] space-y-1.5 gcw-text-tag">
                 <input value={judgeReason} onChange={(e) => setJudgeReason(e.target.value)} placeholder="判断理由..." className="gcw-input w-full px-2 py-1" />
                 <div className="flex gap-1.5">
                   <button

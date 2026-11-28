@@ -100,14 +100,14 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
             <span>万能收录框（支持任意平台链接、多行批量粘贴、或直接粘贴抖音/小红书分享口令文本）</span>
           </div>
           <div className="flex items-center gap-2">
-            <label className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-200 cursor-pointer flex items-center gap-1 border border-slate-700">
+            <label className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 gcw-text-tag text-slate-200 cursor-pointer flex items-center gap-1 border border-slate-700">
               <Upload className="w-3 h-3" />
               导入带货 CSV
               <input type="file" accept=".csv" className="hidden" onChange={(e) => handleCsv(e.target.files?.[0])} />
             </label>
             <a
               href="/api/export/sop-excel"
-              className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-[11px] text-emerald-300 border border-emerald-500/40 flex items-center gap-1"
+              className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 gcw-text-tag text-emerald-300 border border-emerald-500/40 flex items-center gap-1"
             >
               <Download className="w-3 h-3" />
               导出 SOP Excel
@@ -201,7 +201,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
               </div>
             ) : (
               <table className="w-full text-left border-collapse text-xs">
-                <thead className="text-[11px] text-slate-400 border-b border-slate-800 sticky top-0 bg-[#0b1120]">
+                <thead className="gcw-text-tag text-slate-400 border-b border-slate-800 sticky top-0 bg-[#0b1120]">
                   <tr>
                     <th className="py-2 pr-2">平台 / 标题（点开看原视频）</th>
                     <th className="py-2 px-2">作者与变现指纹</th>
@@ -217,7 +217,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                       <tr key={c.id} className="hover:bg-slate-900/60">
                         <td className="py-2.5 pr-2 max-w-md">
                           <div className="flex items-start gap-2">
-                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] uppercase font-mono-num text-cyan-300 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 gcw-text-meta uppercase font-mono-num text-cyan-300 shrink-0">
                               {c.platform}
                             </span>
                             <div className="min-w-0">
@@ -230,7 +230,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                                 {c.title} <ExternalLink className="w-3 h-3 inline opacity-50" />
                               </a>
                               {c.collect_reason && (
-                                <div className="text-[10px] text-slate-400 mt-0.5">理由：{c.collect_reason}</div>
+                                <div className="gcw-text-meta text-slate-400 mt-0.5">理由：{c.collect_reason}</div>
                               )}
                             </div>
                           </div>
@@ -242,7 +242,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                               {tags.map((t) => (
                                 <span
                                   key={t}
-                                  className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px]"
+                                  className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 gcw-text-meta"
                                 >
                                   {t}
                                 </span>
@@ -252,7 +252,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono-num">
                           <div className="text-cyan-300">{fmtNum(c.view_count)}</div>
-                          <div className="text-[10px] text-amber-300">
+                          <div className="gcw-text-meta text-amber-300">
                             {c.outlier_score ? `${c.outlier_score}x` : '—'}
                           </div>
                         </td>
@@ -260,7 +260,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                           <select
                             value={c.status}
                             onChange={(e) => api.patchContent(c.id, { status: e.target.value }).then(load)}
-                            className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-slate-200"
+                            className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 gcw-text-tag text-slate-200"
                           >
                             <option value="inbox">📥 收件箱</option>
                             <option value="useful">⭐ 有用</option>
@@ -272,7 +272,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                         <td className="py-2.5 pl-2 text-right whitespace-nowrap space-x-1">
                           <button
                             onClick={() => onOpenTranscript(c.id)}
-                            className={`px-2 py-1 rounded text-[11px] border ${
+                            className={`px-2 py-1 rounded gcw-text-tag border ${
                               c.has_transcript
                                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                 : 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-600 hover:text-white'
@@ -312,11 +312,11 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                           >
                             {cr.name}
                           </a>
-                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] uppercase text-slate-400">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 gcw-text-meta uppercase text-slate-400">
                             {cr.platform}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-400 font-mono-num mt-1">
+                        <div className="gcw-text-tag text-slate-400 font-mono-num mt-1">
                           粉丝 {fmtNum(cr.follower_count)} · 基线中位数 {fmtNum(cr.baseline_median_views)} · 已收 {cr.video_count} 条
                         </div>
                       </div>
@@ -333,7 +333,7 @@ export default function ContentAuthors({ projectId, onOpenTranscript, onInspectC
                         {tags.map((t) => (
                           <span
                             key={t}
-                            className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px]"
+                            className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 gcw-text-meta"
                           >
                             {t}
                           </span>

@@ -115,16 +115,16 @@ export default function HotTrends({ projectId, onJumpSearchKeyword }: Props) {
             <div className="px-3 py-2.5 border-b border-slate-800 bg-[#0f172a] flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-100">{src.name}</span>
-                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400">{src.region}</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 gcw-text-meta text-slate-400">{src.region}</span>
               </div>
-              <span className={`text-[10px] font-mono-num ${src.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className={`gcw-text-meta font-mono-num ${src.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {src.ok ? `${src.count} 条` : '暂受限'}
               </span>
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-slate-800/50 p-1.5">
               {!src.ok ? (
-                <div className="p-4 text-[11px] text-slate-500 text-center">
+                <div className="p-4 gcw-text-tag text-slate-500 text-center">
                   当前网络访问受限：{src.error}
                 </div>
               ) : (
@@ -139,7 +139,7 @@ export default function HotTrends({ projectId, onJumpSearchKeyword }: Props) {
                     >
                       <div className="flex items-start gap-2">
                         <span
-                          className={`font-mono-num text-[11px] font-bold w-4 shrink-0 ${
+                          className={`font-mono-num gcw-text-tag font-bold w-4 shrink-0 ${
                             it.rank <= 3 ? 'text-rose-400' : 'text-slate-500'
                           }`}
                         >
@@ -155,20 +155,20 @@ export default function HotTrends({ projectId, onJumpSearchKeyword }: Props) {
                             {it.title} <ExternalLink className="w-2.5 h-2.5 inline opacity-40" />
                           </a>
                           <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-slate-500 font-mono-num truncate">
+                            <span className="gcw-text-meta text-slate-500 font-mono-num truncate">
                               {it.hot} {it.extra ? `· ${it.extra}` : ''}
                             </span>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
                               <button
                                 onClick={() => onJumpSearchKeyword(it.title)}
-                                className="px-1.5 py-0.5 rounded bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white text-[10px]"
+                                className="px-1.5 py-0.5 rounded bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white gcw-text-meta"
                                 title="带词去搜全网爆款"
                               >
                                 <Search className="w-2.5 h-2.5 inline" />搜
                               </button>
                               <button
                                 onClick={() => collectHot(it.title, it.url, src.name)}
-                                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-[10px]"
+                                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white gcw-text-meta"
                                 title="收录到素材库"
                               >
                                 <Download className="w-2.5 h-2.5 inline" />收

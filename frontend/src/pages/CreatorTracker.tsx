@@ -109,12 +109,12 @@ export default function CreatorTracker({ projectId, onOpenTranscript, onInspectC
   const outlierBadge = (score?: number | null) => {
     if (!score) return <span className="text-slate-600 font-mono-num">—</span>;
     if (score >= 10)
-      return <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono-num font-bold text-[11px]">🔥 {score}x</span>;
+      return <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono-num font-bold gcw-text-tag">🔥 {score}x</span>;
     if (score >= 5)
-      return <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono-num font-bold text-[11px]">⚡ {score}x</span>;
+      return <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono-num font-bold gcw-text-tag">⚡ {score}x</span>;
     if (score >= 3)
-      return <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono-num font-bold text-[11px]">✅ {score}x</span>;
-    return <span className="text-slate-400 font-mono-num text-[11px]">{score}x</span>;
+      return <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono-num font-bold gcw-text-tag">✅ {score}x</span>;
+    return <span className="text-slate-400 font-mono-num gcw-text-tag">{score}x</span>;
   };
 
   const parseTags = (jsonStr?: string): string[] => {
@@ -134,7 +134,7 @@ export default function CreatorTracker({ projectId, onOpenTranscript, onInspectC
             <UserPlus className="w-4 h-4" />
             <span>爆款博主追踪（贴主页链接直接收录并查看他的近期作品与异常爆款倍数）</span>
           </div>
-          <div className="text-[11px] text-slate-400">
+          <div className="gcw-text-tag text-slate-400">
             YouTube 主页（/@handle 或 /channel/...）支持全自动直拉作品
           </div>
         </div>
@@ -207,13 +207,13 @@ export default function CreatorTracker({ projectId, onOpenTranscript, onInspectC
                             {cr.platform}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-400 font-mono-num mt-1">
+                        <div className="gcw-text-tag text-slate-400 font-mono-num mt-1">
                           中位数 {fmtNum(cr.baseline_median_views)} · {cr.video_count} 条
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {cr.max_outlier && cr.max_outlier >= 3 ? (
-                          <span className="text-[10px] font-mono-num text-amber-300">
+                          <span className="gcw-text-meta font-mono-num text-amber-300">
                             <Flame className="w-3 h-3 inline" />{cr.max_outlier}x
                           </span>
                         ) : null}
@@ -247,16 +247,16 @@ export default function CreatorTracker({ projectId, onOpenTranscript, onInspectC
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-bold text-slate-100">{activeCreator.name}</h2>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] uppercase text-cyan-300 font-mono-num">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 gcw-text-meta uppercase text-cyan-300 font-mono-num">
                       {activeCreator.platform}
                     </span>
                     {parseTags(activeCreator.detected_monetization_json).map((t) => (
-                      <span key={t} className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px]">
+                      <span key={t} className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 gcw-text-meta">
                         {t}
                       </span>
                     ))}
                   </div>
-                  <div className="text-[11px] text-slate-400 font-mono-num mt-1">
+                  <div className="gcw-text-tag text-slate-400 font-mono-num mt-1">
                     粉丝 {fmtNum(activeCreator.follower_count)} · 频道近期播放中位数 {fmtNum(activeCreator.baseline_median_views)} · 已拉取 {videos.length} 条作品
                     {activeCreator.strengths_note ? ` · 备注：${activeCreator.strengths_note}` : ''}
                   </div>
@@ -305,7 +305,7 @@ export default function CreatorTracker({ projectId, onOpenTranscript, onInspectC
                   </div>
                 ) : (
                   <table className="w-full text-left border-collapse text-xs">
-                    <thead className="text-[11px] text-slate-400 border-b border-slate-800 sticky top-0 bg-[#0b1120]">
+                    <thead className="gcw-text-tag text-slate-400 border-b border-slate-800 sticky top-0 bg-[#0b1120]">
                       <tr>
                         <th className="py-2 pr-2">视频（点击直接看原视频）</th>
                         <th className="py-2 px-2 text-right">时长</th>
@@ -338,7 +338,7 @@ export default function CreatorTracker({ projectId, onOpenTranscript, onInspectC
                           <td className="py-2 pl-2 text-right whitespace-nowrap">
                             <button
                               onClick={() => onOpenTranscript(v.id)}
-                              className={`px-2.5 py-1 rounded text-[11px] border ${
+                              className={`px-2.5 py-1 rounded gcw-text-tag border ${
                                 v.has_transcript
                                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                   : 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-600 hover:text-white'

@@ -17,6 +17,7 @@ function createViewController(viewId) {
     getState: () => ipcRenderer.invoke('gcw-browser:get-state', viewId),
     extractVideoMeta: () => ipcRenderer.invoke('gcw-browser:extract-video-meta', viewId),
     getVideoPlayback: () => ipcRenderer.invoke('gcw-browser:get-video-playback', viewId),
+    seekVideo: (seconds) => ipcRenderer.invoke('gcw-browser:seek-video', viewId, seconds),
     onState: (cb) => {
       const handler = (_ev, state) => {
         if (state && state.viewId === viewId) cb(state);

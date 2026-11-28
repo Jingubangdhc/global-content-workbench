@@ -43,7 +43,7 @@ export default function PaidDecisionModal({ tool, onClose, onUpdated }: Props) {
       <div className="bg-[#0f172a] border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-[#0b1120]">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 text-[11px] rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-medium">
+            <span className="px-2 py-0.5 gcw-text-tag rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-medium">
               🔴 付费决策评估
             </span>
             <h3 className="font-bold text-slate-100">{tool.name}</h3>

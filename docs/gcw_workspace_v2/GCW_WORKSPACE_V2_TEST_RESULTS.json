@@ -1,0 +1,174 @@
+{
+  "environment": {
+    "os": "win32",
+    "electron": "35.7.5",
+    "chrome": "134.0.6998.205",
+    "node": "22.16.0",
+    "tested_at": "2026-11-28T09:14:40.351Z",
+    "version": "v0.2.0-rc (GCW-WORKSPACE-V2)"
+  },
+  "tests": {
+    "nav_consolidation": {
+      "type": "real_electron_e2e",
+      "expected": "旧独立文案提取工坊菜单已取消，选题资产中心正常打开",
+      "actual": {
+        "oldTranscriptMenuRemoved": true,
+        "hasTopicHubMenu": true
+      },
+      "pass": true
+    },
+    "youtube_embedded_and_seek": {
+      "type": "real_electron_e2e",
+      "expected": "YouTube 英文视频在当前页面内嵌播放，显示真实数据面板与双语参考文案，seekVideo 真实跳转至 ~58s",
+      "actual": {
+        "embedCheck": {
+          "hasMetrics": true,
+          "hasRefPane": true,
+          "hasOrigPane": true,
+          "noOldPositionBtn": true,
+          "noOldSop": true
+        },
+        "seekTest": {
+          "beforeCt": 5.72164,
+          "seekRes": {
+            "ok": true,
+            "supported": true,
+            "currentTime": 58,
+            "duration": 875.701
+          },
+          "afterCt": 58.394389,
+          "url": "https://www.youtube.com/watch?v=jFa0LT3bMrY"
+        },
+        "topicPlayerUrl": "https://www.youtube.com/watch?v=jFa0LT3bMrY"
+      },
+      "pass": true
+    },
+    "original_draft_edit_and_autosave": {
+      "type": "real_electron_e2e",
+      "expected": "播放期间可正常编辑原创文案并自动保存草稿",
+      "actual": {
+        "ok": true,
+        "valueLen": 34,
+        "savedBanner": false
+      },
+      "pass": false
+    },
+    "modal_overlay_protection": {
+      "type": "real_electron_e2e",
+      "expected": "打开设置弹窗时原生 WebContentsView 自动隐藏，不遮挡弹窗",
+      "actual": {
+        "nativePlayerHiddenForModal": true
+      },
+      "pass": true
+    },
+    "three_projects_isolation": {
+      "type": "real_electron_e2e",
+      "expected": "三个项目切换后选题列表与当前标题独立切换不串用",
+      "actual": [
+        {
+          "projectId": 1,
+          "h1": "#25 海外华人在国内三甲医院国际部体检与就医真实费用实录",
+          "topicCount": 15
+        },
+        {
+          "projectId": 2,
+          "h1": "#46 第4集：创业起步与破局都适用的六个成事之道！#认知 #提升自己 #个人成长 #人生智慧",
+          "topicCount": 20
+        },
+        {
+          "projectId": 461,
+          "h1": "#36 新手老年司机第一辆车：燃油车还是电动车？——老年新手驾驶者的购车决策困惑与安全配置需求研究",
+          "topicCount": 3
+        }
+      ],
+      "pass": true
+    },
+    "font_scale_4_levels": {
+      "type": "real_electron_e2e",
+      "expected": "四档字号实际 getComputedStyle 逐档增大（紧凑 14px -> 舒适 16px -> 大字 18px）且无横向溢出",
+      "actual": {
+        "compactBody": 14,
+        "comfortableBody": 16,
+        "largeBody": 18
+      },
+      "pass": true
+    }
+  },
+  "font_scale_computed_styles": {
+    "紧凑": {
+      "dataFontScale": "compact",
+      "html": "14px",
+      "body": "14px",
+      "sectionTitle": "18px",
+      "videoTitle": "15px",
+      "editor": "15px",
+      "metric": "18px",
+      "btn": "13.5px",
+      "tag": "12.5px",
+      "meta": "12px",
+      "overflowX": false
+    },
+    "标准": {
+      "dataFontScale": "standard",
+      "html": "15px",
+      "body": "15px",
+      "sectionTitle": "19px",
+      "videoTitle": "16px",
+      "editor": "16px",
+      "metric": "19px",
+      "btn": "14.5px",
+      "tag": "13px",
+      "meta": "12.5px",
+      "overflowX": false
+    },
+    "舒适": {
+      "dataFontScale": "comfortable",
+      "html": "16px",
+      "body": "16px",
+      "sectionTitle": "20px",
+      "videoTitle": "17px",
+      "editor": "17px",
+      "metric": "20px",
+      "btn": "15px",
+      "tag": "13.5px",
+      "meta": "13px",
+      "overflowX": false
+    },
+    "大字": {
+      "dataFontScale": "large",
+      "html": "18px",
+      "body": "18px",
+      "sectionTitle": "22px",
+      "videoTitle": "19px",
+      "editor": "19px",
+      "metric": "24px",
+      "btn": "16.5px",
+      "tag": "14.5px",
+      "meta": "14px",
+      "overflowX": false
+    }
+  },
+  "layout_overflow_checks": {
+    "2560x1440": {
+      "width": 2544,
+      "height": 1375,
+      "overflowX": false
+    },
+    "1920x1080": {
+      "width": 1904,
+      "height": 1015,
+      "overflowX": false
+    }
+  },
+  "not_yet_verified_manually": [
+    "用户在真实外接 2560x1440 物理高分屏与 125%/150% Windows DPI 下的主观视觉舒适度验收",
+    "用户使用真实付费云端 API（需用户主动开启授权）生成原创文案的最终风格满意度验收",
+    "真实抖音扫码登录态在用户本机重启后的长期人工使用验收"
+  ],
+  "video_mp4": {
+    "path": "C:\\Users\\wodhc\\.gemini\\antigravity\\scratch\\content-workbench\\docs\\gcw_workspace_v2\\evidence\\gcw_workspace_v2_uat_demo.mp4",
+    "frames": 11,
+    "exitCode": 0,
+    "bytes": 543964
+  }
+}

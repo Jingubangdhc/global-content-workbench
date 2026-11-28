@@ -126,24 +126,24 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
   const tierBadge = (tier: string, myStatus: string) => {
     if (myStatus === 'paid_active')
       return (
-        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-semibold">
+        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 gcw-text-meta font-semibold">
           💳 已付费
         </span>
       );
     if (tier === 'free')
       return (
-        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px]">
+        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 gcw-text-meta">
           🟢 免费直看
         </span>
       );
     if (tier === 'freemium')
       return (
-        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px]">
+        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 gcw-text-meta">
           🟡 限免/需资格
         </span>
       );
     return (
-      <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[10px]">
+      <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 gcw-text-meta">
         🔴 付费决策
       </span>
     );
@@ -239,7 +239,7 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
 
         {xrayRes?.links && (
           <div className="flex items-center gap-2 flex-wrap bg-slate-950/90 border border-slate-800 rounded-lg p-2.5">
-            <span className="text-[11px] text-slate-400">
+            <span className="gcw-text-tag text-slate-400">
               针对 <strong className="text-cyan-300">{xrayRes.query}</strong> 的一键侦察：
             </span>
             {xrayRes.links.map((l: any) => (
@@ -267,7 +267,7 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
       {/* 主体：左侧 11 大变现赛道导航 + 右侧卡片网格 */}
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 lg:col-span-3 bg-[#0b1120] border border-slate-800/90 rounded-xl p-2 space-y-1 h-fit">
-          <div className="px-2 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          <div className="px-2 py-1.5 gcw-text-tag font-bold text-slate-400 uppercase tracking-wider">
             按变现赛道快速切换
           </div>
           {CATEGORIES.map((cat) => {
@@ -285,14 +285,14 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
                 }`}
               >
                 <span>{cat}</span>
-                <span className="font-mono-num text-[11px] px-1.5 rounded bg-slate-900 text-slate-400">
+                <span className="font-mono-num gcw-text-tag px-1.5 rounded bg-slate-900 text-slate-400">
                   {cnt}
                 </span>
               </button>
             );
           })}
           {viewMode === 'external' && (
-            <div className="mt-2 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
+            <div className="mt-2 p-2.5 rounded-lg bg-slate-950 border border-slate-800 gcw-text-tag text-slate-400 leading-relaxed">
               💡 <strong className="text-slate-200">联盟营销 & 私信获客</strong>没有外部竞品查询站：在「素材与作者库」收录视频时，系统会自动用正则扫描简介里的 Amazon 短链、折扣码、独立站与 WhatsApp/微信线索。
             </div>
           )}
@@ -319,7 +319,7 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
                             <span className="font-bold text-sm text-slate-100 truncate">{it.name}</span>
                             {it.is_pinned ? <Star className="w-3.5 h-3.5 text-amber-400 fill-current shrink-0" /> : null}
                           </div>
-                          <div className="text-[11px] text-cyan-400/90">
+                          <div className="gcw-text-tag text-cyan-400/90">
                             {it.target_platform} · {it.category}
                           </div>
                         </div>
@@ -328,11 +328,11 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
 
                       <div className="text-xs text-slate-300 leading-snug">{it.metrics_desc}</div>
                       {it.fee_detail && (
-                        <div className="text-[11px] text-slate-400 bg-slate-950/70 rounded px-2 py-1 border border-slate-800/70">
+                        <div className="gcw-text-tag text-slate-400 bg-slate-950/70 rounded px-2 py-1 border border-slate-800/70">
                           {it.fee_detail}
                         </div>
                       )}
-                      <div className="text-[10px] text-amber-300/80">
+                      <div className="gcw-text-meta text-amber-300/80">
                         口径：{it.data_nature || '按官网'} {it.limitation_warning ? `· ${it.limitation_warning}` : ''}
                       </div>
                     </div>
@@ -375,7 +375,7 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs font-bold text-slate-100">赛道公开收益证据本（L1 自有真实 / L2 博主公开自晒 / L3 第三方估算）</div>
-                <div className="text-[11px] text-slate-400">
+                <div className="gcw-text-tag text-slate-400">
                   随手记下各赛道博主晒出的真实 RPM、带货月 GMV 或独立站收入，形成你自己的一手赛道含金量账本
                 </div>
               </div>
@@ -466,7 +466,7 @@ export default function RevenueRadar({ initialXray, onOpenCalc }: Props) {
                 {evidence.map((ev) => (
                   <div key={ev.id} className="py-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-cyan-300 font-mono-num">
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 gcw-text-meta text-cyan-300 font-mono-num">
                         {ev.evidence_level === 'L1_OWN' ? 'L1 自有' : ev.evidence_level === 'L2_SELF_REPORTED' ? 'L2 自晒' : 'L3 估算'}
                       </span>
                       <span className="font-semibold text-slate-100">

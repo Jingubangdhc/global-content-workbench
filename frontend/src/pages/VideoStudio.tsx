@@ -263,7 +263,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
       <div className="h-11 shrink-0 bg-[#0b1120] border border-slate-800 rounded-xl px-3 flex items-center justify-between gap-2 overflow-x-auto">
         <div className="flex items-center gap-2 shrink-0">
           {/* 三模式切换胶囊：AI 智能剪辑（默认） | 原版编排台 | AI 动效工坊 */}
-          <div className="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-0.5 text-[11px]">
+          <div className="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-0.5 gcw-text-tag">
             <button
               onClick={() => setStudioMode('ai_smart_edit')}
               className={`px-2 py-0.5 rounded-md font-medium transition ${
@@ -313,7 +313,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
             <Plus className="w-3.5 h-3.5" /> 新建
           </button>
           <span
-            className={`px-2 py-0.5 rounded text-[10px] border flex items-center gap-1 ${
+            className={`px-2 py-0.5 rounded gcw-text-meta border flex items-center gap-1 ${
               engine?.reachable
                 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                 : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
@@ -448,18 +448,18 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {drawerTab === 'versions' && (
                 <>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="gcw-text-tag text-slate-400">
                     点击「同步存档」可将原版编辑台当前进度保存为工作台不可变快照；点「恢复到编辑台」可随时回滚。
                   </div>
                   {versions.map((v) => (
                     <div key={v.id} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium text-slate-200">v{v.version_no} · {v.source_type}</div>
-                        <div className="text-[10px] text-slate-400 truncate">{v.note} ({v.checksum})</div>
+                        <div className="gcw-text-meta text-slate-400 truncate">{v.note} ({v.checksum})</div>
                       </div>
                       <button
                         onClick={() => handleRestoreVersionToEngine(v.id)}
-                        className="px-2 py-1 rounded bg-cyan-600/30 hover:bg-cyan-600 text-cyan-100 text-[11px] shrink-0"
+                        className="px-2 py-1 rounded bg-cyan-600/30 hover:bg-cyan-600 text-cyan-100 gcw-text-tag shrink-0"
                       >
                         恢复到编辑台
                       </button>
@@ -484,15 +484,15 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-slate-800">
                     <span className="font-semibold text-slate-200">人工修改偏好学习（A16）</span>
-                    <button onClick={handleProposeFeedback} disabled={!activeProj} className="px-2 py-1 rounded bg-cyan-600/30 text-cyan-200 text-[11px] disabled:opacity-40">
+                    <button onClick={handleProposeFeedback} disabled={!activeProj} className="px-2 py-1 rounded bg-cyan-600/30 text-cyan-200 gcw-text-tag disabled:opacity-40">
                       提取人工精修差异
                     </button>
                   </div>
-                  <div className="text-[10px] text-slate-400">仅人工批准的规则影响后续 AI 编排，可随时撤销，绝不用于模型训练。</div>
+                  <div className="gcw-text-meta text-slate-400">仅人工批准的规则影响后续 AI 编排，可随时撤销，绝不用于模型训练。</div>
                   {feedbackRules.map((r) => (
                     <div key={r.id} className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1.5">
                       <div className="text-slate-200">{r.proposed_rule}</div>
-                      <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center justify-between gcw-text-meta">
                         <span className={r.status === 'approved' ? 'text-emerald-400' : 'text-amber-300'}>状态：{r.status}</span>
                         <div className="flex gap-1">
                           {r.status !== 'approved' && (
@@ -520,7 +520,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
 
               {drawerTab === 'exports' && (
                 <>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="gcw-text-tag text-slate-400">
                     在左侧原版编辑台点击「导出透明 MOV」后，产物会出现在下方列表中，可直接一键送往「多平台发布中心」。
                   </div>
                   <button
@@ -531,13 +531,13 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
                     <Send className="w-3.5 h-3.5" /> 仅用当前工程标题创建发布包
                   </button>
                   <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                    <div className="text-[11px] text-slate-300 font-medium flex items-center gap-1">
+                    <div className="gcw-text-tag text-slate-300 font-medium flex items-center gap-1">
                       <FolderOutput className="w-3.5 h-3.5 text-amber-400" /> 原版导出目录最新文件 ({engineExports.length})
                     </div>
                     {engineExports.map((it) => (
                       <div key={it.path} className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1">
                         <div className="text-slate-200 font-mono-num truncate">{it.name}</div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <div className="flex items-center justify-between gcw-text-meta text-slate-400">
                           <span>{(it.size_bytes / 1024 / 1024).toFixed(1)} MB · {it.ext.toUpperCase()}</span>
                           <button
                             onClick={() => handleSendToPublish(it.path)}
@@ -586,7 +586,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
           <div className="w-[540px] bg-[#0f172a] border border-slate-700 rounded-xl p-4 space-y-3 text-xs">
             <div className="text-sm font-bold text-slate-100">导入文案 / SRT 字幕（随后可 AI 编排推入原版编辑台）</div>
             <div className="space-y-1">
-              <div className="text-[11px] text-slate-400">方式一：直接选择「文案提取工坊」已提取的素材</div>
+              <div className="gcw-text-tag text-slate-400">方式一：直接选择「文案提取工坊」已提取的素材</div>
               <select
                 value={selectedContentId}
                 onChange={(e) => setSelectedContentId(e.target.value ? Number(e.target.value) : '')}
@@ -601,7 +601,7 @@ export default function VideoStudio({ projectId, onJumpPublish }: Props) {
               </select>
             </div>
             <div className="space-y-1">
-              <div className="text-[11px] text-slate-400">方式二：直接粘贴中英文 SRT 字幕全文</div>
+              <div className="gcw-text-tag text-slate-400">方式二：直接粘贴中英文 SRT 字幕全文</div>
               <textarea
                 value={srtInput}
                 onChange={(e) => setSrtInput(e.target.value)}

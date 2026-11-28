@@ -601,6 +601,38 @@ ipcMain.handle('gcw-browser:get-video-playback', async (event, viewId) => {
   return readVideoPlaybackState(entry.view.webContents);
 });
 
+ipcMain.handle('gcw-browser:seek-video', async (event, viewId, seconds) => {
+  if (!isWorkbenchSender(event)) return { ok: false, supported: false, error: 'forbidden_sender' };
+  const entry = getManagedView(viewId);
+  if (!entry || entry.view.webContents.isDestroyed()) {
+    return { ok: false, supported: false, reason: '播放器视图不可用' };
+  }
+  const targetSec = Math.max(0, Number(seconds) || 0);
+  try {
+    const res = await entry.view.webContents.executeJavaScript(
+      `(() => {
+        const isAd = Boolean(document.querySelector('.ad-showing, .ytp-ad-player-overlay'));
+        if (isAd) return { ok: false, supported: false, reason: '当前正在播放贴片广告，暂不支持跳转正片时间' };
+        let v = document.querySelector('video.html5-main-video');
+        if (!v) {
+          const vids = Array.from(document.querySelectorAll('video')).filter(x => Number.isFinite(x.duration) && x.duration > 0);
+          v = vids[0] || document.querySelector('video');
+        }
+        if (!v) return { ok: false, supported: false, reason: '当前平台页面未检测到可控制的 HTML5 视频元素' };
+        const dur = Number.isFinite(v.duration) && v.duration > 0 ? Number(v.duration) : 0;
+        if (!dur) return { ok: false, supported: false, reason: '视频尚未加载完成，暂无法定位时间轴' };
+        const clamped = Math.min(Math.max(0, ${targetSec}), Math.max(0, dur - 0.1));
+        v.currentTime = clamped;
+        return { ok: true, supported: true, currentTime: Number(v.currentTime), duration: dur };
+      })()`,
+      true
+    );
+    return res || { ok: false, supported: false, reason: '平台播放器未响应时间跳转' };
+  } catch (err) {
+    return { ok: false, supported: false, reason: '平台播放器拒绝跳转：' + String(err?.message || err) };
+  }
+});
+
 app.on('second-instance', () => {
   if (mainWin) {
     if (mainWin.isMinimized()) mainWin.restore();

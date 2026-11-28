@@ -66,7 +66,7 @@ export default function RevenueCalculatorDrawer({ open, onClose }: Props) {
     <div className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/80">
       <div>
         <div className="text-xs text-slate-300">{label}</div>
-        {hint && <div className="text-[10px] text-slate-500">{hint}</div>}
+        {hint && <div className="gcw-text-meta text-slate-500">{hint}</div>}
       </div>
       <input
         type="number"
@@ -79,7 +79,7 @@ export default function RevenueCalculatorDrawer({ open, onClose }: Props) {
 
   const metricBox = (label: string, val: string, accent = 'text-emerald-400') => (
     <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5">
-      <div className="text-[11px] text-slate-400">{label}</div>
+      <div className="gcw-text-tag text-slate-400">{label}</div>
       <div className={`text-base font-bold font-mono-num mt-0.5 ${accent}`}>{val}</div>
     </div>
   );
@@ -90,7 +90,7 @@ export default function RevenueCalculatorDrawer({ open, onClose }: Props) {
         <div className="flex items-center gap-2 text-cyan-400 font-semibold text-sm">
           <Calculator className="w-4 h-4" />
           <span>赛道收益反推计算器</span>
-          <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">原表公式</span>
+          <span className="gcw-text-meta bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">原表公式</span>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
           <X className="w-4 h-4" />
@@ -119,7 +119,7 @@ export default function RevenueCalculatorDrawer({ open, onClose }: Props) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {tab === 'rpm' && (
           <>
-            <div className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded p-2">
+            <div className="gcw-text-tag text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded p-2">
               口径红线：Shorts 与长视频 RPM 差异极大，请勿混算；不要用广告主 CPM 代替创作者实收 RPM。
             </div>
             <div>
@@ -136,7 +136,7 @@ export default function RevenueCalculatorDrawer({ open, onClose }: Props) {
 
         {tab === 'ecom' && (
           <>
-            <div className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded p-2">
+            <div className="gcw-text-tag text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded p-2">
               口径红线：第三方工具的 GMV 是下单估算，≠ 达人佣金，也 ≠ 净收入（需扣除退货率）。
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function RevenueCalculatorDrawer({ open, onClose }: Props) {
 
         {tab === 'dm' && (
           <>
-            <div className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded p-2">
+            <div className="gcw-text-tag text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded p-2">
               适合跨境医疗 / 高客单咨询业务：按同批次去重人数测算私域变现效率。
             </div>
             <div>

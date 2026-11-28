@@ -150,7 +150,7 @@ export default function ResourceDirectory() {
 
       <div className="flex-1 bg-[#0b1120] border border-slate-800/90 rounded-xl overflow-y-auto">
         <table className="w-full text-left border-collapse text-xs">
-          <thead className="text-[11px] text-slate-400 border-b border-slate-800 sticky top-0 bg-[#0f172a]">
+          <thead className="gcw-text-tag text-slate-400 border-b border-slate-800 sticky top-0 bg-[#0f172a]">
             <tr>
               <th className="py-2.5 px-3">工具名称</th>
               <th className="py-2.5 px-2">类别 / 平台</th>
@@ -174,17 +174,17 @@ export default function ResourceDirectory() {
                       {r.name}
                     </a>
                   </div>
-                  <div className="text-[10px] text-slate-500">{r.domain}</div>
+                  <div className="gcw-text-meta text-slate-500">{r.domain}</div>
                 </td>
                 <td className="py-2 px-2 whitespace-nowrap">
                   <div className="text-cyan-300">{r.category}</div>
-                  <div className="text-[10px] text-slate-400">
+                  <div className="gcw-text-meta text-slate-400">
                     {r.region} · {r.target_platform}
                   </div>
                 </td>
                 <td className="py-2 px-2 whitespace-nowrap">
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                    className={`px-1.5 py-0.5 rounded gcw-text-meta border ${
                       r.my_status === 'paid_active'
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         : r.fee_tier === 'free'
@@ -202,16 +202,16 @@ export default function ResourceDirectory() {
                       ? '🔴 付费'
                       : '🟡 限免'}
                   </span>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{r.data_nature}</div>
+                  <div className="gcw-text-meta text-slate-500 mt-0.5">{r.data_nature}</div>
                 </td>
                 <td className="py-2 px-2 max-w-md">
                   <div className="text-slate-200 line-clamp-1">{r.metrics_desc}</div>
-                  {r.my_note && <div className="text-[10px] text-emerald-400">备注：{r.my_note}</div>}
+                  {r.my_note && <div className="gcw-text-meta text-emerald-400">备注：{r.my_note}</div>}
                 </td>
                 <td className="py-2 px-3 text-right whitespace-nowrap space-x-1.5">
                   <button
                     onClick={() => setEditTool(r)}
-                    className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]"
+                    className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 gcw-text-tag"
                   >
                     标记/备注
                   </button>
@@ -219,7 +219,7 @@ export default function ResourceDirectory() {
                     href={r.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2 py-1 rounded bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/40 text-[11px] inline-flex items-center gap-0.5"
+                    className="px-2 py-1 rounded bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/40 gcw-text-tag inline-flex items-center gap-0.5"
                   >
                     打开 <ExternalLink className="w-2.5 h-2.5" />
                   </a>

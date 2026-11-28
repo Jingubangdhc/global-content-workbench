@@ -492,14 +492,14 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                     当前默认引擎
                   </span>
-                  <span className="text-[10px] text-slate-500">DPAPI 本机加密</span>
+                  <span className="gcw-text-meta text-slate-500">DPAPI 本机加密</span>
                 </div>
                 <div className="text-sm font-semibold text-cyan-300 truncate">
                   {trOverview?.default_engine_id
                     ? providers.find((p) => p.engine_id === trOverview.default_engine_id)?.name || trOverview.default_engine_id
                     : '尚未设定（请先选定默认引擎）'}
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="gcw-text-tag text-slate-400">
                   密钥按服务商独立加密隔离，前端仅显示掩码
                 </div>
               </div>
@@ -510,20 +510,20 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     <DollarSign className="w-3.5 h-3.5 text-amber-400" />
                     本月用量与缓存复用
                   </span>
-                  <span className="font-mono-num text-[10px] text-slate-400">{usage.month || '本月'}</span>
+                  <span className="font-mono-num gcw-text-meta text-slate-400">{usage.month || '本月'}</span>
                 </div>
                 <div className="flex items-baseline gap-3 font-mono-num">
                   <span className="text-sm font-semibold text-slate-100">
                     {(usage.source_chars || 0).toLocaleString()} 字
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="gcw-text-tag text-slate-400">
                     {(usage.total_tokens || 0).toLocaleString()} tok
                   </span>
-                  <span className="text-[11px] text-amber-300">
+                  <span className="gcw-text-tag text-amber-300">
                     ≈ ¥{Number(usage.estimated_cost_cny || 0).toFixed(3)}
                   </span>
                 </div>
-                <div className="text-[11px] text-emerald-400">
+                <div className="gcw-text-tag text-emerald-400">
                   缓存零费用命中：{usage.cache_hits || 0} 次 / 总调用 {usage.total_calls || 0} 次
                 </div>
               </div>
@@ -535,7 +535,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     type="button"
                     onClick={handleSavePolicy}
                     disabled={policySaving}
-                    className="px-2 py-0.5 rounded bg-cyan-600/80 hover:bg-cyan-500 text-white text-[11px]"
+                    className="px-2 py-0.5 rounded bg-cyan-600/80 hover:bg-cyan-500 text-white gcw-text-tag"
                   >
                     {policySaving ? '保存中...' : '保存策略'}
                   </button>
@@ -544,7 +544,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                   <button
                     type="button"
                     onClick={() => setBillingMode('free_only')}
-                    className={`py-1 px-2 rounded border text-[11px] font-medium ${
+                    className={`py-1 px-2 rounded border gcw-text-tag font-medium ${
                       billingMode === 'free_only'
                         ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -555,7 +555,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                   <button
                     type="button"
                     onClick={() => setBillingMode('authorized_paid')}
-                    className={`py-1 px-2 rounded border text-[11px] font-medium ${
+                    className={`py-1 px-2 rounded border gcw-text-tag font-medium ${
                       billingMode === 'authorized_paid'
                         ? 'bg-amber-500/20 border-amber-400/60 text-amber-300'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -564,7 +564,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     用户授权付费模式
                   </button>
                 </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-300 pt-0.5">
+                <div className="flex items-center gap-2 gcw-text-tag text-slate-300 pt-0.5">
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
                       type="checkbox"
@@ -580,7 +580,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     type="number"
                     value={monthlyCharLimit}
                     onChange={(e) => setMonthlyCharLimit(e.target.value)}
-                    className="w-16 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono-num text-[11px] text-slate-200"
+                    className="w-16 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono-num gcw-text-tag text-slate-200"
                     title="月度字符上限"
                   />
                   <span className="text-slate-400">¥</span>
@@ -589,7 +589,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     step="1"
                     value={monthlyBudgetCny}
                     onChange={(e) => setMonthlyBudgetCny(e.target.value)}
-                    className="w-11 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono-num text-[11px] text-slate-200"
+                    className="w-11 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 font-mono-num gcw-text-tag text-slate-200"
                     title="月度预算上限 (RMB)"
                   />
                 </div>
@@ -610,7 +610,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     if (!list.length) return null;
                     return (
                       <div key={grp} className="space-y-1">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500 px-1.5 font-semibold">
+                        <div className="gcw-text-meta uppercase tracking-wider text-slate-500 px-1.5 font-semibold">
                           {GROUP_TITLE[grp] || grp}
                         </div>
                         {list.map((p) => {
@@ -631,7 +631,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                                 <span className="font-semibold text-xs truncate">{p.short_name}</span>
                                 <div className="flex items-center gap-1 shrink-0">
                                   {p.is_default && (
-                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/25 text-cyan-200 text-[10px] font-semibold">
+                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/25 text-cyan-200 gcw-text-meta font-semibold">
                                       默认
                                     </span>
                                   )}
@@ -644,11 +644,11 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                                 </div>
                               </div>
                               <div className="flex items-center justify-between gap-1">
-                                <span className={`px-1.5 py-0.5 rounded border text-[10px] ${badge.cls}`}>
+                                <span className={`px-1.5 py-0.5 rounded border gcw-text-meta ${badge.cls}`}>
                                   {badge.label}
                                 </span>
                                 {p.secret_source === 'env_deepseek' && (
-                                  <span className="text-[10px] text-emerald-400">复用 .env</span>
+                                  <span className="gcw-text-meta text-emerald-400">复用 .env</span>
                                 )}
                               </div>
                             </button>
@@ -667,20 +667,20 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                         <div className="flex items-center gap-2">
                           <h3 className="text-sm font-semibold text-slate-100">{activeProvider.name}</h3>
                           {activeProvider.is_default && (
-                            <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px]">
+                            <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 gcw-text-meta">
                               当前默认引擎
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400">{activeProvider.notes}</p>
-                        <div className="text-[11px] text-amber-300/90">计费说明：{activeProvider.billing_label}</div>
+                        <p className="gcw-text-tag text-slate-400">{activeProvider.notes}</p>
+                        <div className="gcw-text-tag text-amber-300/90">计费说明：{activeProvider.billing_label}</div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0 items-end">
                         <a
                           href={activeProvider.official_links.api_key_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px]"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 gcw-text-tag"
                         >
                           <KeyRound className="w-3 h-3" />
                           <span>官方密钥入口</span>
@@ -691,7 +691,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                             href={activeProvider.official_links.docs_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-cyan-300"
+                            className="inline-flex items-center gap-1 gcw-text-tag text-slate-400 hover:text-cyan-300"
                           >
                             <span>官方文档</span>
                             <ExternalLink className="w-2.5 h-2.5" />
@@ -701,7 +701,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                             href={activeProvider.official_links.pricing_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-amber-300"
+                            className="inline-flex items-center gap-1 gcw-text-tag text-slate-400 hover:text-amber-300"
                           >
                             <span>价格说明</span>
                             <ExternalLink className="w-2.5 h-2.5" />
@@ -712,14 +712,14 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
 
                     {/* GCW-UAT-R4-C / R4-C-FINAL: 混元 Hy-MT3-1.8B 本地免费翻译模型状态与运行管理面板 */}
                     {activeProvider.engine_id === 'hunyuan_mt3_local' && (
-                      <div className="p-3 rounded-lg bg-slate-950/90 border border-cyan-500/35 space-y-2 text-[11px]">
+                      <div className="p-3 rounded-lg bg-slate-950/90 border border-cyan-500/35 space-y-2 gcw-text-tag">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold text-cyan-300 flex items-center gap-1.5">
                             <Cpu className="w-3.5 h-3.5" />
                             <span>本地免费翻译模型管理（腾讯混元 Hy-MT3-1.8B · Apache-2.0）</span>
                           </span>
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            className={`px-2 py-0.5 rounded-full gcw-text-meta font-semibold ${
                               localEnv?.service_online
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                                 : localEnv?.installed_on_demand
@@ -735,7 +735,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                           </span>
                         </div>
                         {localEnv && (
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono-num text-slate-300 bg-slate-900/70 p-2.5 rounded border border-slate-800">
+                          <div className="grid grid-cols-2 gap-1.5 gcw-text-meta font-mono-num text-slate-300 bg-slate-900/70 p-2.5 rounded border border-slate-800">
                             <div>已安装模型版本：{localEnv.deployment?.model_version || '未安装'}</div>
                             <div>模型文件大小：{localEnv.deployment?.model_size_gb ? `${localEnv.deployment.model_size_gb} GB` : '未下载'}</div>
                             <div>实际加载模型名：{localEnv.deployment?.loaded_model_name || '—'}</div>
@@ -781,7 +781,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                         </div>
                         {!localEnv?.installed_on_demand && (
                           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800">
-                            <label className="flex items-center gap-1.5 text-[10px] text-slate-300 cursor-pointer">
+                            <label className="flex items-center gap-1.5 gcw-text-meta text-slate-300 cursor-pointer">
                               <input type="checkbox" checked={localAuthChecked} onChange={(e) => setLocalAuthChecked(e.target.checked)} className="accent-cyan-400" />
                               <span>我已了解约 1.35 GB 下载与显存占用，授权安装/拉取本地模型</span>
                             </label>
@@ -789,13 +789,13 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                               type="button"
                               onClick={handleAuthorizedPull}
                               disabled={localBusy || !localAuthChecked}
-                              className="px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-[10px] disabled:opacity-40"
+                              className="px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-semibold gcw-text-meta disabled:opacity-40"
                             >
                               授权拉取模型引导
                             </button>
                           </div>
                         )}
-                        {localWizardMsg && <div className="text-[10px] text-amber-300">{localWizardMsg}</div>}
+                        {localWizardMsg && <div className="gcw-text-meta text-amber-300">{localWizardMsg}</div>}
                       </div>
                     )}
 
@@ -877,7 +877,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                                 <button
                                   type="button"
                                   onClick={() => setFormBaseUrl(activeProvider.default_base_url)}
-                                  className="text-[10px] text-cyan-400 hover:underline"
+                                  className="gcw-text-meta text-cyan-400 hover:underline"
                                 >
                                   恢复官方默认地址
                                 </button>
@@ -900,7 +900,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                                   type="button"
                                   onClick={handleFetchModels}
                                   disabled={fetchingModels}
-                                  className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300"
+                                  className="inline-flex items-center gap-1 gcw-text-tag text-cyan-400 hover:text-cyan-300"
                                 >
                                   <RefreshCw className={`w-3 h-3 ${fetchingModels ? 'animate-spin' : ''}`} />
                                   <span>获取在线模型列表</span>
@@ -927,7 +927,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                                       key={m}
                                       type="button"
                                       onClick={() => setFormModelId(m)}
-                                      className={`px-2 py-0.5 rounded text-[10px] font-mono-num border ${
+                                      className={`px-2 py-0.5 rounded gcw-text-meta font-mono-num border ${
                                         formModelId === m
                                           ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200'
                                           : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
@@ -1025,7 +1025,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
 
                     {connResult && (
                       <div
-                        className={`p-2.5 rounded-lg border text-[11px] flex items-start gap-2 ${
+                        className={`p-2.5 rounded-lg border gcw-text-tag flex items-start gap-2 ${
                           connResult.ok
                             ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-300'
                             : 'bg-rose-500/10 border-rose-500/35 text-rose-300'
@@ -1066,7 +1066,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                       </div>
                       {sampleResult && (
                         <div
-                          className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
+                          className={`p-2.5 rounded-lg border gcw-text-tag space-y-1 ${
                             sampleResult.ok
                               ? 'bg-slate-950 border-cyan-500/40 text-slate-100'
                               : 'bg-amber-500/10 border-amber-500/35 text-amber-200'
@@ -1075,7 +1075,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                           {sampleResult.ok ? (
                             <>
                               <div className="text-cyan-300 font-medium">中文译文：{sampleResult.translated_text}</div>
-                              <div className="text-[10px] text-slate-400 font-mono-num">
+                              <div className="gcw-text-meta text-slate-400 font-mono-num">
                                 模型：{sampleResult.model_id} · 耗时：{sampleResult.elapsed_ms}ms · Token：{sampleResult.total_tokens} · 估算：¥{sampleResult.estimated_cost_cny}
                               </div>
                             </>
@@ -1086,7 +1086,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                       )}
                     </div>
 
-                    {trMsg && <div className="text-[11px] text-cyan-300">{trMsg}</div>}
+                    {trMsg && <div className="gcw-text-tag text-cyan-300">{trMsg}</div>}
                   </div>
                 )}
               </div>
@@ -1189,7 +1189,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
               <div className="space-y-2 bg-slate-900/70 border border-slate-800 rounded-lg p-3.5">
                 <div className="flex items-center justify-between">
                   <span className="text-cyan-300 font-semibold">抖音/TikTok 无水印解析服务（Douyin_TikTok_Download_API）</span>
-                  <span className="text-[11px] text-slate-400">双击 tools/start_douyin_api.bat 启动</span>
+                  <span className="gcw-text-tag text-slate-400">双击 tools/start_douyin_api.bat 启动</span>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -1206,7 +1206,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     检测连通
                   </button>
                 </div>
-                {douyinStatus && <div className="text-[11px] text-amber-300">{douyinStatus}</div>}
+                {douyinStatus && <div className="gcw-text-tag text-amber-300">{douyinStatus}</div>}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1235,7 +1235,7 @@ export default function SettingsModal({ open, onClose, boot, onSaved, initialTab
                     <Bookmark className="w-3.5 h-3.5 text-amber-400" />
                     <span>一键收录书签小工具</span>
                   </div>
-                  <div className="text-slate-400 text-[11px]">将下方按钮拖到浏览器书签栏，看任何页面一键收录：</div>
+                  <div className="text-slate-400 gcw-text-tag">将下方按钮拖到浏览器书签栏，看任何页面一键收录：</div>
                   <a
                     href={bookmarkletHref}
                     onClick={(e) => e.preventDefault()}

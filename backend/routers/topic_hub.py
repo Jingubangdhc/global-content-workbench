@@ -36,6 +36,9 @@ def api_topic_hub_list(
     tag: str = Query(""),
     include_published: bool = Query(True),
     include_archived: bool = Query(False),
+    sort_by: str = Query("created_desc"),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
     limit: int = Query(100),
 ):
     items = svc.list_topics_hub(
@@ -48,6 +51,9 @@ def api_topic_hub_list(
         tag=tag,
         include_published=include_published,
         include_archived=include_archived,
+        sort_by=sort_by,
+        date_from=date_from,
+        date_to=date_to,
         limit=limit,
     )
     return {"ok": True, "total": len(items), "topics": items}
@@ -526,4 +532,55 @@ def api_patch_topic_content_asset(topic_id: int, content_id: int, body: PatchTop
     if not res.get("ok"):
         code = 409 if res.get("conflict") else 400
         raise HTTPException(code, res.get("error") or "更新视频资产失败")
+    return res
+
+
+# ==================== GCW-WORKSPACE-V2: 原创草稿持久化与当前视频真实数据面板 ====================
+class TopicDraftBody(BaseModel):
+    title: str = ""
+    content: str = ""
+    extra_requirements: str = ""
+    skill_id: str = ""
+    engine_id: str = ""
+    model_id: str = ""
+
+
+@router.get("/topics/{topic_id}/draft")
+def api_get_topic_draft(topic_id: int):
+    return svc.get_topic_original_draft(topic_id)
+
+
+@router.put("/topics/{topic_id}/draft")
+def api_save_topic_draft(topic_id: int, body: TopicDraftBody):
+    res = svc.save_topic_original_draft(topic_id, body.model_dump())
+    if not res.get("ok"):
+        raise HTTPException(500, res.get("error") or "保存草稿失败")
+    return res
+
+
+@router.get("/contents/{content_id}/metrics")
+def api_get_content_metrics(content_id: int):
+    res = svc.get_content_metrics_detail(content_id)
+    if not res.get("ok"):
+        raise HTTPException(404, res.get("error") or "未找到作品")
+    return res
+
+
+class RefreshContentMetricsBody(BaseModel):
+    view_count: Optional[Any] = None
+    like_count: Optional[Any] = None
+    comment_count: Optional[Any] = None
+    favorite_count: Optional[Any] = None
+    share_count: Optional[Any] = None
+    author_follower_count: Optional[Any] = None
+    duration_sec: Optional[Any] = None
+    author_name: Optional[str] = None
+    published_at: Optional[str] = None
+
+
+@router.post("/contents/{content_id}/refresh-metrics")
+def api_refresh_content_metrics(content_id: int, body: RefreshContentMetricsBody):
+    res = svc.refresh_content_metrics(content_id, body.model_dump(exclude_unset=True))
+    if not res.get("ok"):
+        raise HTTPException(400, res.get("error") or "刷新作品数据失败")
     return res

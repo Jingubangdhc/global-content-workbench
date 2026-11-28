@@ -253,11 +253,11 @@ export default function CredentialVaultModal({
             <div>
               <div className="font-bold text-sm flex items-center gap-2">
                 <span>本地加密账号保险箱</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[10px] font-medium flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 gcw-text-meta font-medium flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" /> {encryptionInfo || 'Windows DPAPI 加密'}
                 </span>
               </div>
-              <div className="text-[11px] text-slate-400">
+              <div className="gcw-text-tag text-slate-400">
                 仅加密保存在本机 <code className="text-cyan-300">data/credential_vault.json</code>，仅当前 Windows 用户可解密；不读取 Chrome 凭据，不自动注入第三方网页
               </div>
             </div>
@@ -319,7 +319,7 @@ export default function CredentialVaultModal({
                       setFPlatform(qp.name);
                       setFUrl(qp.url);
                     }}
-                    className={`px-2 py-0.5 rounded-full text-[11px] ${
+                    className={`px-2 py-0.5 rounded-full gcw-text-tag ${
                       fPlatform === qp.name ? 'gcw-chip-active font-semibold' : 'gcw-chip'
                     }`}
                   >
@@ -330,7 +330,7 @@ export default function CredentialVaultModal({
 
               <div className="grid grid-cols-2 gap-2.5 text-xs">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">平台名称 *</label>
+                  <label className="block gcw-text-tag text-slate-400 mb-1">平台名称 *</label>
                   <input
                     value={fPlatform}
                     onChange={(e) => setFPlatform(e.target.value)}
@@ -339,7 +339,7 @@ export default function CredentialVaultModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">登录网址</label>
+                  <label className="block gcw-text-tag text-slate-400 mb-1">登录网址</label>
                   <input
                     value={fUrl}
                     onChange={(e) => setFUrl(e.target.value)}
@@ -348,7 +348,7 @@ export default function CredentialVaultModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">账号 / 手机号 / 邮箱 *</label>
+                  <label className="block gcw-text-tag text-slate-400 mb-1">账号 / 手机号 / 邮箱 *</label>
                   <input
                     value={fUsername}
                     onChange={(e) => setFUsername(e.target.value)}
@@ -357,7 +357,7 @@ export default function CredentialVaultModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">
+                  <label className="block gcw-text-tag text-slate-400 mb-1">
                     密码 {editingId ? '（留空则保留原加密密码）' : ''}
                   </label>
                   <div className="relative">
@@ -380,7 +380,7 @@ export default function CredentialVaultModal({
               </div>
 
               <div className="text-xs">
-                <label className="block text-[11px] text-slate-400 mb-1">备注（如：扫码绑定手机尾号、主号/小号）</label>
+                <label className="block gcw-text-tag text-slate-400 mb-1">备注（如：扫码绑定手机尾号、主号/小号）</label>
                 <input
                   value={fNote}
                   onChange={(e) => setFNote(e.target.value)}
@@ -434,7 +434,7 @@ export default function CredentialVaultModal({
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-bold text-xs text-slate-100">{item.platform}</span>
                         {isCurrent && (
-                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 text-[10px] font-medium">
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 gcw-text-meta font-medium">
                             当前平台
                           </span>
                         )}
@@ -446,7 +446,7 @@ export default function CredentialVaultModal({
                                 onOpenSite(item.site_url);
                               }
                             }}
-                            className="text-[11px] text-cyan-300 hover:underline flex items-center gap-0.5 truncate max-w-[260px]"
+                            className="gcw-text-tag text-cyan-300 hover:underline flex items-center gap-0.5 truncate max-w-[260px]"
                             title={`在内置浏览器打开 ${item.site_url}`}
                           >
                             <span className="truncate">{item.site_url}</span>
@@ -476,12 +476,12 @@ export default function CredentialVaultModal({
                       {/* 账号 */}
                       <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#0C1424] border border-[#1E2E4A]">
                         <div className="truncate">
-                          <span className="text-[10px] text-slate-500 mr-1.5">账号</span>
+                          <span className="gcw-text-meta text-slate-500 mr-1.5">账号</span>
                           <span className="font-mono-num text-slate-100">{item.username}</span>
                         </div>
                         <button
                           onClick={() => handleCopyText(item.username, `usr_${item.id}`)}
-                          className="gcw-btn-ghost px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5 shrink-0 ml-2"
+                          className="gcw-btn-ghost px-1.5 py-0.5 rounded gcw-text-meta flex items-center gap-0.5 shrink-0 ml-2"
                         >
                           {copiedKey === `usr_${item.id}` ? (
                             <>
@@ -498,7 +498,7 @@ export default function CredentialVaultModal({
                       {/* 密码 */}
                       <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#0C1424] border border-[#1E2E4A]">
                         <div className="truncate">
-                          <span className="text-[10px] text-slate-500 mr-1.5">密码</span>
+                          <span className="gcw-text-meta text-slate-500 mr-1.5">密码</span>
                           <span className="font-mono-num text-slate-100">
                             {!item.has_password ? '—' : revealed !== undefined ? revealed : '••••••••••'}
                           </span>
@@ -514,7 +514,7 @@ export default function CredentialVaultModal({
                             </button>
                             <button
                               onClick={() => handleCopyPassword(item.id)}
-                              className="gcw-btn-ghost px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5"
+                              className="gcw-btn-ghost px-1.5 py-0.5 rounded gcw-text-meta flex items-center gap-0.5"
                             >
                               {copiedKey === `pwd_${item.id}` ? (
                                 <>
@@ -532,7 +532,7 @@ export default function CredentialVaultModal({
                     </div>
 
                     {item.note && (
-                      <div className="text-[11px] text-slate-400">备注：{item.note}</div>
+                      <div className="gcw-text-tag text-slate-400">备注：{item.note}</div>
                     )}
                   </div>
                 );

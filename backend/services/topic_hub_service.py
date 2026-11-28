@@ -266,12 +266,17 @@ def list_topics_hub(
     tag: str = "",
     include_published: bool = True,
     include_archived: bool = False,
+    sort_by: str = "created_desc",
+    date_from: str = "",
+    date_to: str = "",
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     conn = get_conn()
     try:
         clause, params = _project_filter_clause(project_id)
-        sql = f"""SELECT t.*, p.name AS project_name
+        sql = f"""SELECT t.*, p.name AS project_name,
+                         (SELECT MAX(COALESCE(NULLIF(te.manual_captured_at, ''), te.created_at))
+                          FROM topic_evidence te WHERE te.topic_id = t.id) AS latest_captured_at
                   FROM topics t
                   LEFT JOIN projects p ON p.id = t.project_id
                   WHERE {clause.replace('project_id', 't.project_id')} AND t.merged_into_topic_id IS NULL"""
@@ -280,17 +285,32 @@ def list_topics_hub(
             params.append(origin_type)
         if favorite_only:
             sql += " AND t.is_favorite = 1"
+        if date_from.strip():
+            sql += " AND t.created_at IS NOT NULL AND substr(t.created_at, 1, 10) >= ?"
+            params.append(date_from.strip()[:10])
+        if date_to.strip():
+            sql += " AND t.created_at IS NOT NULL AND substr(t.created_at, 1, 10) <= ?"
+            params.append(date_to.strip()[:10])
         if q.strip():
             like = f"%{q.strip()}%"
             sql += " AND (t.topic_title LIKE ? OR t.research_question LIKE ? OR t.angle LIKE ? OR t.keywords_json LIKE ? OR t.tags_json LIKE ?)"
             params.extend([like, like, like, like, like])
-        sql += " ORDER BY t.is_favorite DESC, t.updated_at DESC, t.id DESC LIMIT ?"
+
+        order_map = {
+            "created_desc": "ORDER BY t.is_favorite DESC, (t.created_at IS NULL) ASC, t.created_at DESC, t.id DESC",
+            "created_asc": "ORDER BY t.is_favorite DESC, (t.created_at IS NULL) ASC, t.created_at ASC, t.id ASC",
+            "updated_desc": "ORDER BY t.is_favorite DESC, (t.updated_at IS NULL) ASC, t.updated_at DESC, t.id DESC",
+            "captured_desc": "ORDER BY t.is_favorite DESC, (latest_captured_at IS NULL) ASC, latest_captured_at DESC, t.id DESC",
+        }
+        order_sql = order_map.get(sort_by or "created_desc", order_map["created_desc"])
+        sql += f" {order_sql} LIMIT ?"
         params.append(limit)
         rows = conn.execute(sql, params).fetchall()
         out = []
         want_archived = include_archived or production_status == "已归档"
         for r in rows:
             item = _format_topic_row(conn, r)
+            item["latest_captured_at"] = r["latest_captured_at"] or None
             if item.get("is_archived"):
                 item["production_status_norm"] = "已归档"
             if not want_archived and item["production_status_norm"] == "已归档":
@@ -307,6 +327,182 @@ def list_topics_hub(
         return out
     finally:
         conn.close()
+
+
+def get_topic_original_draft(topic_id: int) -> dict[str, Any]:
+    """GCW-WORKSPACE-05: 读取选题级原创文案草稿（与参考原文、译文、正式版本严格隔离）。"""
+    conn = get_conn()
+    try:
+        key = f"topic_original_draft_{int(topic_id)}"
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        if not row or not row["value"]:
+            return {"ok": True, "topic_id": topic_id, "draft": {"title": "", "content": "", "extra_requirements": "", "skill_id": "", "engine_id": "", "model_id": "", "updated_at": None}}
+        try:
+            data = json.loads(row["value"])
+        except Exception:
+            data = {"title": "", "content": str(row["value"]), "updated_at": None}
+        return {"ok": True, "topic_id": topic_id, "draft": data}
+    finally:
+        conn.close()
+
+
+def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """GCW-WORKSPACE-05: 持久化选题级原创文案草稿（零表结构变更，兼容旧版回滚）。"""
+    conn = get_conn()
+    try:
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        draft = {
+            "title": str(payload.get("title") or "")[:200],
+            "content": str(payload.get("content") or ""),
+            "extra_requirements": str(payload.get("extra_requirements") or "")[:2000],
+            "skill_id": str(payload.get("skill_id") or "")[:120],
+            "engine_id": str(payload.get("engine_id") or "")[:120],
+            "model_id": str(payload.get("model_id") or "")[:160],
+            "updated_at": now_iso,
+        }
+        key = f"topic_original_draft_{int(topic_id)}"
+        conn.execute(
+            "INSERT INTO app_settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, json.dumps(draft, ensure_ascii=False)),
+        )
+        conn.commit()
+        return {"ok": True, "topic_id": topic_id, "draft": draft}
+    except Exception as e:
+        return {"ok": False, "error": f"保存原创草稿失败：{e}"}
+    finally:
+        conn.close()
+
+
+def get_content_metrics_detail(content_id: int) -> dict[str, Any]:
+    """GCW-WORKSPACE-03: 返回当前作品真实数据面板（严格区分 NULL 与 0、互动率口径与同作者历史爆款倍数基准）。"""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            """SELECT c.*, cr.name AS creator_name, cr.followers AS creator_followers
+               FROM contents c
+               LEFT JOIN creators cr ON cr.id = c.creator_id
+               WHERE c.id = ?""",
+            (content_id,),
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": f"未找到作品 #{content_id}"}
+        d = dict(row)
+        views = d.get("view_count")
+        likes = d.get("like_count")
+        comments = d.get("comment_count")
+        favorites = d.get("favorite_count")
+        shares = d.get("share_count")
+        followers = d.get("author_follower_count") if d.get("author_follower_count") is not None else d.get("creator_followers")
+
+        # 互动率口径：((点赞 + 评论 + 收藏 + 分享) / 播放量) × 100%，缺播放量或无任何互动数据时为 NULL
+        used_parts = []
+        inter_sum = 0
+        for label, val in [("点赞", likes), ("评论", comments), ("收藏", favorites), ("分享", shares)]:
+            if val is not None and int(val) >= 0:
+                used_parts.append(label)
+                inter_sum += int(val)
+        if views is not None and int(views) > 0 and used_parts:
+            engagement_rate = round((inter_sum / int(views)) * 100.0, 2)
+            engagement_formula = f"({'+'.join(used_parts)}) / 播放量 × 100%"
+        else:
+            engagement_rate = None
+            engagement_formula = "缺少有效播放量或互动指标，暂不计算互动率"
+
+        # 异常爆款倍数：必须有可靠同作者同平台历史作品基准（至少 3 条有效播放量作品），绝不以播放/粉丝比冒充
+        outlier_multiple = None
+        outlier_basis = "缺少同作者有效历史作品基准（需至少 3 条含播放量作品），不计算爆款倍数"
+        creator_id = d.get("creator_id")
+        platform = d.get("platform") or ""
+        if creator_id and views is not None and int(views) > 0:
+            hist = conn.execute(
+                """SELECT view_count FROM contents
+                   WHERE creator_id = ? AND platform = ? AND view_count IS NOT NULL AND view_count > 0""",
+                (creator_id, platform),
+            ).fetchall()
+            hist_views = [int(r["view_count"]) for r in hist]
+            if len(hist_views) >= 3:
+                avg_views = sum(hist_views) / len(hist_views)
+                if avg_views > 0:
+                    outlier_multiple = round(int(views) / avg_views, 2)
+                    outlier_basis = f"当前播放量 / 该作者同平台 {len(hist_views)} 条历史作品均值（{int(round(avg_views)):,}）"
+            else:
+                outlier_basis = f"该作者同平台仅 {len(hist_views)} 条含播放量作品（需 ≥3 条可靠基准），暂不计算"
+
+        return {
+            "ok": True,
+            "content_id": int(d["id"]),
+            "platform": platform,
+            "platform_item_id": d.get("platform_item_id") or "",
+            "title": d.get("title") or "",
+            "url": d.get("url") or "",
+            "author_name": d.get("author_name") or d.get("creator_name") or "",
+            "author_url": d.get("author_url") or "",
+            "duration_sec": d.get("duration_sec"),
+            "published_at": d.get("published_at") or None,
+            "manual_captured_at": d.get("manual_captured_at") or None,
+            "collected_at": d.get("collected_at") or None,
+            "metrics": {
+                "view_count": views,
+                "like_count": likes,
+                "comment_count": comments,
+                "favorite_count": favorites,
+                "share_count": shares,
+                "author_follower_count": followers,
+                "engagement_rate": engagement_rate,
+                "engagement_formula": engagement_formula,
+                "outlier_multiple": outlier_multiple,
+                "outlier_basis": outlier_basis,
+            },
+        }
+    finally:
+        conn.close()
+
+
+def refresh_content_metrics(content_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """GCW-WORKSPACE-03: 仅在用户主动点击刷新时更新非空有效字段，绝不以 0 覆盖已有有效数据。"""
+    from backend.services.video_capture_service import parse_human_count
+    from datetime import datetime, timezone
+
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT * FROM contents WHERE id=?", (content_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": f"未找到作品 #{content_id}"}
+        cur = dict(row)
+        updates: dict[str, Any] = {}
+        for field in ("view_count", "like_count", "comment_count", "favorite_count", "share_count", "author_follower_count"):
+            raw = payload.get(field)
+            parsed = parse_human_count(raw)
+            if parsed is not None:
+                # 绝不以 0 覆盖原有大于 0 的有效数据
+                if parsed == 0 and (cur.get(field) or 0) > 0:
+                    continue
+                updates[field] = parsed
+        if payload.get("duration_sec") is not None:
+            try:
+                ds = int(payload["duration_sec"])
+                if ds > 0:
+                    updates["duration_sec"] = ds
+            except Exception:
+                pass
+        if payload.get("author_name") and str(payload["author_name"]).strip():
+            updates["author_name"] = str(payload["author_name"]).strip()
+        if payload.get("published_at") and str(payload["published_at"]).strip():
+            updates["published_at"] = str(payload["published_at"]).strip()
+
+        if not updates:
+            return {"ok": False, "error": "未能从当前页面获取到新的有效数据，已保留上一次成功采集的数据与时间"}
+
+        updates["collected_at"] = datetime.now(timezone.utc).isoformat()
+        set_sql = ", ".join(f"{k}=?" for k in updates.keys())
+        conn.execute(f"UPDATE contents SET {set_sql} WHERE id=?", (*updates.values(), content_id))
+        conn.commit()
+    finally:
+        conn.close()
+    res = get_content_metrics_detail(content_id)
+    res["refreshed"] = True
+    return res
 
 
 def create_manual_topic(project_id: int, payload: dict[str, Any]) -> dict[str, Any]:

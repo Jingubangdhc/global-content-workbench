@@ -467,6 +467,14 @@ export const api = {
     req(`/api/topic-hub/merge-logs/${mergeLogId}/restore`, { method: 'POST', body: JSON.stringify({ project_id: projectId }) }),
   topicHubReSearch: (topicId: number, body: any) =>
     req(`/api/topic-hub/topics/${topicId}/re-search`, { method: 'POST', body: JSON.stringify(body) }),
+  topicHubGetDraft: (topicId: number) =>
+    req(`/api/topic-hub/topics/${topicId}/draft`),
+  topicHubSaveDraft: (topicId: number, body: { title?: string; content?: string; extra_requirements?: string; skill_id?: string; engine_id?: string; model_id?: string }) =>
+    req(`/api/topic-hub/topics/${topicId}/draft`, { method: 'PUT', body: JSON.stringify(body) }),
+  topicHubContentMetrics: (contentId: number) =>
+    req(`/api/topic-hub/contents/${contentId}/metrics`),
+  topicHubRefreshContentMetrics: (contentId: number, body: any) =>
+    req(`/api/topic-hub/contents/${contentId}/refresh-metrics`, { method: 'POST', body: JSON.stringify(body) }),
 
   // ==================== SEARCH-PHASE-5 / R4-D: 原创文案多版本、自定义 Skill 与创作资料包 ====================
   topicHubScriptSkills: () => req('/api/topic-hub/script-skills'),

@@ -41,73 +41,100 @@
   --gcw-text-secondary: #94a3b8;
   --gcw-text-muted: #64748b;
 
-  /* GCW-ASSET-02 语义字号体系（参考 Ant Design / IBM Carbon，默认标准 15px，严禁整窗缩放） */
-  --gcw-root-rem: 15px;
-  --gcw-fs-base: 15px;
-  --gcw-fs-btn: 14px;
-  --gcw-fs-video-title: 16px;
-  --gcw-fs-section: 18px;
-  --gcw-fs-page: 22px;
-  --gcw-fs-tag: 12.5px;
-  --gcw-fs-meta: 12px;
+  /* GCW-UI-02 全局默认字号体系（默认舒适 16px，中文微软雅黑优先，英文 Inter / Segoe UI，严禁整窗缩放） */
+  --gcw-font-sans: 'Inter', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  --gcw-root-rem: 16px;
+  --gcw-fs-base: 16px;
+  --gcw-fs-nav: 16px;
+  --gcw-fs-btn: 15px;
+  --gcw-fs-video-title: 17px;
+  --gcw-fs-editor: 17px;
+  --gcw-fs-section: 20px;
+  --gcw-fs-page: 24px;
+  --gcw-fs-metric: 20px;
+  --gcw-fs-tag: 13.5px;
+  --gcw-fs-meta: 13px;
 }
 
-/* 4 档字号预设：紧凑 14px / 标准 15px / 舒适 16px / 大字体 18px */
+/* 4 档字号预设：紧凑 14px / 标准 15px / 舒适 16px（默认）/ 大字体 18px */
 html[data-font-scale="compact"] {
   --gcw-root-rem: 14px;
   --gcw-fs-base: 14px;
-  --gcw-fs-btn: 13px;
+  --gcw-fs-nav: 14px;
+  --gcw-fs-btn: 13.5px;
   --gcw-fs-video-title: 15px;
-  --gcw-fs-section: 17px;
-  --gcw-fs-page: 20px;
-  --gcw-fs-tag: 12px;
+  --gcw-fs-editor: 15px;
+  --gcw-fs-section: 18px;
+  --gcw-fs-page: 21px;
+  --gcw-fs-metric: 18px;
+  --gcw-fs-tag: 12.5px;
   --gcw-fs-meta: 12px;
 }
 
 html[data-font-scale="standard"] {
   --gcw-root-rem: 15px;
   --gcw-fs-base: 15px;
-  --gcw-fs-btn: 14px;
+  --gcw-fs-nav: 15px;
+  --gcw-fs-btn: 14.5px;
   --gcw-fs-video-title: 16px;
-  --gcw-fs-section: 18px;
+  --gcw-fs-editor: 16px;
+  --gcw-fs-section: 19px;
   --gcw-fs-page: 22px;
-  --gcw-fs-tag: 12.5px;
-  --gcw-fs-meta: 12px;
+  --gcw-fs-metric: 19px;
+  --gcw-fs-tag: 13px;
+  --gcw-fs-meta: 12.5px;
 }
 
 html[data-font-scale="comfortable"] {
   --gcw-root-rem: 16px;
   --gcw-fs-base: 16px;
+  --gcw-fs-nav: 16px;
   --gcw-fs-btn: 15px;
   --gcw-fs-video-title: 17px;
-  --gcw-fs-section: 19px;
-  --gcw-fs-page: 23px;
-  --gcw-fs-tag: 13px;
-  --gcw-fs-meta: 12.5px;
+  --gcw-fs-editor: 17px;
+  --gcw-fs-section: 20px;
+  --gcw-fs-page: 24px;
+  --gcw-fs-metric: 20px;
+  --gcw-fs-tag: 13.5px;
+  --gcw-fs-meta: 13px;
 }
 
 html[data-font-scale="large"] {
   --gcw-root-rem: 18px;
   --gcw-fs-base: 18px;
-  --gcw-fs-btn: 16px;
+  --gcw-fs-nav: 18px;
+  --gcw-fs-btn: 16.5px;
   --gcw-fs-video-title: 19px;
-  --gcw-fs-section: 20px;
-  --gcw-fs-page: 24px;
-  --gcw-fs-tag: 13.5px;
-  --gcw-fs-meta: 13px;
+  --gcw-fs-editor: 19px;
+  --gcw-fs-section: 22px;
+  --gcw-fs-page: 26px;
+  --gcw-fs-metric: 24px;
+  --gcw-fs-tag: 14.5px;
+  --gcw-fs-meta: 14px;
 }
 
 html {
   font-size: var(--gcw-root-rem);
+  font-family: var(--gcw-font-sans);
+}
+
+body {
+  font-family: var(--gcw-font-sans);
+  font-size: var(--gcw-fs-base);
+  line-height: 1.6;
 }
 
 .gcw-page-title { font-size: var(--gcw-fs-page); line-height: 1.3; font-weight: 700; }
 .gcw-section-title { font-size: var(--gcw-fs-section); line-height: 1.35; font-weight: 700; }
-.gcw-video-title { font-size: var(--gcw-fs-video-title); line-height: 1.4; font-weight: 600; }
-.gcw-text-base { font-size: var(--gcw-fs-base); line-height: 1.5; }
-.gcw-text-btn { font-size: var(--gcw-fs-btn); line-height: 1.3; }
-.gcw-text-tag { font-size: var(--gcw-fs-tag); line-height: 1.25; }
-.gcw-text-meta { font-size: var(--gcw-fs-meta); line-height: 1.35; }
+.gcw-video-title { font-size: var(--gcw-fs-video-title); line-height: 1.45; font-weight: 600; }
+.gcw-editor-text { font-size: var(--gcw-fs-editor); line-height: 1.65; }
+.gcw-metric-value { font-size: var(--gcw-fs-metric); font-variant-numeric: tabular-nums; }
+.gcw-nav-text { font-size: var(--gcw-fs-nav); line-height: 1.35; }
+.gcw-text-base { font-size: var(--gcw-fs-base); line-height: 1.6; }
+.gcw-text-btn { font-size: var(--gcw-fs-btn); line-height: 1.35; }
+.gcw-text-tag { font-size: var(--gcw-fs-tag); line-height: 1.35; }
+.gcw-text-meta { font-size: var(--gcw-fs-meta); line-height: 1.4; }
+.font-mono-num { font-variant-numeric: tabular-nums; }
 
 /* 统一工作台外壳与模块面板 */
 .gcw-workspace {

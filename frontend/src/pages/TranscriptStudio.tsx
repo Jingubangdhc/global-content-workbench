@@ -545,7 +545,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
               }`}
             >
               <div className="text-xs text-slate-200 line-clamp-2 leading-snug">{c.title}</div>
-              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+              <div className="flex items-center justify-between mt-1 gcw-text-meta text-slate-400">
                 <span className="uppercase font-mono-num">{c.platform}</span>
                 <span className={c.has_transcript ? 'text-emerald-400' : 'text-slate-500'}>
                   {c.has_transcript ? '已提取' : '待提取'}
@@ -577,7 +577,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                     <span className="truncate">{detail.content.title}</span>
                     <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                   </a>
-                  <div className="text-[11px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+                  <div className="gcw-text-tag text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
                     <span>平台：{detail.content.platform}</span>
                     <span>·</span>
                     <span>作者：{detail.content.creator_name || '—'}</span>
@@ -675,7 +675,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                     <button
                       type="button"
                       onClick={() => setLeftView('bilingual')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                      className={`px-2 py-0.5 rounded gcw-text-tag font-medium ${
                         leftView === 'bilingual' ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -684,7 +684,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                     <button
                       type="button"
                       onClick={() => setLeftView('fulltext')}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                      className={`px-2 py-0.5 rounded gcw-text-tag font-medium ${
                         leftView === 'fulltext' ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -693,7 +693,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                   </div>
                   <button
                     onClick={() => navigator.clipboard.writeText(leftView === 'fulltext' ? (translated || rawText) : rawText)}
-                    className="text-slate-400 hover:text-cyan-300 flex items-center gap-1 text-[11px]"
+                    className="text-slate-400 hover:text-cyan-300 flex items-center gap-1 gcw-text-tag"
                   >
                     <Copy className="w-3 h-3" />复制
                   </button>
@@ -705,7 +705,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                       const isEditing = editingSegIdx === seg.segment_idx;
                       return (
                         <div key={seg.segment_idx} className="p-2 rounded-lg hover:bg-slate-900/70 space-y-1 text-xs">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono-num">
+                          <div className="flex items-center justify-between gcw-text-meta text-slate-400 font-mono-num">
                             <div className="flex items-center gap-1.5">
                               <span className="text-cyan-400">#{seg.segment_idx + 1}</span>
                               <span>
@@ -744,7 +744,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                                 <button
                                   type="button"
                                   onClick={() => setEditingSegIdx(null)}
-                                  className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px]"
+                                  className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 gcw-text-tag"
                                 >
                                   取消
                                 </button>
@@ -752,7 +752,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                                   type="button"
                                   onClick={() => handleSaveManualSeg(seg.segment_idx)}
                                   disabled={savingSeg}
-                                  className="px-2.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium"
+                                  className="px-2.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white gcw-text-tag font-medium"
                                 >
                                   {savingSeg ? '保存中...' : '保存人工修订'}
                                 </button>
@@ -777,7 +777,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                     />
                     {translated && (
                       <div className="h-2/5 border-t border-slate-800 flex flex-col bg-slate-950/60">
-                        <div className="px-3 py-1.5 text-[11px] font-semibold text-indigo-300 border-b border-slate-800/80 flex justify-between">
+                        <div className="px-3 py-1.5 gcw-text-tag font-semibold text-indigo-300 border-b border-slate-800/80 flex justify-between">
                           <span>中文译文全文（与逐段双语字幕同源缓存）</span>
                           <button onClick={() => navigator.clipboard.writeText(translated)} className="text-slate-400 hover:text-white">
                             复制译文
@@ -823,7 +823,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                       {/* 行 1：Skill 选择 + 明显导入 Skill 入口 + AI 模型选择 */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5 flex-1 min-w-[220px]">
-                          <span className="text-[11px] text-slate-400 shrink-0">文案 Skill</span>
+                          <span className="gcw-text-tag text-slate-400 shrink-0">文案 Skill</span>
                           <select
                             value={selectedSkillId}
                             onChange={(e) => setSelectedSkillId(e.target.value)}
@@ -855,7 +855,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                           <FileUp className="w-3.5 h-3.5" />+ 导入 / 自定义 Skill
                         </button>
                         <div className="flex items-center gap-1.5 min-w-[200px]">
-                          <span className="text-[11px] text-slate-400 shrink-0">执行模型</span>
+                          <span className="gcw-text-tag text-slate-400 shrink-0">执行模型</span>
                           <select
                             value={selectedEngineId}
                             onChange={(e) => setSelectedEngineId(e.target.value)}
@@ -874,7 +874,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                       {/* 行 2：多篇参考文案勾选 + 关联 TopicHub 选题 */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-[220px]">
-                          <span className="text-[11px] text-slate-400 shrink-0">参考文案 ({selectedRefIds.length})：</span>
+                          <span className="gcw-text-tag text-slate-400 shrink-0">参考文案 ({selectedRefIds.length})：</span>
                           {list.slice(0, 8).map((c) => {
                             const checked = selectedRefIds.includes(c.id);
                             return (
@@ -882,7 +882,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                                 key={c.id}
                                 type="button"
                                 onClick={() => toggleRefContent(c.id)}
-                                className={`px-1.5 py-0.5 rounded border text-[10px] max-w-[150px] truncate transition ${
+                                className={`px-1.5 py-0.5 rounded border gcw-text-meta max-w-[150px] truncate transition ${
                                   checked
                                     ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-200'
                                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
@@ -897,7 +897,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                         <select
                           value={selectedTopicId}
                           onChange={(e) => setSelectedTopicId(e.target.value)}
-                          className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-200 max-w-[210px]"
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 gcw-text-tag text-slate-200 max-w-[210px]"
                           title="可选：关联 TopicHub 选题，自动带入该选题的证据与高赞评论"
                         >
                           <option value="">关联选题（可选）</option>
@@ -940,7 +940,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                       {/* 行 4：独立原创版本历史切换条 */}
                       {originalVersions.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-800/80">
-                          <span className="text-[10px] text-slate-400">独立原创版本 ({originalVersions.length})：</span>
+                          <span className="gcw-text-meta text-slate-400">独立原创版本 ({originalVersions.length})：</span>
                           {originalVersions.slice(0, 8).map((v) => (
                             <button
                               key={v.id}
@@ -951,7 +951,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                                 setDraft(v.content_markdown || '');
                                 setMsg(`已加载独立原创版本 v${v.version_no}（Skill：${v.skill_name} · 模型：${v.model_id || '手动'}）`);
                               }}
-                              className={`px-2 py-0.5 rounded text-[10px] border transition ${
+                              className={`px-2 py-0.5 rounded gcw-text-meta border transition ${
                                 activeVersionId === v.id
                                   ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200'
                                   : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
@@ -1029,11 +1029,11 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                             <div className="flex items-center justify-between">
                               <span className="font-mono-num text-cyan-300 font-semibold">
                                 #{i + 1} · {fmtDur(Math.floor(h.start_sec))} ~ {fmtDur(Math.floor(h.end_sec))} （重播热度 {(h.heat * 100).toFixed(0)}%）
-                                {h.lang ? <span className="ml-2 px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">{h.lang}→中</span> : null}
+                                {h.lang ? <span className="ml-2 px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 gcw-text-meta">{h.lang}→中</span> : null}
                               </span>
                               <button
                                 onClick={() => saveQuote(h.snippet_zh ? `${h.snippet_zh}\n（原文：${h.snippet}）` : h.snippet, '热力高光', h.start_sec)}
-                                className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-200"
+                                className="gcw-text-meta px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-200"
                               >
                                 + 存金句库
                               </button>
@@ -1056,7 +1056,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                         <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-amber-300">钩子类型：{breakdown.hook_type}</span>
-                            <span className={breakdown.hook_verified ? 'text-emerald-400 text-[10px]' : 'text-rose-400 text-[10px]'}>
+                            <span className={breakdown.hook_verified ? 'text-emerald-400 gcw-text-meta' : 'text-rose-400 gcw-text-meta'}>
                               {breakdown.hook_verified ? '✅ 原文核验通过' : '⚠️ 引用未精确匹配'}
                             </span>
                           </div>
@@ -1069,7 +1069,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                           <div key={idx} className="p-2 rounded-lg bg-slate-950/70 border border-slate-800/80 space-y-1">
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-slate-200">{m.stage}</span>
-                              <span className={m.verified ? 'text-emerald-400 text-[10px]' : 'text-rose-400 text-[10px]'}>
+                              <span className={m.verified ? 'text-emerald-400 gcw-text-meta' : 'text-rose-400 gcw-text-meta'}>
                                 {m.verified ? '✅ 核验通过' : '⚠️ 待核'}
                               </span>
                             </div>
@@ -1087,13 +1087,13 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                                 <div>
                                   <div className="text-slate-100">“{q.text}”</div>
                                   {q.text_zh && <div className="text-indigo-200 mt-0.5">译：{q.text_zh}</div>}
-                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                  <div className="gcw-text-meta text-slate-400 mt-0.5">
                                     {q.category} · {q.usage} · {q.verified ? '✅核验通过' : '⚠️待核'}
                                   </div>
                                 </div>
                                 <button
                                   onClick={() => saveQuote(q.text_zh ? `${q.text_zh}\n（原文：${q.text}）` : q.text, q.category)}
-                                  className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] shrink-0"
+                                  className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 gcw-text-meta shrink-0"
                                 >
                                   + 存库
                                 </button>
@@ -1111,7 +1111,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                         <div key={q.id} className="p-2 rounded bg-slate-950/70 border border-slate-800/70 flex items-start justify-between gap-2">
                           <div>
                             <div className="text-slate-200">“{q.quote_text}”</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{q.category}</div>
+                            <div className="gcw-text-meta text-slate-500 mt-0.5">{q.category}</div>
                           </div>
                           <button onClick={() => api.delQuote(q.id).then(loadQuotes)} className="text-slate-600 hover:text-rose-400">
                             <Trash2 className="w-3 h-3" />
@@ -1154,9 +1154,9 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
 
                     {topKw.length > 0 && (
                       <div className="flex items-center gap-1.5 flex-wrap bg-slate-950/80 border border-slate-800 rounded-lg p-2">
-                        <span className="text-[10px] text-slate-400">高频词：</span>
+                        <span className="gcw-text-meta text-slate-400">高频词：</span>
                         {topKw.map((k) => (
-                          <span key={k.word} className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-num text-[10px]">
+                          <span key={k.word} className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-num gcw-text-meta">
                             {k.word} ({k.count})
                           </span>
                         ))}
@@ -1166,7 +1166,7 @@ export default function TranscriptStudio({ projectId, activeContentId, autoExtra
                     <div className="divide-y divide-slate-800/70">
                       {comments.map((cm) => (
                         <div key={cm.id} className="py-2 space-y-1">
-                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                          <div className="flex items-center justify-between gcw-text-meta text-slate-400">
                             <span>
                               {cm.author} · 👍 <span className="font-mono-num text-cyan-300">{cm.like_count}</span>
                               {cm.is_question ? <span className="ml-1.5 px-1 rounded bg-amber-500/20 text-amber-300">提问</span> : null}

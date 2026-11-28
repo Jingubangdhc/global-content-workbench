@@ -292,7 +292,7 @@ export default function PublishHub({ projectId }: Props) {
           >
             <Plus className="w-3.5 h-3.5" /> 新建发布包
           </button>
-          <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-amber-200 text-[10px]">
+          <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-amber-200 gcw-text-meta">
             🔒 全 7 平台只填写 · 严禁自动发布
           </span>
         </div>
@@ -340,24 +340,24 @@ export default function PublishHub({ projectId }: Props) {
       {/* KPI 状态卡（无真实数据时一律显示 —） */}
       <div className="grid grid-cols-4 gap-2.5 shrink-0">
         <div className="bg-[#0b1120] border border-slate-800 rounded-xl p-3">
-          <div className="text-[11px] text-slate-400">已选白名单平台</div>
+          <div className="gcw-text-tag text-slate-400">已选白名单平台</div>
           <div className="text-xl font-bold text-cyan-300 font-mono-num mt-1">{pickedList.length} / 7</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">B12 暂定平台已硬拦截</div>
+          <div className="gcw-text-meta text-slate-500 mt-0.5">B12 暂定平台已硬拦截</div>
         </div>
         <div className="bg-[#0b1120] border border-slate-800 rounded-xl p-3">
-          <div className="text-[11px] text-slate-400">平台规则版本</div>
+          <div className="gcw-text-tag text-slate-400">平台规则版本</div>
           <div className="text-base font-bold text-slate-100 font-mono-num mt-1.5">{caps?.rules_version || '—'}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">医疗类仅提醒人工复核</div>
+          <div className="gcw-text-meta text-slate-500 mt-0.5">医疗类仅提醒人工复核</div>
         </div>
         <div className="bg-[#0b1120] border border-slate-800 rounded-xl p-3">
-          <div className="text-[11px] text-slate-400">待本人确认发布</div>
+          <div className="gcw-text-tag text-slate-400">待本人确认发布</div>
           <div className="text-xl font-bold text-amber-300 font-mono-num mt-1">{tasks.length ? awaitingCount : '—'}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">需在官方页本人点发布</div>
+          <div className="gcw-text-meta text-slate-500 mt-0.5">需在官方页本人点发布</div>
         </div>
         <div className="bg-[#0b1120] border border-slate-800 rounded-xl p-3">
-          <div className="text-[11px] text-slate-400">真实回填链接</div>
+          <div className="gcw-text-tag text-slate-400">真实回填链接</div>
           <div className="text-xl font-bold text-emerald-300 font-mono-num mt-1">{tasks.length ? confirmedCount : '—'}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">以官方页确认 URL 为准</div>
+          <div className="gcw-text-meta text-slate-500 mt-0.5">以官方页确认 URL 为准</div>
         </div>
       </div>
 
@@ -383,7 +383,7 @@ export default function PublishHub({ projectId }: Props) {
                   {(['16:9', '4:3', '3:4'] as const).map((slot) => (
                     <label
                       key={slot}
-                      className={`px-2 py-1 rounded border text-[11px] cursor-pointer flex items-center gap-1 ${
+                      className={`px-2 py-1 rounded border gcw-text-tag cursor-pointer flex items-center gap-1 ${
                         covers[slot]
                           ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                           : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-500/50'
@@ -412,7 +412,7 @@ export default function PublishHub({ projectId }: Props) {
                 </div>
               </div>
               {validation?.global_errors?.length > 0 && (
-                <div className="p-2 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px]">
+                <div className="p-2 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 gcw-text-tag">
                   {validation.global_errors.join('；')}
                 </div>
               )}
@@ -422,7 +422,7 @@ export default function PublishHub({ projectId }: Props) {
           {/* 7 平台逐行卡片 */}
           <div className="bg-[#0b1120] border border-slate-800 rounded-xl overflow-hidden">
             <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-[#0f172a] text-[11px] text-slate-400 border-b border-slate-800">
+              <thead className="bg-[#0f172a] gcw-text-tag text-slate-400 border-b border-slate-800">
                 <tr>
                   <th className="py-2.5 px-3 w-10">选</th>
                   <th className="py-2.5 px-2">平台 / 绑定账号</th>
@@ -458,7 +458,7 @@ export default function PublishHub({ projectId }: Props) {
                         <select
                           value={boundAccountByPlat[p.id] || ''}
                           onChange={(e) => setBoundAccountByPlat((prev) => ({ ...prev, [p.id]: e.target.value ? Number(e.target.value) : '' }))}
-                          className="mt-1 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[10px] text-slate-300 max-w-[140px]"
+                          className="mt-1 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 gcw-text-meta text-slate-300 max-w-[140px]"
                         >
                           <option value="">未绑定账号</option>
                           {platAccounts.map((a) => (
@@ -470,24 +470,24 @@ export default function PublishHub({ projectId }: Props) {
                       </td>
                       <td className="py-2.5 px-2 max-w-xs">
                         <div className="text-slate-200 truncate">{d.title || <span className="text-slate-500">未生成文案</span>}</div>
-                        <div className="text-[10px] text-slate-400 truncate mt-0.5">{d.body || p.notes}</div>
+                        <div className="gcw-text-meta text-slate-400 truncate mt-0.5">{d.body || p.notes}</div>
                         <div className="flex items-center gap-2 mt-1">
                           <button
                             onClick={() => setEditingPlat(p.id)}
                             disabled={!activePkg}
-                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-300 disabled:opacity-40"
+                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 gcw-text-meta text-cyan-300 disabled:opacity-40"
                           >
                             编辑草稿
                           </button>
                           {pVal && (
                             pVal.passed ? (
-                              <span className="text-[10px] text-emerald-400 flex items-center gap-0.5"><CheckCircle2 className="w-3 h-3" />通过</span>
+                              <span className="gcw-text-meta text-emerald-400 flex items-center gap-0.5"><CheckCircle2 className="w-3 h-3" />通过</span>
                             ) : (
-                              <span className="text-[10px] text-rose-400 flex items-center gap-0.5" title={pVal.errors.join('; ')}><XCircle className="w-3 h-3" />{pVal.errors[0]}</span>
+                              <span className="gcw-text-meta text-rose-400 flex items-center gap-0.5" title={pVal.errors.join('; ')}><XCircle className="w-3 h-3" />{pVal.errors[0]}</span>
                             )
                           )}
                           {pVal?.warnings?.length > 0 && (
-                            <span className="text-[10px] text-amber-300 flex items-center gap-0.5" title={pVal.warnings.join('; ')}>
+                            <span className="gcw-text-meta text-amber-300 flex items-center gap-0.5" title={pVal.warnings.join('; ')}>
                               <AlertTriangle className="w-3 h-3" />{pVal.warnings.length}提醒
                             </span>
                           )}
@@ -503,15 +503,15 @@ export default function PublishHub({ projectId }: Props) {
                               [p.id]: { ...(prev[p.id] || {}), scheduled_at: e.target.value },
                             }))
                           }
-                          className="bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-[10px] font-mono-num text-slate-300"
+                          className="bg-slate-950 border border-slate-800 rounded px-1.5 py-1 gcw-text-meta font-mono-num text-slate-300"
                         />
                       </td>
                       <td className="py-2.5 px-3 text-right space-y-1">
                         <div>
                           {stInfo ? (
-                            <span className={`px-2 py-0.5 rounded text-[10px] ${stInfo.cls}`}>{stInfo.text}</span>
+                            <span className={`px-2 py-0.5 rounded gcw-text-meta ${stInfo.cls}`}>{stInfo.text}</span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] bg-slate-900 text-slate-500">未发起</span>
+                            <span className="px-2 py-0.5 rounded gcw-text-meta bg-slate-900 text-slate-500">未发起</span>
                           )}
                         </div>
                         {latestTask && (
@@ -523,7 +523,7 @@ export default function PublishHub({ projectId }: Props) {
                                   setPubUrlInput(latestTask.published_url || '');
                                   setPubIdInput(latestTask.external_item_id || '');
                                 }}
-                                className="px-2 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 text-[10px]"
+                                className="px-2 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 gcw-text-meta"
                               >
                                 回填确认链接
                               </button>
@@ -533,7 +533,7 @@ export default function PublishHub({ projectId }: Props) {
                                 href={latestTask.published_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 text-[10px]"
+                                className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 gcw-text-meta"
                               >
                                 看成片
                               </a>
@@ -558,15 +558,15 @@ export default function PublishHub({ projectId }: Props) {
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {calendar.slice(0, 9).map((c) => (
-                  <div key={c.id} className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] space-y-1">
+                  <div key={c.id} className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 gcw-text-tag space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-slate-200">{c.platform}</span>
-                      <span className={`px-1.5 py-0.2 rounded text-[10px] ${(STATE_LABELS[c.state] || STATE_LABELS.draft).cls}`}>
+                      <span className={`px-1.5 py-0.2 rounded gcw-text-meta ${(STATE_LABELS[c.state] || STATE_LABELS.draft).cls}`}>
                         {(STATE_LABELS[c.state] || STATE_LABELS.draft).text}
                       </span>
                     </div>
                     <div className="text-slate-300 truncate">{c.package_title}</div>
-                    <div className="text-[10px] text-slate-500 font-mono-num">
+                    <div className="gcw-text-meta text-slate-500 font-mono-num">
                       {c.actual_published_at || c.scheduled_at || c.created_at}
                     </div>
                   </div>
@@ -580,13 +580,13 @@ export default function PublishHub({ projectId }: Props) {
         <div className="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto">
           <div className="bg-[#0b1120] border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
             <div className="font-semibold text-slate-200">发布前预检清单</div>
-            <div className="space-y-1.5 text-[11px] text-slate-300">
+            <div className="space-y-1.5 gcw-text-tag text-slate-300">
               <div>{activePkg?.video_file_path ? '☑' : '☐'} 成片文件存在且格式受支持</div>
               <div>{accounts.length > 0 ? '☑' : '☐'} 已登记独立隔离平台账号（不存密码/Cookie）</div>
               <div>{validation?.passed ? '☑' : '☐'} 7 平台字数/标签/外链/医疗人工复核已检查</div>
               <div>{Object.keys(covers).length > 0 ? '☑' : '☐'} 已准备 16:9 / 4:3 / 3:4 封面与本地时区</div>
             </div>
-            <div className="text-[10px] text-amber-300/90 pt-1 border-t border-slate-800">
+            <div className="gcw-text-meta text-amber-300/90 pt-1 border-t border-slate-800">
               红线：系统无任何自动提交接口，所有平台最终确认均由本人在官方原生页面完成。
             </div>
           </div>
@@ -596,16 +596,16 @@ export default function PublishHub({ projectId }: Props) {
               <span className="font-semibold text-slate-200 flex items-center gap-1">
                 <UserCheck className="w-3.5 h-3.5 text-cyan-400" /> 平台账号 ({accounts.length})
               </span>
-              <button onClick={() => setNewAccModal(true)} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 text-[10px]">
+              <button onClick={() => setNewAccModal(true)} className="px-2 py-0.5 rounded bg-cyan-600/30 text-cyan-200 gcw-text-meta">
                 + 登记账号
               </button>
             </div>
             <div className="space-y-1.5 max-h-44 overflow-y-auto">
               {accounts.map((a) => (
-                <div key={a.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between gap-1 text-[11px]">
+                <div key={a.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between gap-1 gcw-text-tag">
                   <div className="min-w-0">
                     <div className="text-slate-200 truncate">{a.platform} · {a.display_name}</div>
-                    <div className="text-[10px] text-slate-500 font-mono-num truncate">UID: {a.external_uid} · {a.authorization_state}</div>
+                    <div className="gcw-text-meta text-slate-500 font-mono-num truncate">UID: {a.external_uid} · {a.authorization_state}</div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -615,7 +615,7 @@ export default function PublishHub({ projectId }: Props) {
                           showToast(`已为 ${a.display_name} 打开独立隔离 Chrome 登录窗口`);
                         })
                       }
-                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-cyan-600 text-[10px] text-slate-200"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-cyan-600 gcw-text-meta text-slate-200"
                     >
                       登录/校验
                     </button>
@@ -628,19 +628,19 @@ export default function PublishHub({ projectId }: Props) {
                   </div>
                 </div>
               ))}
-              {accounts.length === 0 && <div className="text-[11px] text-slate-500">尚未登记平台账号</div>}
+              {accounts.length === 0 && <div className="gcw-text-tag text-slate-500">尚未登记平台账号</div>}
             </div>
           </div>
 
           <div className="bg-[#0b1120] border border-slate-800 rounded-xl p-3 space-y-2 text-xs flex-1 min-h-[140px]">
             <div className="font-semibold text-slate-200">执行日志（已自动脱敏）</div>
-            <div className="space-y-1.5 text-[11px]">
+            <div className="space-y-1.5 gcw-text-tag">
               {allLogs.length === 0 ? (
                 <div className="text-slate-500">尚未执行填写任务；失败或状态未知将标为待对账，禁止重复上传。</div>
               ) : (
                 allLogs.map((l, i) => (
                   <div key={i} className="border-l-2 border-cyan-500/50 pl-2 py-0.5">
-                    <div className="text-[10px] text-slate-500 font-mono-num">{l.ts} · {l.plat}</div>
+                    <div className="gcw-text-meta text-slate-500 font-mono-num">{l.ts} · {l.plat}</div>
                     <div className="text-slate-300">{l.message}</div>
                   </div>
                 ))
@@ -734,7 +734,7 @@ export default function PublishHub({ projectId }: Props) {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="w-[460px] bg-[#0f172a] border border-slate-700 rounded-xl p-4 space-y-3 text-xs">
             <div className="text-sm font-bold text-slate-100">人工确认已发布 · 回填真实链接（{reconcileTask.platform}）</div>
-            <div className="text-[11px] text-slate-400">请在平台官方页面点击发布后，将真实作品链接回填至此处：</div>
+            <div className="gcw-text-tag text-slate-400">请在平台官方页面点击发布后，将真实作品链接回填至此处：</div>
             <input value={pubUrlInput} onChange={(e) => setPubUrlInput(e.target.value)} placeholder="官方作品 URL（https://...）" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono-num text-slate-100" />
             <input value={pubIdInput} onChange={(e) => setPubIdInput(e.target.value)} placeholder="平台作品 ID（选填，如 BV号 / videoId）" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono-num text-slate-200" />
             <div className="flex justify-end gap-2">

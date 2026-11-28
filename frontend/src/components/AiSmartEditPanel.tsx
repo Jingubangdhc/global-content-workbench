@@ -205,11 +205,11 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
             <Sparkles className="w-4 h-4 text-[#B98732]" />
             AI 智能剪辑（ChatCut Desktop + Google Antigravity 原生导演）
           </div>
-          <div className="text-[11px] text-[#766D61]">
+          <div className="gcw-text-tag text-[#766D61]">
             当前工作台项目 #{projectId} · 创建任务后进入 WaitingForAgent，由 Antigravity 官方客户端通过双 MCP 真实执行
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+        <div className="flex flex-wrap items-center gap-1.5 gcw-text-tag font-medium">
           <span className={`px-2.5 py-0.5 rounded-full border ${statusInfo?.antigravity_director?.workspace_plugin_configured ? 'bg-[#EAF2E7] text-[#3E5A39] border-[#CFE0CA]' : 'bg-[#FBECEB] text-[#A63B30] border-[#EAC4BF]'}`}>
             AI导演工作区插件: {statusInfo?.antigravity_director?.workspace_plugin_configured ? '已配置' : '未配置'}
           </span>
@@ -238,7 +238,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
           <div className="text-xs font-bold text-[#2B2620]">1. 导入素材与配置任务</div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#766D61] mb-1">从工作台文案/选题导入</label>
+            <label className="block gcw-text-tag font-semibold text-[#766D61] mb-1">从工作台文案/选题导入</label>
             <select
               value={selectedContentId}
               onChange={(e) => e.target.value && handleImportContent(Number(e.target.value))}
@@ -252,12 +252,12 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#766D61] mb-1">任务标题</label>
+            <label className="block gcw-text-tag font-semibold text-[#766D61] mb-1">任务标题</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="如：P2 正式口播成片" className="w-full px-2.5 py-1.5 rounded-lg border border-[#E7DFD1] bg-[#FCFBF8] text-xs" />
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#766D61] mb-1 flex justify-between">
+            <label className="block gcw-text-tag font-semibold text-[#766D61] mb-1 flex justify-between">
               <span>本地视频路径（或上传导入）</span>
               <label className="text-[#B98732] cursor-pointer flex items-center gap-0.5">
                 <Upload className="w-3 h-3" /> 上传 MP4
@@ -268,13 +268,13 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#766D61] mb-1">口播参考文案</label>
+            <label className="block gcw-text-tag font-semibold text-[#766D61] mb-1">口播参考文案</label>
             <textarea value={script} onChange={(e) => setScript(e.target.value)} rows={3} placeholder="供 VisualDirector 分析语义分段与同音纠错..." className="w-full px-2.5 py-1.5 rounded-lg border border-[#E7DFD1] bg-[#FCFBF8] text-xs" />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[11px] font-semibold text-[#766D61] mb-1">视频 Skill</label>
+              <label className="block gcw-text-tag font-semibold text-[#766D61] mb-1">视频 Skill</label>
               <select value={skillId} onChange={(e) => setSkillId(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border border-[#E7DFD1] bg-[#FCFBF8] text-xs">
                 {skills.map((s) => (
                   <option key={s.skill_id} value={s.skill_id} disabled={s.execution_status === 'unimplemented'}>
@@ -284,7 +284,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-[#766D61] mb-1">画幅 / 分辨率</label>
+              <label className="block gcw-text-tag font-semibold text-[#766D61] mb-1">画幅 / 分辨率</label>
               <select value={`${aspectRatio}|${resolution}`} onChange={(e) => { const [r, res] = e.target.value.split('|'); setAspectRatio(r); setResolution(res); }} className="w-full px-2 py-1.5 rounded-lg border border-[#E7DFD1] bg-[#FCFBF8] text-xs">
                 <option value="9:16|1080x1920">9:16 竖屏 (1080×1920)</option>
                 <option value="16:9|1920x1080">16:9 横屏 (1920×1080)</option>
@@ -292,7 +292,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px] text-[#5B5349]">
+          <div className="grid grid-cols-2 gap-1.5 pt-1 gcw-text-tag text-[#5B5349]">
             {[
               ['auto_rough_cut', '自动粗剪/气口'],
               ['auto_captions', '自动字幕'],
@@ -314,7 +314,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
             ))}
           </div>
 
-          <div className="flex items-center justify-between text-[11px] pt-1">
+          <div className="flex items-center justify-between gcw-text-tag pt-1">
             <label className="flex items-center gap-1.5 text-[#5B5349]">
               <input type="checkbox" checked={autoStyle} onChange={(e) => setAutoStyle(e.target.checked)} />
               自动风格选择（结合个人 Style DNA）
@@ -337,7 +337,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
           <div className="bg-white border border-[#E7DFD1] rounded-xl p-3">
             <div className="flex justify-between items-center mb-2">
               <span className="text-xs font-bold">2. 正式工作台 AI 剪辑任务队列（{jobs.length}）</span>
-              <span className="text-[11px] text-[#766D61]">持久化于 data/workbench.db · 重启不丢失</span>
+              <span className="gcw-text-tag text-[#766D61]">持久化于 data/workbench.db · 重启不丢失</span>
             </div>
             <div className="space-y-1.5 max-h-44 overflow-y-auto">
               {jobs.length === 0 && <div className="text-xs text-[#766D61] py-3 text-center">暂无任务，请在左侧创建。</div>}
@@ -357,11 +357,11 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                 >
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate">{j.input_manifest?.title || j.job_id}</div>
-                    <div className="text-[11px] text-[#766D61]">
+                    <div className="gcw-text-tag text-[#766D61]">
                       {j.job_id} · Skill: {j.skill_id} v{j.skill_version} · 工程: {j.external_project_id || '待创建'}
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold shrink-0 ${badgeCls(j.status)}`}>{j.status}</span>
+                  <span className={`px-2 py-0.5 rounded-full border gcw-text-tag font-semibold shrink-0 ${badgeCls(j.status)}`}>{j.status}</span>
                 </div>
               ))}
             </div>
@@ -372,7 +372,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
               <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-[#EAE3D7]">
                 <div>
                   <div className="text-sm font-bold">{selectedJob.input_manifest?.title || selectedJob.job_id}</div>
-                  <div className="text-[11px] text-[#766D61]">
+                  <div className="gcw-text-tag text-[#766D61]">
                     状态: <strong>{selectedJob.status}</strong> · 不可变版本数: {selectedJob.versions?.length || 0} · ChatCut 工程: {selectedJob.external_project_id || '未创建'}
                   </div>
                 </div>
@@ -415,7 +415,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                       <button
                         key={k}
                         onClick={() => setActiveTab(k as any)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                        className={`px-2.5 py-1 rounded-lg gcw-text-tag font-semibold border ${
                           activeTab === k ? 'bg-[#2B2620] text-white border-[#2B2620]' : 'bg-[#F4EFE6] text-[#5B5349] border-[#E7DFD1]'
                         }`}
                       >
@@ -425,7 +425,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                   </div>
 
                   {activeTab === 'plan' && (
-                    <pre className="bg-[#FAF8F4] border border-[#E7DFD1] rounded-lg p-2.5 text-[11px] max-h-64 overflow-auto whitespace-pre-wrap">
+                    <pre className="bg-[#FAF8F4] border border-[#E7DFD1] rounded-lg p-2.5 gcw-text-tag max-h-64 overflow-auto whitespace-pre-wrap">
                       {Object.keys(selectedJob.visual_plan || {}).length
                         ? JSON.stringify(selectedJob.visual_plan, null, 2)
                         : '尚未提交视觉导演方案（等待 Antigravity 原生 Agent 领取并分析逐词时间码）。'}
@@ -433,7 +433,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                   )}
 
                   {activeTab === 'logs' && (
-                    <pre className="bg-[#FAF8F4] border border-[#E7DFD1] rounded-lg p-2.5 text-[11px] max-h-64 overflow-auto whitespace-pre-wrap">
+                    <pre className="bg-[#FAF8F4] border border-[#E7DFD1] rounded-lg p-2.5 gcw-text-tag max-h-64 overflow-auto whitespace-pre-wrap">
                       {JSON.stringify(selectedJob.execution_log || [], null, 2)}
                     </pre>
                   )}
@@ -441,11 +441,11 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                   {activeTab === 'quality' && (
                     selectedJob.quality_report?.raw_report ? (
                       <div>
-                        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold mb-2 ${selectedJob.quality_report.passed ? 'bg-[#EAF2E7] text-[#3E5A39] border-[#CFE0CA]' : 'bg-[#FBECEB] text-[#A63B30] border-[#EAC4BF]'}`}>
+                        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border gcw-text-tag font-semibold mb-2 ${selectedJob.quality_report.passed ? 'bg-[#EAF2E7] text-[#3E5A39] border-[#CFE0CA]' : 'bg-[#FBECEB] text-[#A63B30] border-[#EAC4BF]'}`}>
                           <CheckCircle2 className="w-3 h-3" /> {selectedJob.quality_report.summary}
                         </div>
-                        <div className="text-[11px] text-[#766D61] mb-1.5">{selectedJob.quality_report.human_review_note}</div>
-                        <pre className="bg-[#FAF8F4] border border-[#E7DFD1] rounded-lg p-2.5 text-[11px] max-h-56 overflow-auto whitespace-pre-wrap">
+                        <div className="gcw-text-tag text-[#766D61] mb-1.5">{selectedJob.quality_report.human_review_note}</div>
+                        <pre className="bg-[#FAF8F4] border border-[#E7DFD1] rounded-lg p-2.5 gcw-text-tag max-h-56 overflow-auto whitespace-pre-wrap">
                           {selectedJob.quality_report.raw_report}
                         </pre>
                       </div>
@@ -459,11 +459,11 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                       <div className="font-semibold flex items-center gap-1"><Scissors className="w-3.5 h-3.5 text-[#B98732]" /> 局部 AI 重新剪辑（生成新版本，不覆盖原版）</div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[11px] text-[#766D61]">起始秒</label>
+                          <label className="gcw-text-tag text-[#766D61]">起始秒</label>
                           <input value={segStart} onChange={(e) => setSegStart(e.target.value)} className="w-full px-2 py-1 rounded border border-[#E7DFD1] bg-white text-xs" />
                         </div>
                         <div>
-                          <label className="text-[11px] text-[#766D61]">结束秒</label>
+                          <label className="gcw-text-tag text-[#766D61]">结束秒</label>
                           <input value={segEnd} onChange={(e) => setSegEnd(e.target.value)} className="w-full px-2 py-1 rounded border border-[#E7DFD1] bg-white text-xs" />
                         </div>
                       </div>
@@ -483,7 +483,7 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                       <div><strong>ChatCut 积分变化：</strong>{selectedJob.cost_report?.chatcut_credits_before ?? '-'} → {selectedJob.cost_report?.chatcut_credits_after ?? '-'}（消耗 {selectedJob.cost_report?.chatcut_credits_used ?? 0}）</div>
                       <div><strong>额外付费 API：</strong>${selectedJob.cost_report?.extra_api_cost_usd ?? 0}</div>
                       <div><strong>本地渲染耗时：</strong>{selectedJob.cost_report?.local_render_sec ?? 0} 秒</div>
-                      <div className="text-[11px] text-[#766D61] pt-1 border-t border-[#E7DFD1]">
+                      <div className="gcw-text-tag text-[#766D61] pt-1 border-t border-[#E7DFD1]">
                         商业化边界：当前仅限内部创作；非商业授权 Skill（CC BY-NC 4.0）与个人 Google AI Pro 会员严禁共享或打包商用。
                       </div>
                     </div>
@@ -493,12 +493,12 @@ export default function AiSmartEditPanel({ projectId, videoProjectId, contents, 
                 {/* 右侧：不可变版本选择 + 成片播放器 */}
                 <div className="xl:col-span-5">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-semibold text-[#766D61] flex items-center gap-1"><History className="w-3.5 h-3.5" /> 不可变成片预览</span>
+                    <span className="gcw-text-tag font-semibold text-[#766D61] flex items-center gap-1"><History className="w-3.5 h-3.5" /> 不可变成片预览</span>
                     {selectedJob.versions?.length > 0 && (
                       <select
                         value={playVer ?? ''}
                         onChange={(e) => setPlayVer(Number(e.target.value))}
-                        className="px-2 py-0.5 rounded border border-[#E7DFD1] bg-[#FCFBF8] text-[11px]"
+                        className="px-2 py-0.5 rounded border border-[#E7DFD1] bg-[#FCFBF8] gcw-text-tag"
                       >
                         {selectedJob.versions.map((v: any) => (
                           <option key={v.version_no} value={v.version_no}>

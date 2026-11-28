@@ -356,7 +356,7 @@ export default function VideoCaptureModal({
             <BookmarkPlus className="w-4 h-4 text-cyan-400" />
             <span className="font-bold text-sm">收录作品至选题资产中心</span>
             {initialPreview?.existing_content && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[10px]">
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 gcw-text-meta">
                 作品已存在 (#{initialPreview.existing_content.content_id})，本次将去重复用并建立选题关联
               </span>
             )}
@@ -381,7 +381,7 @@ export default function VideoCaptureModal({
             )}
 
             {!identityVerified && (
-              <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/45 text-amber-200 text-[11px] flex items-start gap-2">
+              <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/45 text-amber-200 gcw-text-tag flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-300" />
                 <span>
                   {identityWarning ||
@@ -396,7 +396,7 @@ export default function VideoCaptureModal({
                   <div>
                     ✅ 已成功收录至 <strong>选题资产中心</strong>（项目：<strong>{savedResult.project_name || `#${savedResult.project_id}`}</strong> · 选题 <strong>#{savedResult.topic_id}</strong>「{savedResult.topic_title}」）
                   </div>
-                  <div className="text-[11px] text-emerald-300/90">
+                  <div className="gcw-text-tag text-emerald-300/90">
                     作品 #{savedResult.content_id}（{savedResult.dedup_reused ? '已存在去重复用' : '新收录'}）·
                     {savedResult.topic_created ? '已自动新建待研究选题' : `已关联已有选题（保持原状态：${savedResult.topic_status || '待研究'}）`} ·
                     关联结果：{savedResult.link_status === 'updated' ? '已更新关联' : '已新建关联'} · 不会自动进入文案工坊
@@ -424,21 +424,21 @@ export default function VideoCaptureModal({
 
             {/* 步骤 1 & 3：明确收录目的地 + 选择研究项目 + 自动生成或编辑选题名称 */}
             <div className="gcw-panel p-3 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="flex flex-wrap items-center justify-between gap-2 gcw-text-tag">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
                     收录目的地：选题资产中心（TopicHub）
                   </span>
-                  <span className="text-[10px] text-slate-400">不默认落入素材与作者库 · 不自动进入文案工坊</span>
+                  <span className="gcw-text-meta text-slate-400">不默认落入素材与作者库 · 不自动进入文案工坊</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono-num">
+                <span className="gcw-text-meta text-slate-400 font-mono-num">
                   采集时间：{initialPreview?.collected_at || '当前'}
                 </span>
               </div>
 
               <div className="grid grid-cols-12 gap-2.5 items-end">
                 <div className="col-span-4 space-y-1">
-                  <label className="block text-[11px] font-semibold text-slate-300">1. 所属研究项目 *</label>
+                  <label className="block gcw-text-tag font-semibold text-slate-300">1. 所属研究项目 *</label>
                   {projects.length > 0 ? (
                     <select
                       value={selectedProjectId}
@@ -463,11 +463,11 @@ export default function VideoCaptureModal({
 
                 <div className="col-span-8 space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-slate-300">
+                    <label className="gcw-text-tag font-semibold text-slate-300">
                       2. 选题名称（自动生成待研究选题，或直接选择已有选题关联）*
                     </label>
                     {loadingTopics ? (
-                      <span className="text-[10px] text-cyan-300">加载项目选题中...</span>
+                      <span className="gcw-text-meta text-cyan-300">加载项目选题中...</span>
                     ) : topics.length > 0 && (
                       <select
                         value={linkedExistingTopicId}
@@ -479,7 +479,7 @@ export default function VideoCaptureModal({
                             if (hit) setTopicTitle(hit.topic_title);
                           }
                         }}
-                        className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[10px] text-slate-300 max-w-[210px]"
+                        className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 gcw-text-meta text-slate-300 max-w-[210px]"
                         title="可选：改选当前项目下已有选题"
                       >
                         <option value="">自动新建待研究选题</option>
@@ -513,7 +513,7 @@ export default function VideoCaptureModal({
                   <Film className="w-6 h-6 text-slate-600" />
                 )}
                 {durationSec && (
-                  <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/75 text-slate-100 text-[10px] font-mono-num">
+                  <span className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/75 text-slate-100 gcw-text-meta font-mono-num">
                     {fmtDur(Number(durationSec))}
                   </span>
                 )}
@@ -526,39 +526,39 @@ export default function VideoCaptureModal({
                   className="gcw-input w-full px-2.5 py-1 text-xs font-semibold"
                 />
                 <div className="grid grid-cols-3 gap-1.5">
-                  <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="平台" className="gcw-input px-2 py-1 text-[11px]" />
+                  <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="平台" className="gcw-input px-2 py-1 gcw-text-tag" />
                   <input
                     value={itemId}
                     onChange={(e) => setItemId(e.target.value)}
                     placeholder="真实作品唯一 ID *"
-                    className={`gcw-input px-2 py-1 text-[11px] font-mono-num ${!identityVerified ? 'border-amber-500/70' : ''}`}
+                    className={`gcw-input px-2 py-1 gcw-text-tag font-mono-num ${!identityVerified ? 'border-amber-500/70' : ''}`}
                   />
-                  <input value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} placeholder="发布时间" className="gcw-input px-2 py-1 text-[11px] font-mono-num" />
+                  <input value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} placeholder="发布时间" className="gcw-input px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div className="flex gap-1.5">
                   <input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="具体视频链接 *（支持粘贴完整抖音分享文本并点击解析）"
-                    className={`gcw-input flex-1 px-2 py-1 text-[11px] font-mono-num text-slate-200 ${!identityVerified ? 'border-amber-500/70' : ''}`}
+                    className={`gcw-input flex-1 px-2 py-1 gcw-text-tag font-mono-num text-slate-200 ${!identityVerified ? 'border-amber-500/70' : ''}`}
                   />
                   <button
                     type="button"
                     onClick={() => handleResolveShareText()}
                     disabled={resolvingLink || !url.trim()}
-                    className="gcw-btn-cyan px-2.5 py-1 rounded text-[10px] font-semibold shrink-0"
+                    className="gcw-btn-cyan px-2.5 py-1 rounded gcw-text-meta font-semibold shrink-0"
                     title="提取抖音/平台分享文本中的短链并安全校验解析为具体作品链接"
                   >
                     {resolvingLink ? '解析中...' : '解析分享链'}
                   </button>
                 </div>
                 {originalShareUrl && (
-                  <div className="text-[10px] text-slate-400 font-mono-num truncate">
+                  <div className="gcw-text-meta text-slate-400 font-mono-num truncate">
                     原始分享链接留痕：{originalShareUrl}
                   </div>
                 )}
                 {multiLinkCandidates.length > 1 && (
-                  <div className="p-1.5 rounded bg-amber-500/10 border border-amber-500/35 space-y-1 text-[10px]">
+                  <div className="p-1.5 rounded bg-amber-500/10 border border-amber-500/35 space-y-1 gcw-text-meta">
                     <div className="text-amber-300">识别到多个链接，请人工点选：</div>
                     <div className="flex flex-wrap gap-1">
                       {multiLinkCandidates.map((cu) => (
@@ -585,46 +585,46 @@ export default function VideoCaptureModal({
             <div className="gcw-panel p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-200">作者与真实数据核对（缺失项请留空存 NULL）</span>
-                <span className="text-[10px] text-slate-400">支持 18.5万 / 1.2k 自动解析</span>
+                <span className="gcw-text-meta text-slate-400">支持 18.5万 / 1.2k 自动解析</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">作者名</label>
-                  <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px]" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">作者名</label>
+                  <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">作者主页 URL</label>
-                  <input value={authorUrl} onChange={(e) => setAuthorUrl(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">作者主页 URL</label>
+                  <input value={authorUrl} onChange={(e) => setAuthorUrl(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">视频时长（秒）</label>
-                  <input value={durationSec} onChange={(e) => setDurationSec(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">视频时长（秒）</label>
+                  <input value={durationSec} onChange={(e) => setDurationSec(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
               </div>
               <div className="grid grid-cols-6 gap-2">
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">播放量</label>
-                  <input value={viewCount} onChange={(e) => setViewCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">播放量</label>
+                  <input value={viewCount} onChange={(e) => setViewCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">点赞量</label>
-                  <input value={likeCount} onChange={(e) => setLikeCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">点赞量</label>
+                  <input value={likeCount} onChange={(e) => setLikeCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">评论量</label>
-                  <input value={commentCount} onChange={(e) => setCommentCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">评论量</label>
+                  <input value={commentCount} onChange={(e) => setCommentCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">收藏量</label>
-                  <input value={favoriteCount} onChange={(e) => setFavoriteCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">收藏量</label>
+                  <input value={favoriteCount} onChange={(e) => setFavoriteCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">分享量</label>
-                  <input value={shareCount} onChange={(e) => setShareCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">分享量</label>
+                  <input value={shareCount} onChange={(e) => setShareCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">作者粉丝量</label>
-                  <input value={followerCount} onChange={(e) => setFollowerCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 text-[11px] font-mono-num" />
+                  <label className="block gcw-text-meta text-slate-400 mb-0.5">作者粉丝量</label>
+                  <input value={followerCount} onChange={(e) => setFollowerCount(e.target.value)} placeholder="—" className="gcw-input w-full px-2 py-1 gcw-text-tag font-mono-num" />
                 </div>
               </div>
             </div>
@@ -637,7 +637,7 @@ export default function VideoCaptureModal({
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {userTags.map((t) => (
-                  <span key={t} className="gcw-chip-active px-2 py-0.5 rounded-full text-[11px] flex items-center gap-1">
+                  <span key={t} className="gcw-chip-active px-2 py-0.5 rounded-full gcw-text-tag flex items-center gap-1">
                     {t}
                     <button onClick={() => removeTag(t)} className="hover:text-rose-300"><X className="w-3 h-3" /></button>
                   </span>
@@ -648,7 +648,7 @@ export default function VideoCaptureModal({
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); setTagInput(''); } }}
                     placeholder="+ 输入人工标签回车..."
-                    className="gcw-input px-2 py-0.5 text-[11px] w-36"
+                    className="gcw-input px-2 py-0.5 gcw-text-tag w-36"
                   />
                   <button
                     type="button"
@@ -661,7 +661,7 @@ export default function VideoCaptureModal({
               </div>
 
               {aiSuggestedTags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                <div className="flex flex-wrap items-center gap-1.5 gcw-text-meta">
                   <span className="text-purple-300 flex items-center gap-0.5">
                     <Sparkles className="w-3 h-3" /> AI 建议标签：
                   </span>
@@ -695,7 +695,7 @@ export default function VideoCaptureModal({
 
         {/* 底栏 */}
         <div className="px-5 py-3 bg-[#131E36] border-t border-[#1E2E4A] flex items-center justify-between text-xs">
-          <span className="text-[11px] text-slate-400">
+          <span className="gcw-text-tag text-slate-400">
             确认后写入<strong className="text-cyan-300">选题资产中心</strong>，作品全局去重，不会自动进入文案工坊
           </span>
           <div className="flex items-center gap-2">
