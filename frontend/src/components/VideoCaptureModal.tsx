@@ -123,9 +123,15 @@ export default function VideoCaptureModal({
           setLinkedExistingTopicId('');
           setTopicTitle(candidateTopicTitle);
         } else {
-          // 切换到其他项目或无当前研究选题时：默认不乱挂旧选题，自动以视频标题作为待新建选题名
+          // 切换到其他项目或无当前研究选题时：默认不乱挂旧选题，也绝不把旧项目候选选题标题带入新项目
           setLinkedExistingTopicId('');
-          setTopicTitle((prev) => prev || initialPreview?.title || '');
+          const videoDefaultTitle = (initialPreview?.title || '').split('\n')[0].slice(0, 120);
+          setTopicTitle((prev) => {
+            if (!prev || (candidateTopicTitle && prev === candidateTopicTitle)) {
+              return videoDefaultTitle;
+            }
+            return prev;
+          });
         }
       })
       .catch(() => {
@@ -208,14 +214,69 @@ export default function VideoCaptureModal({
         setMultiLinkCandidates(r.candidate_urls);
         setErrMsg(r.message || '识别到多个链接，请人工选择');
       } else if (r?.ok && r.status === 'resolved') {
+        const prevItemId = itemId.trim();
+        const nextItemId = (r.platform_item_id || '').trim();
+        const switchedToDifferentWork = Boolean(nextItemId && prevItemId && nextItemId !== prevItemId);
         if (r.original_share_url && r.original_share_url !== r.final_url) {
           setOriginalShareUrl(r.original_share_url);
         }
         setUrl(r.final_url);
         if (r.platform) setPlatform(r.platform);
-        if (r.platform_item_id) setItemId(r.platform_item_id);
+        if (nextItemId) setItemId(nextItemId);
         setIdentityVerified(true);
         setIdentityWarning('');
+
+        // GCW-STABLE-FIX-02: 分享链接解析成功后重新核对作品信息，防止把旧视频的标题/作者/互动数据错存到新链接
+        try {
+          const pv = await api.videoCapturePreview({
+            project_id: selectedProjectId,
+            url: r.final_url,
+            platform: r.platform || '',
+            platform_item_id: nextItemId,
+            title: switchedToDifferentWork ? '' : title,
+          });
+          const existing = pv?.preview?.existing_content;
+          if (existing) {
+            if (existing.title) setTitle(existing.title);
+            setAuthor(existing.author_name || '');
+            setAuthorUrl(existing.author_url || '');
+            setThumbnailUrl(existing.thumbnail_url || '');
+            setPublishedAt(existing.published_at || '');
+            setDurationSec(existing.duration_sec != null ? String(existing.duration_sec) : '');
+            setViewCount(existing.view_count != null ? String(existing.view_count) : '');
+            setLikeCount(existing.like_count != null ? String(existing.like_count) : '');
+            setCommentCount(existing.comment_count != null ? String(existing.comment_count) : '');
+            setFavoriteCount(existing.favorite_count != null ? String(existing.favorite_count) : '');
+            setShareCount(existing.share_count != null ? String(existing.share_count) : '');
+            setFollowerCount(existing.author_follower_count != null ? String(existing.author_follower_count) : '');
+          } else if (switchedToDifferentWork) {
+            // 解析到了与当前页面不同的新作品：清空旧视频残留元数据，避免张冠李戴
+            setTitle('');
+            setAuthor('');
+            setAuthorUrl('');
+            setThumbnailUrl('');
+            setPublishedAt('');
+            setDurationSec('');
+            setViewCount('');
+            setLikeCount('');
+            setCommentCount('');
+            setFavoriteCount('');
+            setShareCount('');
+            setFollowerCount('');
+            setErrMsg('已解析到新作品 ID，已清空旧视频元数据，请核对并填写当前作品标题后保存');
+          }
+        } catch {
+          if (switchedToDifferentWork) {
+            setAuthor('');
+            setAuthorUrl('');
+            setThumbnailUrl('');
+            setViewCount('');
+            setLikeCount('');
+            setCommentCount('');
+            setFavoriteCount('');
+            setShareCount('');
+          }
+        }
       } else {
         setIdentityVerified(false);
         setErrMsg(r?.error || '未能确认具体作品链接，请复制该视频的具体分享链接粘贴后重试');

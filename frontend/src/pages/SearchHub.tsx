@@ -197,29 +197,45 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
     setCaptureModalOpen(true);
     try {
       const snap = await researchBrowser.extractVideoMeta();
+      // GCW-STABLE-FIX-02: 严禁吞掉页面提取脚本异常或伪装成功回退为 web
+      if (!snap || snap.ok === false || snap.extract_status === 'script_error') {
+        const errDetail = snap?.error_message || snap?.error || '未知提取异常';
+        setCaptureModalOpen(false);
+        showToast(`⚠️ 视频元数据提取脚本执行异常（${snap?.error_code || 'EXTRACT_ERROR'}）：${errDetail}`);
+        return;
+      }
       await researchBrowser.setVisible(false);
       const res = await api.videoCapturePreview({
         project_id: reqPid,
-        url: snap?.url || ebState.url,
-        platform: snap?.platform || '',
-        platform_item_id: snap?.platform_item_id || '',
-        title: snap?.title || ebState.title || '',
-        thumbnail_url: snap?.thumbnail_url || '',
-        author: snap?.author || '',
-        author_url: snap?.author_url || '',
-        published_at: snap?.published_at || '',
-        duration_sec: snap?.duration_sec ?? null,
-        raw_metrics: snap?.raw_metrics || {},
+        url: snap.url || ebState.url,
+        platform: snap.platform || '',
+        platform_item_id: snap.platform_item_id || '',
+        title: snap.title || ebState.title || '',
+        thumbnail_url: snap.thumbnail_url || '',
+        author: snap.author || '',
+        author_url: snap.author_url || '',
+        published_at: snap.published_at || '',
+        duration_sec: snap.duration_sec ?? null,
+        raw_metrics: snap.raw_metrics || {},
         search_keyword: activeQueryText.trim(),
-        collected_at: snap?.collected_at || '',
+        collected_at: snap.collected_at || '',
       });
       if (activeProjectIdRef.current !== reqPid) return;
       if (res?.ok) {
-        setCapturePreview(res.preview);
+        setCapturePreview({
+          ...res.preview,
+          extract_status: snap.extract_status || (res.preview?.identity_verified ? 'complete' : 'identity_unverified'),
+          raw_page_url: snap.raw_page_url || ebState.url,
+        });
       } else {
-        showToast('提取预览失败');
+        setCaptureModalOpen(false);
+        showToast('提取预览失败：' + (res?.error || '后端未返回有效预览'));
       }
     } catch (e: any) {
+      setCaptureModalOpen(false);
+      if (researchBrowser && browserWasVisibleRef.current) {
+        researchBrowser.setVisible(true);
+      }
       showToast('提取当前视频失败：' + (e?.message || e));
     } finally {
       setCaptureLoading(false);

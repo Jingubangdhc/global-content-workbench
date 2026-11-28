@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app, BaseWindow, WebContentsView, ipcMain } = require('electron');
+const { buildReadonlyVideoMetaScript } = require('./video_meta_extractor');
 
 process.on('uncaughtException', (err) => {
   try {
@@ -470,226 +471,45 @@ ipcMain.handle('gcw-browser:get-state', (event, viewId) => {
 });
 
 /**
- * FIX-A05 · 受控只读提取当前真实页面视频公开元数据（增强抖音作者名称与主视频容器定位，避免抓到推荐流作者）
+ * GCW-STABLE-FIX-02 · 受控只读提取当前真实页面视频公开元数据
+ * - 独立分离 raw_page_url 与规范化 url，彻底修复 const 赋值导致的 TypeError
+ * - 捕获异常时严格返回 ok: false + extract_status: 'script_error' 与诊断日志，严禁伪装成功回退为 web
  */
 async function extractReadonlyVideoMeta(wc) {
+  if (!wc || wc.isDestroyed()) {
+    return {
+      ok: false,
+      extract_status: 'script_error',
+      error_code: 'VIEW_UNAVAILABLE',
+      error_message: '内置浏览器视图不可用或已销毁',
+      collected_at: new Date().toISOString(),
+    };
+  }
   const currentUrl = wc.getURL() || '';
   const pageTitle = wc.getTitle() || '';
-  const script = `
-    (() => {
-      const url = location.href || '';
-      const host = (location.hostname || '').toLowerCase();
-      const getMeta = (sel) => {
-        const el = document.querySelector(sel);
-        return el ? (el.getAttribute('content') || '').trim() : '';
-      };
-      const getText = (sel, root = document) => {
-        const el = root.querySelector(sel);
-        return el ? (el.innerText || el.textContent || '').trim() : '';
-      };
-
-      let ld = {};
-      try {
-        for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
-          const parsed = JSON.parse(s.textContent || '{}');
-          const arr = Array.isArray(parsed) ? parsed : [parsed];
-          for (const item of arr) {
-            if (item && (item['@type'] === 'VideoObject' || item.interactionStatistic)) {
-              ld = item;
-              break;
-            }
-          }
-        }
-      } catch (_) {}
-
-      const vids = Array.from(document.querySelectorAll('video'));
-      let mainVideo = vids[0] || null;
-      let maxArea = -1;
-      for (const v of vids) {
-        const r = v.getBoundingClientRect ? v.getBoundingClientRect() : { width: 0, height: 0 };
-        const area = Math.max(0, r.width) * Math.max(0, r.height);
-        if (area > maxArea) { maxArea = area; mainVideo = v; }
-      }
-      const videoDuration = (mainVideo && Number.isFinite(mainVideo.duration) && mainVideo.duration > 0) ? Math.round(mainVideo.duration) : null;
-
-      let platform = 'web';
-      let platformItemId = '';
-      let title = getMeta('meta[property="og:title"]') || getMeta('meta[name="title"]') || document.title || '';
-      let thumbnail = getMeta('meta[property="og:image"]') || (Array.isArray(ld.thumbnailUrl) ? ld.thumbnailUrl[0] : (ld.thumbnailUrl || '')) || '';
-      let author = '';
-      let authorUrl = '';
-      let publishedAt = getMeta('meta[itemprop="datePublished"]') || getMeta('meta[itemprop="uploadDate"]') || ld.uploadDate || '';
-      let durationSec = videoDuration;
-      let rawViews = '', rawLikes = '', rawComments = '', rawFavorites = '', rawShares = '', rawFollowers = '';
-
-      if (host.includes('youtube.com') || host.includes('youtu.be')) {
-        platform = 'youtube';
-        const m = url.match(/(?:v=|shorts\\/|youtu\\.be\\/)([A-Za-z0-9_-]{11})/);
-        if (m) platformItemId = m[1];
-        const vd = (window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails) || {};
-        if (!platformItemId && vd.videoId) platformItemId = vd.videoId;
-        if (!thumbnail && platformItemId) thumbnail = 'https://i.ytimg.com/vi/' + platformItemId + '/hqdefault.jpg';
-        title = getText('h1.ytd-watch-metadata yt-formatted-string') || getText('h1.ytd-watch-metadata') || vd.title || title.replace(/\\s*-\\s*YouTube$/i, '');
-        const chLink = document.querySelector('#owner ytd-channel-name a, ytd-video-owner-renderer a.yt-simple-endpoint');
-        author = (chLink && (chLink.textContent || '').trim()) || vd.author || getMeta('link[itemprop="name"]') || '';
-        if (chLink && chLink.href) authorUrl = chLink.href;
-        rawFollowers = getText('#owner-sub-count');
-        if (!durationSec && vd.lengthSeconds) durationSec = Number(vd.lengthSeconds) || null;
-        rawViews = vd.viewCount || getMeta('meta[itemprop="interactionCount"]') || '';
-        if (!rawViews) {
-          const infoText = getText('#info-strings') || getText('#description-inner') || getText('ytd-watch-metadata');
-          const vm = infoText.match(/([\\d.,]+\\s*[万亿KMBkmb]?)\\s*(?:次观看|views)/i);
-          if (vm && vm[1]) rawViews = vm[1].trim();
-        }
-        const likeBtn = document.querySelector('like-button-view-model button, ytd-toggle-button-renderer button[aria-label*="赞"], button[aria-label*="like"]');
-        if (likeBtn) rawLikes = (likeBtn.innerText || likeBtn.getAttribute('aria-label') || '').trim();
-        const cmtCount = getText('ytd-comments-header-renderer #count .count-text') || getText('ytd-comments-header-renderer #count');
-        if (cmtCount && /\\d/.test(cmtCount)) rawComments = cmtCount;
-      } else if (host.includes('bilibili.com')) {
-        platform = 'bilibili';
-        const m = url.match(/(BV[A-Za-z0-9]{10})/i);
-        if (m) platformItemId = m[1];
-        const bvd = (window.__INITIAL_STATE__ && window.__INITIAL_STATE__.videoData) || {};
-        const bst = bvd.stat || {};
-        if (!platformItemId && bvd.bvid) platformItemId = bvd.bvid;
-        title = getText('h1.video-title') || bvd.title || title.replace(/_哔哩哔哩_bilibili$/i, '');
-        if (!thumbnail && bvd.pic) thumbnail = bvd.pic;
-        if (!durationSec && bvd.duration) durationSec = Number(bvd.duration) || null;
-        const upLink = document.querySelector('a.up-name, .up-info--right a.up-name');
-        author = (upLink && (upLink.textContent || '').trim()) || (bvd.owner && bvd.owner.name) || '';
-        authorUrl = (upLink && upLink.href) || (bvd.owner && bvd.owner.mid ? ('https://space.bilibili.com/' + bvd.owner.mid) : '');
-        publishedAt = getText('.pubdate-ip-text') || publishedAt;
-        rawViews = getText('.view-text') || (bst.view != null ? String(bst.view) : '');
-        rawLikes = getText('.video-like-info') || (bst.like != null ? String(bst.like) : '');
-        rawFavorites = getText('.video-fav-info') || (bst.favorite != null ? String(bst.favorite) : '');
-        rawShares = getText('.video-share-info') || (bst.share != null ? String(bst.share) : '');
-        rawComments = getText('.total-reply') || (bst.reply != null ? String(bst.reply) : '');
-      } else if (host.includes('douyin.com')) {
-        platform = 'douyin';
-        const m = url.match(/(?:video|note)\\/(\\d{15,22})/) || url.match(/modal_id=(\\d{15,22})/);
-        if (m) platformItemId = m[1];
-        // 优先限定在当前活跃视频播放容器/弹窗中查找，防止误抓右侧推荐流作者
-        const activeScope =
-          document.querySelector('[data-e2e="feed-active-video"]') ||
-          document.querySelector('[data-e2e="video-detail"]') ||
-          document.querySelector('.video-detail-container') ||
-          document;
-        // GCW-UAT-R4-H: 在抖音精选/推荐流中，地址栏停留在 /jingxuan/，尝试从当前活跃视频容器只读提取真实 19 位 aweme_id
-        if (!platformItemId && activeScope) {
-          const vidAttr =
-            (activeScope.getAttribute && (activeScope.getAttribute('data-e2e-vid') || activeScope.getAttribute('data-aweme-id'))) ||
-            '';
-          if (/^\\d{15,22}$/.test(vidAttr)) {
-            platformItemId = vidAttr;
-          } else {
-            const vidNode = activeScope.querySelector('[data-e2e-vid], [data-aweme-id], a[href*="/video/"], a[href*="modal_id="]');
-            if (vidNode) {
-              const candAttr = vidNode.getAttribute('data-e2e-vid') || vidNode.getAttribute('data-aweme-id') || vidNode.getAttribute('href') || '';
-              const dm = candAttr.match(/(\\d{15,22})/);
-              if (dm) platformItemId = dm[1];
-            }
-          }
-          if (!platformItemId) {
-            try {
-              const fiberKey = Object.keys(activeScope).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
-              let cur = fiberKey ? activeScope[fiberKey] : null;
-              for (let depth = 0; cur && depth < 12; depth++) {
-                const p = cur.memoizedProps || cur;
-                const aid = (p && (p.awemeId || p.itemId || (p.awemeInfo && p.awemeInfo.awemeId) || (p.data && p.data.awemeId))) || '';
-                if (/^\\d{15,22}$/.test(String(aid))) {
-                  platformItemId = String(aid);
-                  break;
-                }
-                cur = cur.return;
-              }
-            } catch {}
-          }
-          if (platformItemId) {
-            url = 'https://www.douyin.com/video/' + platformItemId;
-          }
-        }
-        title =
-          getText('[data-e2e="video-desc"]', activeScope) ||
-          getText('[data-e2e="detail-video-desc"]', activeScope) ||
-          getText('h1', activeScope) ||
-          title.replace(/\\s*-\\s*抖音$/i, '');
-        const cleanAt = (s) => (s || '').replace(/^@+/, '').trim();
-        const authorCandidates = [
-          '[data-e2e="feed-video-nickname"]',
-          '[data-e2e="detail-video-author-name"]',
-          '[data-e2e="user-info"] [data-e2e="user-info-nickname"]',
-          '.account-name',
-          '.author-card-user-name',
-          '[data-e2e="user-info"] span',
-        ];
-        for (const sel of authorCandidates) {
-          const val = cleanAt(getText(sel, activeScope));
-          if (val && val.length <= 40 && !/^(关注|已关注|私信|粉丝|获赞)$/.test(val)) {
-            author = val;
-            break;
-          }
-        }
-        const authorA = activeScope.querySelector('[data-e2e="user-info"] a[href*="/user/"], a[data-e2e="feed-video-nickname"], a[href*="/user/MS4w"]');
-        if (authorA) {
-          authorUrl = authorA.href || '';
-          if (!author) {
-            const atxt = cleanAt(authorA.innerText || authorA.textContent || '');
-            if (atxt && atxt.length <= 40) author = atxt;
-          }
-        }
-        publishedAt = getText('[data-e2e="detail-video-publish-time"]', activeScope) || getText('.video-create-time', activeScope) || publishedAt;
-        rawLikes = getText('[data-e2e="detail-video-like-count"]', activeScope) || getText('[data-e2e="video-player-digg"]', activeScope);
-        rawComments = getText('[data-e2e="detail-video-comment-count"]', activeScope) || getText('[data-e2e="video-player-comment"]', activeScope);
-        rawFavorites = getText('[data-e2e="detail-video-collect-count"]', activeScope) || getText('[data-e2e="video-player-collect"]', activeScope);
-        rawShares = getText('[data-e2e="detail-video-share-count"]', activeScope) || getText('[data-e2e="video-player-share"]', activeScope);
-        rawFollowers = getText('[data-e2e="user-info-fans"]', activeScope) || '';
-        if (!thumbnail && mainVideo && mainVideo.poster) thumbnail = mainVideo.poster;
-      } else if (host.includes('zhihu.com')) {
-        platform = 'zhihu';
-      } else if (host.includes('xiaohongshu.com')) {
-        platform = 'xiaohongshu';
-      } else if (host.includes('reddit.com')) {
-        platform = 'reddit';
-      }
-
-      return {
-        url,
-        platform,
-        platform_item_id: platformItemId,
-        title: (title || '').trim(),
-        thumbnail_url: (thumbnail || '').trim(),
-        author: (author || '').trim(),
-        author_url: (authorUrl || '').trim(),
-        published_at: (publishedAt || '').trim(),
-        duration_sec: durationSec,
-        raw_metrics: {
-          views: rawViews,
-          likes: rawLikes,
-          comments: rawComments,
-          favorites: rawFavorites,
-          shares: rawShares,
-          followers: rawFollowers,
-        },
-      };
-    })()
-  `;
+  const script = buildReadonlyVideoMetaScript();
   try {
     const snap = await wc.executeJavaScript(script, true);
+    if (!snap || typeof snap !== 'object') {
+      throw new Error('提取脚本未返回有效元数据对象');
+    }
     return { ok: true, ...snap, collected_at: new Date().toISOString() };
   } catch (err) {
-    return {
-      ok: true,
+    const errMsg = String(err?.message || err);
+    console.error('[GCW extractReadonlyVideoMeta ERROR]', {
       url: currentUrl,
       title: pageTitle,
-      platform: 'web',
-      platform_item_id: '',
-      thumbnail_url: '',
-      author: '',
-      author_url: '',
-      published_at: '',
-      duration_sec: null,
-      raw_metrics: {},
-      extract_warning: String(err?.message || err),
+      error: errMsg,
+      stack: err?.stack ? String(err.stack).slice(0, 600) : '',
+    });
+    return {
+      ok: false,
+      extract_status: 'script_error',
+      error_code: 'EXTRACT_SCRIPT_ERROR',
+      error_message: errMsg,
+      raw_page_url: currentUrl,
+      url: currentUrl,
+      title: pageTitle,
       collected_at: new Date().toISOString(),
     };
   }
