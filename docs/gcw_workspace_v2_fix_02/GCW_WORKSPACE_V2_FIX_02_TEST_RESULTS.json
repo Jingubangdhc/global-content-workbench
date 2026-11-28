@@ -1,0 +1,102 @@
+{
+  "version": "v0.2.2-rc (GCW-WORKSPACE-V2-FIX-02)",
+  "tested_at": "2026-11-28T10:27:42.973Z",
+  "tests": {
+    "fix07_join_topic_library_naming": {
+      "type": "real_electron_e2e",
+      "actual": {
+        "hasJoinTopicBtn": true,
+        "noOldCaptureLabel": true
+      },
+      "pass": true
+    },
+    "fix01_fix09_10x_switch_no_overlap_and_keepalive": {
+      "type": "real_electron_e2e",
+      "switches": 10,
+      "overlapCount": 0,
+      "researchUrlPreserved": true,
+      "topicUrlPreserved": true,
+      "sampleLogs": [
+        {
+          "step": 1,
+          "targetTab": "关键词搜爆款",
+          "rVis": false,
+          "tVis": false
+        },
+        {
+          "step": 2,
+          "targetTab": "选题资产中心",
+          "rVis": false,
+          "tVis": true
+        },
+        {
+          "step": 3,
+          "targetTab": "关键词搜爆款",
+          "rVis": true,
+          "tVis": false
+        },
+        {
+          "step": 4,
+          "targetTab": "选题资产中心",
+          "rVis": false,
+          "tVis": true
+        },
+        {
+          "step": 5,
+          "targetTab": "关键词搜爆款",
+          "rVis": false,
+          "tVis": false
+        },
+        {
+          "step": 6,
+          "targetTab": "选题资产中心",
+          "rVis": false,
+          "tVis": true
+        }
+      ],
+      "pass": true
+    },
+    "fix02_compact_metrics_bar": {
+      "type": "real_electron_e2e",
+      "heightPx": 79,
+      "pass": true
+    },
+    "fix03_fix06_rewrite_body_and_naming": {
+      "type": "real_electron_e2e",
+      "actual": {
+        "hasRewriteLabel": true,
+        "hasVersionBody": true
+      },
+      "pass": true
+    },
+    "fix04_fix08_breakdown_and_comment_discovery": {
+      "type": "real_electron_e2e",
+      "actual": {
+        "noMainBreakdownTab": true,
+        "hasImportBreakdownBtn": true,
+        "hasBatchDiscover": true
+      },
+      "pass": true
+    },
+    "fix10_atomic_duplicate_rev_reject": {
+      "type": "real_backend_test",
+      "actual": {
+        "tid": 1050942,
+        "firstStatus": 200,
+        "duplicateRevStatus": 409
+      },
+      "pass": true
+    }
+  },
+  "not_tested_or_blocked": [
+    "FIX-04 正式拆解 Skill 执行：用户尚未提供正式拆解 Skill，已标记 BLOCKED（通用导入/执行/保存框架已实测就绪，无拆解 Skill 时如实显示待导入）",
+    "未经授权的付费云端模型生成调用：按费用授权规范不擅自调用，标记 NOT TESTED"
+  ],
+  "video_mp4": {
+    "path": "C:\\Users\\wodhc\\.gemini\\antigravity\\scratch\\content-workbench\\docs\\gcw_workspace_v2_fix_02\\evidence\\fix02_switch_no_overlap_demo.mp4",
+    "frames": 13,
+    "exitCode": 0,
+    "bytes": 436263
+  },
+  "all_executed_pass": true
+}

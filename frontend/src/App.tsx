@@ -49,6 +49,8 @@ export default function App() {
   const [projectId, setProjectId] = useState<number>(1);
 
   const [page, setPage] = useState<PageKey>('search');
+  const [mountedPages, setMountedPages] = useState<PageKey[]>(['search']);
+  const [topicRefreshToken, setTopicRefreshToken] = useState<number>(0);
   const [searchSeedKw, setSearchSeedKw] = useState<string | null>(null);
   const [focusTopicTarget, setFocusTopicTarget] = useState<{ projectId: number; topicId: number; token: number } | null>(null);
   const [activeContentId, setActiveContentId] = useState<number | null>(null);
@@ -125,12 +127,27 @@ export default function App() {
     return () => window.removeEventListener('gcw:open-translation-settings', handler);
   }, []);
 
-  // FIX-A02: 切换到不需要内置浏览器的页面时，自动暂停并隐藏所有 WebContentsView（不销毁实例）
+  // FIX-09: 按需首次挂载并保活已访问导航页
   useEffect(() => {
-    if (page !== 'search' && page !== 'topics') {
-      (window.gcwDesktopBrowser as any)?.hideAll?.().catch?.(() => {});
-    }
+    setMountedPages((prev) => (prev.includes(page) ? prev : [...prev, page]));
   }, [page]);
+
+  // FIX-01: 全局单一活动原生浏览器视图控制（任一时刻仅允许当前活动模块视图显示，弹窗打开立即全部隐藏）
+  useEffect(() => {
+    const bridge = window.gcwDesktopBrowser as any;
+    if (!bridge) return;
+    if (settingsOpen || calcOpen) {
+      bridge.setActiveView?.(null)?.catch?.(() => {});
+      return;
+    }
+    if (page === 'search') {
+      bridge.setActiveView?.('research')?.catch?.(() => {});
+    } else if (page === 'topics') {
+      bridge.setActiveView?.('topicPlayer')?.catch?.(() => {});
+    } else {
+      bridge.setActiveView?.(null)?.catch?.(() => {});
+    }
+  }, [page, settingsOpen, calcOpen]);
 
   const handleChangeFontScale = (next: FontScaleKey) => {
     setFontScale(next);
@@ -325,91 +342,121 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 主内容区域 */}
-      <main className="flex-1 flex flex-col min-w-0 p-3.5 overflow-hidden">
-        {page === 'search' && (
-          <SearchHub
-            projectId={projectId}
-            projectName={projects.find((p) => p.id === projectId)?.name || ''}
-            projects={projects}
-            lowFollowerThreshold={lowThreshold}
-            externalQuery={searchSeedKw}
-            onOpenTranscript={(cid) => {
-              setActiveContentId(cid);
-              setPage('transcript');
-            }}
-            onGoTopicHub={(targetPid, targetTid) => {
-              const nextPid = targetPid || projectId;
-              if (nextPid !== projectId) setProjectId(nextPid);
-              if (targetTid) {
-                setFocusTopicTarget({ projectId: nextPid, topicId: targetTid, token: Date.now() });
-              }
-              setPage('topics');
-            }}
-          />
+      {/* 主内容区域（FIX-09: 按需首次挂载 + display:none 保活，切换页面不卸载、不丢失滚动/视频/编辑状态） */}
+      <main className="flex-1 flex flex-col min-w-0 p-3.5 overflow-hidden relative">
+        {mountedPages.includes('search') && (
+          <div className={page === 'search' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <SearchHub
+              isActive={page === 'search' && !settingsOpen && !calcOpen}
+              projectId={projectId}
+              projectName={projects.find((p) => p.id === projectId)?.name || ''}
+              projects={projects}
+              lowFollowerThreshold={lowThreshold}
+              externalQuery={searchSeedKw}
+              onOpenTranscript={(cid) => {
+                setActiveContentId(cid);
+                setPage('topics');
+              }}
+              onGoTopicHub={(targetPid, targetTid) => {
+                const nextPid = targetPid || projectId;
+                if (nextPid !== projectId) setProjectId(nextPid);
+                setTopicRefreshToken((t) => t + 1);
+                if (targetTid) {
+                  setFocusTopicTarget({ projectId: nextPid, topicId: targetTid, token: Date.now() });
+                }
+                setPage('topics');
+              }}
+            />
+          </div>
         )}
-        {page === 'topics' && (
-          <TopicHub
-            projectId={projectId}
-            projects={projects}
-            focusTarget={focusTopicTarget}
-            onConsumeFocusTarget={() => setFocusTopicTarget(null)}
-            onGoSearch={(kw) => {
-              setSearchSeedKw(kw);
-              setPage('search');
-            }}
-            overlayBlocked={settingsOpen || calcOpen}
-          />
+        {mountedPages.includes('topics') && (
+          <div className={page === 'topics' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <TopicHub
+              isActive={page === 'topics'}
+              refreshToken={topicRefreshToken}
+              projectId={projectId}
+              projects={projects}
+              focusTarget={focusTopicTarget}
+              onConsumeFocusTarget={() => setFocusTopicTarget(null)}
+              onGoSearch={(kw) => {
+                setSearchSeedKw(kw);
+                setPage('search');
+              }}
+              overlayBlocked={settingsOpen || calcOpen}
+            />
+          </div>
         )}
-        {page === 'trends' && (
-          <HotTrends
-            projectId={projectId}
-            onJumpSearchKeyword={(kw) => {
-              setSearchSeedKw(kw);
-              setPage('search');
-            }}
-          />
+        {mountedPages.includes('trends') && (
+          <div className={page === 'trends' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <HotTrends
+              projectId={projectId}
+              onJumpSearchKeyword={(kw) => {
+                setSearchSeedKw(kw);
+                setPage('search');
+              }}
+            />
+          </div>
         )}
-        {page === 'tracker' && (
-          <CreatorTracker
-            projectId={projectId}
-            onOpenTranscript={(cid) => {
-              setActiveContentId(cid);
-              setPage('transcript');
-            }}
-            onInspectCreatorRevenue={(handle, platform) => {
-              setXrayTarget({ query: handle, platform });
-              setPage('revenue');
-            }}
-          />
+        {mountedPages.includes('tracker') && (
+          <div className={page === 'tracker' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <CreatorTracker
+              projectId={projectId}
+              onOpenTranscript={(cid) => {
+                setActiveContentId(cid);
+                setPage('topics');
+              }}
+              onInspectCreatorRevenue={(handle, platform) => {
+                setXrayTarget({ query: handle, platform });
+                setPage('revenue');
+              }}
+            />
+          </div>
         )}
-        {page === 'contents' && (
-          <ContentAuthors
-            projectId={projectId}
-            onOpenTranscript={(cid) => {
-              setActiveContentId(cid);
-              setPage('transcript');
-            }}
-            onInspectCreatorRevenue={(handle, platform) => {
-              setXrayTarget({ query: handle, platform });
-              setPage('revenue');
-            }}
-          />
+        {mountedPages.includes('contents') && (
+          <div className={page === 'contents' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <ContentAuthors
+              projectId={projectId}
+              onOpenTranscript={(cid) => {
+                setActiveContentId(cid);
+                setPage('topics');
+              }}
+              onInspectCreatorRevenue={(handle, platform) => {
+                setXrayTarget({ query: handle, platform });
+                setPage('revenue');
+              }}
+            />
+          </div>
         )}
-        {page === 'transcript' && (
-          <TranscriptStudio
-            projectId={projectId}
-            activeContentId={activeContentId}
-            autoExtractToken={autoExtractToken}
-            onSelectContent={setActiveContentId}
-          />
+        {mountedPages.includes('transcript') && (
+          <div className={page === 'transcript' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <TranscriptStudio
+              projectId={projectId}
+              activeContentId={activeContentId}
+              autoExtractToken={autoExtractToken}
+              onSelectContent={setActiveContentId}
+            />
+          </div>
         )}
-        {page === 'video' && <VideoStudio projectId={projectId} onJumpPublish={() => setPage('publish')} />}
-        {page === 'publish' && <PublishHub projectId={projectId} />}
-        {page === 'revenue' && (
-          <RevenueRadar initialXray={xrayTarget} onOpenCalc={() => setCalcOpen(true)} />
+        {mountedPages.includes('video') && (
+          <div className={page === 'video' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <VideoStudio projectId={projectId} onJumpPublish={() => setPage('publish')} />
+          </div>
         )}
-        {page === 'directory' && <ResourceDirectory />}
+        {mountedPages.includes('publish') && (
+          <div className={page === 'publish' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <PublishHub projectId={projectId} />
+          </div>
+        )}
+        {mountedPages.includes('revenue') && (
+          <div className={page === 'revenue' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <RevenueRadar initialXray={xrayTarget} onOpenCalc={() => setCalcOpen(true)} />
+          </div>
+        )}
+        {mountedPages.includes('directory') && (
+          <div className={page === 'directory' ? 'h-full w-full flex flex-col min-h-0' : 'hidden'}>
+            <ResourceDirectory />
+          </div>
+        )}
       </main>
 
       <RevenueCalculatorDrawer open={calcOpen} onClose={() => setCalcOpen(false)} />

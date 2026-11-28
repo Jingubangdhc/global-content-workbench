@@ -31,5 +31,6 @@ function createViewController(viewId) {
 contextBridge.exposeInMainWorld('gcwDesktopBrowser', {
   isElectron: true,
   forView: (viewId) => createViewController(viewId),
+  setActiveView: (viewId) => ipcRenderer.invoke('gcw-browser:set-active-view', viewId),
   hideAll: () => ipcRenderer.invoke('gcw-browser:hide-all'),
 });

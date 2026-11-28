@@ -221,8 +221,10 @@ def list_available_writing_models() -> list[dict[str, Any]]:
         models.append({
             "engine_id": p["engine_id"],
             "name": p["name"],
+            "label": f"{p['name']} ({pcfg.get('model_id') or p.get('default_model') or ''})",
             "model_id": pcfg.get("model_id") or p.get("default_model") or "",
             "configured": bool(p.get("configured")),
+            "ready": bool(p.get("configured")),
             "is_paid": p.get("billing_category") != "free_local",
             "is_local": is_local,
             "base_url": pcfg.get("local_endpoint") if is_local else (pcfg.get("base_url") or p.get("default_base_url") or ""),
@@ -235,8 +237,10 @@ def list_available_writing_models() -> list[dict[str, Any]]:
         models.insert(0, {
             "engine_id": "env_default_llm",
             "name": f"工作台默认大模型 ({env.get('llm_model') or 'deepseek-chat'})",
+            "label": f"工作台默认大模型 ({env.get('llm_model') or 'deepseek-chat'})",
             "model_id": env.get("llm_model") or "deepseek-chat",
             "configured": True,
+            "ready": True,
             "is_paid": True,
             "is_local": False,
             "base_url": env.get("llm_base_url") or "https://api.deepseek.com/v1",

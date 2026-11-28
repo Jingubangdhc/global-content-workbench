@@ -19,6 +19,7 @@ import { api } from '../../api';
 export type SubtitleMode = 'bilingual' | 'zh' | 'original' | 'off';
 
 interface Props {
+  isActive?: boolean;
   activeVideo: any | null;
   playerBrowser: any;
   overlayHidden: boolean;
@@ -39,6 +40,7 @@ function isChineseSubtitles(sub: any): boolean {
 }
 
 export default function EmbeddedVideoWorkspace({
+  isActive = true,
   activeVideo,
   playerBrowser,
   overlayHidden,
@@ -53,9 +55,11 @@ export default function EmbeddedVideoWorkspace({
   const autoTransRunIdRef = useRef(0);
   const playbackReqSeqRef = useRef(0);
   const boundsOpSeqRef = useRef(0);
-  const overlayHiddenRef = useRef(overlayHidden);
+  const lastNavigatedUrlRef = useRef<string>('');
+  const effectiveHidden = !isActive || overlayHidden;
+  const overlayHiddenRef = useRef(effectiveHidden);
   const activeVideoRef = useRef(activeVideo);
-  overlayHiddenRef.current = overlayHidden;
+  overlayHiddenRef.current = effectiveHidden;
   activeVideoRef.current = activeVideo;
 
   const [subMode, setSubMode] = useState<SubtitleMode>('bilingual');
@@ -75,15 +79,18 @@ export default function EmbeddedVideoWorkspace({
     url: '',
   });
 
-  // 1. 切换视频时导航 topicPlayerView（非浮层，固定内嵌）
+  // 1. FIX-09: 仅当切换到不同视频 URL 且页面处于激活态时才 navigate，返回 TopicHub 绝不重新加载原视频
   useEffect(() => {
     if (!playerBrowser) return;
-    if (!activeVideo?.url || overlayHidden) {
+    if (!activeVideo?.url || effectiveHidden) {
       playerBrowser.setVisible(false).catch(() => {});
       return;
     }
-    playerBrowser.navigate(activeVideo.url).catch(() => {});
-  }, [activeVideo?.content_id, activeVideo?.url, playerBrowser]);
+    if (lastNavigatedUrlRef.current !== activeVideo.url) {
+      lastNavigatedUrlRef.current = activeVideo.url;
+      playerBrowser.navigate(activeVideo.url).catch(() => {});
+    }
+  }, [activeVideo?.content_id, activeVideo?.url, effectiveHidden, playerBrowser]);
 
   // 2. FIX-05: 精准同步 WebContentsView 坐标与显隐（带 boundsOpSeqRef + overlayHiddenRef 防旧异步 setBounds 在弹窗打开后重新显示播放器）
   useEffect(() => {
@@ -129,7 +136,7 @@ export default function EmbeddedVideoWorkspace({
       window.removeEventListener('resize', syncBounds);
       window.removeEventListener('scroll', syncBounds, true);
     };
-  }, [playerBrowser, activeVideo?.content_id, activeVideo?.url, overlayHidden, heightPx, maximized]);
+  }, [playerBrowser, activeVideo?.content_id, activeVideo?.url, effectiveHidden, heightPx, maximized]);
 
   // 组件卸载（离开 TopicHub）时暂停并隐藏播放器，绝不销毁实例
   useEffect(() => {
@@ -236,9 +243,9 @@ export default function EmbeddedVideoWorkspace({
     })();
   }, [activeVideo?.content_id]);
 
-  // 4. R4-G 100ms 真实 currentTime 同步轮询（防旧 IPC 覆盖、过滤广告态与旧视频 URL 残留）
+  // 4. R4-G / FIX-09: 仅当页面激活且未隐藏时执行 100ms 真实 currentTime 同步轮询（离开页面自动停轮询省资源）
   useEffect(() => {
-    if (!playerBrowser || !activeVideo?.content_id) return;
+    if (!playerBrowser || !activeVideo?.content_id || effectiveHidden) return;
     let alive = true;
     const expectedItemId = String(activeVideo.platform_item_id || '').trim();
     const expectedUrl = String(activeVideo.url || '').trim();
@@ -286,7 +293,7 @@ export default function EmbeddedVideoWorkspace({
       playbackReqSeqRef.current += 1;
       clearInterval(iv);
     };
-  }, [activeVideo?.content_id, activeVideo?.platform_item_id, activeVideo?.url, playerBrowser]);
+  }, [activeVideo?.content_id, activeVideo?.platform_item_id, activeVideo?.url, effectiveHidden, playerBrowser]);
 
   const sortedSegs = useMemo(() => {
     const segs: any[] = subData?.segments || [];

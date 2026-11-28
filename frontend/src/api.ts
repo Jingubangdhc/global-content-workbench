@@ -475,6 +475,12 @@ export const api = {
     req(`/api/topic-hub/contents/${contentId}/metrics`),
   topicHubRefreshContentMetrics: (contentId: number, body: any) =>
     req(`/api/topic-hub/contents/${contentId}/refresh-metrics`, { method: 'POST', body: JSON.stringify(body) }),
+  topicHubListBreakdownReports: (contentId: number) =>
+    req(`/api/topic-hub/contents/${contentId}/breakdown-reports`),
+  topicHubRunBreakdownSkill: (contentId: number, body: { skill_id: string; engine_id?: string; model_id?: string; text_mode?: string; extra_requirements?: string }) =>
+    req(`/api/topic-hub/contents/${contentId}/breakdown-run`, { method: 'POST', body: JSON.stringify(body) }),
+  topicHubDiscoverTopicsFromComments: (body: { project_id: number; content_id: number; comment_ids: number[]; count?: number; engine_id?: string; model_id?: string }) =>
+    req('/api/topic-hub/comments/discover-topics', { method: 'POST', body: JSON.stringify(body) }),
 
   // ==================== SEARCH-PHASE-5 / R4-D: 原创文案多版本、自定义 Skill 与创作资料包 ====================
   topicHubScriptSkills: () => req('/api/topic-hub/script-skills'),

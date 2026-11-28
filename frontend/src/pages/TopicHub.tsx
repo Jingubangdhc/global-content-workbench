@@ -31,12 +31,16 @@ import {
   X,
 } from 'lucide-react';
 import { api, fmtDur, fmtNum } from '../api';
+import CommentTopicDiscoveryPane from '../components/workspace/CommentTopicDiscoveryPane';
 import EmbeddedVideoWorkspace from '../components/workspace/EmbeddedVideoWorkspace';
+import FullTextBreakdownPane from '../components/workspace/FullTextBreakdownPane';
 import OriginalCopyStudioPane from '../components/workspace/OriginalCopyStudioPane';
 import ReferenceTranscriptPane from '../components/workspace/ReferenceTranscriptPane';
 import VideoMetricsBar, { formatLocalDateTime } from '../components/workspace/VideoMetricsBar';
 
 interface Props {
+  isActive?: boolean;
+  refreshToken?: number;
   projectId: number;
   projects?: any[];
   focusTarget?: { projectId: number; topicId: number; token: number } | null;
@@ -45,12 +49,15 @@ interface Props {
   overlayBlocked?: boolean;
 }
 
-type RightTab = 'copy' | 'breakdown' | 'comments' | 'evidence';
+type RightTab = 'copy' | 'comments' | 'evidence';
+type LeftCopySubTab = 'reference' | 'breakdown';
 type SortKey = 'created_desc' | 'created_asc' | 'updated_desc' | 'captured_desc';
 
 const LIFECYCLE_STATUSES = ['待研究', '研究中', '待制作', '制作中', '待发布', '已发布', '已归档'] as const;
 
 export default function TopicHub({
+  isActive = true,
+  refreshToken = 0,
   projectId,
   projects = [],
   focusTarget,
@@ -79,6 +86,7 @@ export default function TopicHub({
 
   // 右侧工作区交互状态
   const [rightTab, setRightTab] = useState<RightTab>('copy');
+  const [leftCopySubTab, setLeftCopySubTab] = useState<LeftCopySubTab>('reference');
   const [videoHeightPx, setVideoHeightPx] = useState<number>(() => {
     const saved = Number(localStorage.getItem('gcw_v2_video_h') || '320');
     return Number.isFinite(saved) && saved >= 180 && saved <= 640 ? saved : 320;
@@ -173,7 +181,7 @@ export default function TopicHub({
 
   useEffect(() => {
     loadTopics();
-  }, [selectedProjId, filterStatus, sortBy, dateFrom, dateTo]);
+  }, [selectedProjId, filterStatus, sortBy, dateFrom, dateTo, refreshToken]);
 
   // 加载当前选题详情（带 reqSeq 防快速切选题竞态）
   const loadDetail = async (tid: number) => {
@@ -562,6 +570,7 @@ export default function TopicHub({
 
         {/* 2 & 3. 横向完整内嵌视频播放区域 + 实时双语字幕 */}
         <EmbeddedVideoWorkspace
+          isActive={isActive}
           activeVideo={activeVideo}
           playerBrowser={playerBrowser}
           overlayHidden={hideNativePlayer}
@@ -595,14 +604,13 @@ export default function TopicHub({
           />
         )}
 
-        {/* 5. 标签页：文案创作 | 内容拆解 | 高赞评论 | 研究证据 */}
+        {/* 5. 标签页：文案创作 | 高赞评论 | 研究证据（FIX-04: 取消独立内容拆解主标签，市场四类信号归入选题详情抽屉） */}
         {!videoMaximized && (
           <div className="flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-1.5">
               {(
                 [
                   ['copy', '文案创作', FileText],
-                  ['breakdown', '内容拆解', Sparkles],
                   ['comments', `高赞评论 (${comments.length})`, MessageSquare],
                   ['evidence', `研究证据 (${topicContents.length})`, Layers],
                 ] as [RightTab, string, any][]
@@ -630,23 +638,59 @@ export default function TopicHub({
           <div className="flex-1 min-h-0 overflow-hidden">
             {rightTab === 'copy' && (
               <div ref={splitContainerRef} className="h-full w-full flex min-h-0">
-                <div style={{ width: `${refWidthPct}%` }} className="h-full min-w-0 pr-1">
-                  <ReferenceTranscriptPane
-                    contentId={activeVideo ? Number(activeVideo.content_id || activeVideo.id) : null}
-                    videoTitle={activeVideo?.title || ''}
-                    subData={subData}
-                    onSubDataChange={setSubData}
-                    activeSegmentIdx={activeSegIdx}
-                    onSeekToSeconds={handleSeekToSeconds}
-                    seekWarning={seekWarning}
-                  />
+                <div style={{ width: `${refWidthPct}%` }} className="h-full min-w-0 pr-1 flex flex-col">
+                  {/* FIX-04: 左侧双子标签（参考文案 | 全文拆解） */}
+                  <div className="flex items-center gap-1 mb-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setLeftCopySubTab('reference')}
+                      className={`px-3 py-1 rounded-lg gcw-text-tag font-semibold border transition ${
+                        leftCopySubTab === 'reference'
+                          ? 'gcw-tab-active'
+                          : 'bg-[#111a2e] border-[#1e2e4a] text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      参考文案
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeftCopySubTab('breakdown')}
+                      className={`px-3 py-1 rounded-lg gcw-text-tag font-semibold border transition inline-flex items-center gap-1 ${
+                        leftCopySubTab === 'breakdown'
+                          ? 'gcw-tab-active'
+                          : 'bg-[#111a2e] border-[#1e2e4a] text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> 全文拆解
+                    </button>
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    {leftCopySubTab === 'reference' ? (
+                      <ReferenceTranscriptPane
+                        contentId={activeVideo ? Number(activeVideo.content_id || activeVideo.id) : null}
+                        videoTitle={activeVideo?.title || ''}
+                        subData={subData}
+                        onSubDataChange={setSubData}
+                        activeSegmentIdx={activeSegIdx}
+                        onSeekToSeconds={handleSeekToSeconds}
+                        seekWarning={seekWarning}
+                      />
+                    ) : (
+                      <div className="gcw-panel h-full overflow-hidden">
+                        <FullTextBreakdownPane
+                          contentId={activeVideo ? Number(activeVideo.content_id || activeVideo.id) : null}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* 左右宽度拖动分隔条 */}
                 <div
                   onMouseDown={startHorizontalResize}
                   className="w-2.5 flex items-center justify-center cursor-col-resize group shrink-0"
-                  title="左右拖动调整参考文案与原创文案宽度"
+                  title="左右拖动调整参考文案与二创文案宽度"
                 >
                   <div className="h-16 w-1 rounded-full bg-[#2c4268] group-hover:bg-cyan-400 transition flex items-center justify-center">
                     <GripVertical className="w-3 h-4 text-slate-400 group-hover:text-cyan-200" />
@@ -665,48 +709,13 @@ export default function TopicHub({
               </div>
             )}
 
-            {rightTab === 'breakdown' && (
-              <div className="gcw-panel h-full overflow-y-auto p-4 space-y-3">
-                <div className="gcw-section-title text-slate-100">内容拆解与市场四类信号</div>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {[
-                    ['市场关注', detail?.topic?.four_signals?.market_attention],
-                    ['用户需求', detail?.topic?.four_signals?.user_demand],
-                    ['购买信号', detail?.topic?.four_signals?.purchase_intent],
-                    ['商业收益', detail?.topic?.four_signals?.commercial_revenue],
-                  ].map(([title, sig]: any) => (
-                    <div key={title} className="p-3 rounded-xl bg-[#0c1424] border border-[#1e2e4a] space-y-1">
-                      <div className="gcw-text-btn font-semibold text-cyan-300">{title}</div>
-                      <div className="gcw-text-base text-slate-300">{sig?.summary || '—'}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="p-3 rounded-xl bg-[#0c1424] border border-[#1e2e4a] space-y-1">
-                  <div className="gcw-text-btn font-semibold text-slate-200">核心研究问题与切入角度</div>
-                  <div className="gcw-text-base text-slate-300">问题：{detail?.topic?.research_question || '—'}</div>
-                  <div className="gcw-text-base text-slate-300">角度：{detail?.topic?.angle || '—'}</div>
-                  <div className="gcw-text-base text-slate-300">验证说明：{detail?.topic?.validation_reason || '—'}</div>
-                </div>
-              </div>
-            )}
-
             {rightTab === 'comments' && (
-              <div className="gcw-panel h-full overflow-y-auto p-4 space-y-2.5">
-                <div className="gcw-section-title text-slate-100">当前视频高赞评论与用户痛点</div>
-                {!comments.length ? (
-                  <div className="text-slate-500 gcw-text-base py-6">当前作品暂无已采集的评论数据</div>
-                ) : (
-                  comments.map((c: any) => (
-                    <div key={c.id} className="p-3 rounded-xl bg-[#0c1424] border border-[#1e2e4a] space-y-1">
-                      <div className="flex items-center justify-between gcw-text-tag text-slate-400">
-                        <span>{c.author || '匿名用户'}</span>
-                        <span className="font-mono-num">赞 {fmtNum(c.like_count)}</span>
-                      </div>
-                      <div className="gcw-text-base text-slate-200">{c.text}</div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <CommentTopicDiscoveryPane
+                projectId={detail?.topic?.project_id || (selectedProjId > 0 ? selectedProjId : projectId)}
+                contentId={activeVideo ? Number(activeVideo.content_id || activeVideo.id) : null}
+                comments={comments}
+                onTopicAdded={() => loadTopics()}
+              />
             )}
 
             {rightTab === 'evidence' && (
@@ -775,6 +784,21 @@ export default function TopicHub({
                 <div>选题 ID：#{detail.topic.id}</div>
                 <div>创建时间：{formatLocalDateTime(detail.topic.created_at)}</div>
                 <div>更新时间：{formatLocalDateTime(detail.topic.updated_at)}</div>
+              </div>
+
+              {/* FIX-04: 现有市场四类信号归入选题详情与档案，不删除原有数据 */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['市场关注', detail.topic.four_signals?.market_attention],
+                  ['用户需求', detail.topic.four_signals?.user_demand],
+                  ['购买信号', detail.topic.four_signals?.purchase_intent],
+                  ['商业收益', detail.topic.four_signals?.commercial_revenue],
+                ].map(([lbl, sig]: any) => (
+                  <div key={lbl} className="p-2 rounded-lg bg-[#0c1424] border border-[#1e2e4a] space-y-0.5">
+                    <div className="gcw-text-meta font-semibold text-cyan-300">{lbl}</div>
+                    <div className="gcw-text-meta text-slate-300">{sig?.summary || '—'}</div>
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

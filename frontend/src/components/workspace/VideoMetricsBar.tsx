@@ -165,74 +165,58 @@ export default function VideoMetricsBar({ contentId, playerBrowser, fallbackItem
   ];
 
   return (
-    <div className="gcw-panel px-3.5 py-2.5 space-y-2 shrink-0">
-      {/* 顶部：视频元信息 + 刷新按钮 */}
+    <div className="gcw-panel px-3 py-1.5 space-y-1 shrink-0" data-testid="compact-metrics-bar">
+      {/* 行 1：平台 + 标题 + 作者 + 时长 + 关键时间 + 刷新按钮 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-          <span className="px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 gcw-text-tag font-semibold shrink-0">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 min-w-0">
+          <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 gcw-text-meta font-semibold shrink-0">
             {platform}
           </span>
-          <span className="gcw-video-title text-slate-100 truncate max-w-[42vw]" title={title}>
+          <span className="gcw-text-base font-semibold text-slate-100 truncate max-w-[30vw]" title={title}>
             {title}
           </span>
-          <span className="gcw-text-meta text-slate-300">作者：{author}</span>
-          <span className="gcw-text-meta text-slate-400 font-mono-num">时长：{fmtDur(durationSec)}</span>
+          <span className="gcw-text-tag text-slate-300 truncate max-w-[14vw]" title={`作者：${author}`}>
+            {author}
+          </span>
+          <span className="gcw-text-meta text-slate-400 font-mono-num">时长 {fmtDur(durationSec)}</span>
+          <span
+            className="gcw-text-meta text-slate-400 font-mono-num hidden 2xl:inline"
+            title={`发布：${publishedAt || '未知'} | 收录：${formatLocalDateTime(capturedAt)} | 采集：${formatLocalDateTime(collectedAt)}`}
+          >
+            收录 {formatLocalDateTime(capturedAt)}
+          </span>
           {url && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 gcw-text-tag text-cyan-400 hover:text-cyan-300"
-              title="在外部浏览器查看原视频"
-            >
-              原链接 <ExternalLink className="w-3.5 h-3.5" />
+            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 gcw-text-meta text-cyan-400 hover:text-cyan-300">
+              原链<ExternalLink className="w-3 h-3" />
             </a>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-            className="gcw-btn-ghost gcw-text-btn px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"
-            title="仅在点击时尝试从当前播放页面刷新真实数据；失败时保留上次有效数据"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? '刷新中...' : '刷新数据'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+          className="gcw-btn-ghost gcw-text-tag px-2 py-0.5 rounded-lg inline-flex items-center gap-1 shrink-0 disabled:opacity-50"
+          title={`仅点击时刷新真实数据（失败保留原值）\n互动率口径：${m.engagement_formula || '—'}\n爆款基准：${m.outlier_basis || '未知'}\n采集时间：${formatLocalDateTime(collectedAt)}`}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? '刷新中' : '刷新'}
+        </button>
       </div>
 
-      {/* 8 项核心真实指标 */}
-      <div className="grid grid-cols-4 xl:grid-cols-8 gap-2">
+      {/* 行 2：紧凑型横向 8 项指标条（宽屏单行，总高 ~68-80px，详细口径悬停查看） */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-[#0c1424] border border-[#1e2e4a] rounded-lg px-3 py-1">
         {cells.map((c) => (
-          <div
-            key={c.label}
-            title={c.tip || c.label}
-            className="bg-[#0c1424] border border-[#1e2e4a] rounded-lg px-2.5 py-1.5 flex flex-col justify-between"
-          >
-            <span className="gcw-text-meta text-slate-400 truncate">{c.label}</span>
-            <span className={`gcw-metric-value font-mono-num font-bold leading-tight mt-0.5 ${c.accent || 'text-slate-100'}`}>
+          <div key={c.label} title={c.tip || c.label} className="inline-flex items-baseline gap-1.5 cursor-help">
+            <span className="gcw-text-meta text-slate-400">{c.label}</span>
+            <span className={`gcw-text-base font-mono-num font-bold ${c.accent || 'text-slate-100'}`}>
               {loading ? '…' : c.value}
             </span>
           </div>
         ))}
       </div>
 
-      {/* 时间与口径说明条 */}
-      <div className="flex flex-wrap items-center justify-between gap-2 gcw-text-meta text-slate-400">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 font-mono-num">
-          <span>作品发布：{publishedAt || '未知'}</span>
-          <span>作品收录：{formatLocalDateTime(capturedAt)}</span>
-          <span>数据采集：{formatLocalDateTime(collectedAt)}</span>
-        </div>
-        <div className="truncate max-w-[46vw]" title={`${m.engagement_formula || ''} | ${m.outlier_basis || ''}`}>
-          口径：{m.engagement_formula || '—'} · 爆款：{m.outlier_basis || '—'}
-        </div>
-      </div>
-
       {refreshErr && (
-        <div className="px-2.5 py-1.5 rounded bg-rose-500/15 border border-rose-500/40 text-rose-300 gcw-text-tag flex items-center gap-1.5">
+        <div className="px-2.5 py-1 rounded bg-rose-500/15 border border-rose-500/40 text-rose-300 gcw-text-meta flex items-center gap-1.5">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span>{refreshErr}</span>
         </div>

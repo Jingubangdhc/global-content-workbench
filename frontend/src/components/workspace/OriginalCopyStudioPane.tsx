@@ -106,7 +106,7 @@ export default function OriginalCopyStudioPane({
       const mdList = mdRes?.models || [];
       setModels(mdList);
       if (mdList.length && !selectedModelKey) {
-        const firstReady = mdList.find((m: any) => m.ready) || mdList[0];
+        const firstReady = mdList.find((m: any) => m.configured || m.ready) || mdList[0];
         if (firstReady) setSelectedModelKey(`${firstReady.engine_id}::${firstReady.model_id}`);
       }
     } catch {
@@ -118,8 +118,30 @@ export default function OriginalCopyStudioPane({
     loadSkillsAndModels();
   }, []);
 
-  // 执行实际保存（带修订号防旧请求覆盖新版本）
+  const pendingStorageKey = (tid: number) => `gcw_draft_pending_${tid}`;
+  const saveLocalPending = (snap: DraftSnapshot) => {
+    try {
+      localStorage.setItem(pendingStorageKey(snap.topicId), JSON.stringify(snap));
+    } catch {
+      // 忽略配额异常
+    }
+  };
+  const clearLocalPending = (tid: number, savedRev: number) => {
+    try {
+      const raw = localStorage.getItem(pendingStorageKey(tid));
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || Number(parsed.client_rev || 0) <= savedRev) {
+        localStorage.removeItem(pendingStorageKey(tid));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // FIX-10: 执行实际保存（收到后端成功确认前绝不清除 dirtyRef 或本地备份）
   const persistSnapshot = useCallback(async (snap: DraftSnapshot, isBackgroundFlush = false) => {
+    saveLocalPending(snap);
     if (!isBackgroundFlush && loadedTopicIdRef.current === snap.topicId) {
       setDraftState('saving');
       setDraftErr('');
@@ -134,27 +156,30 @@ export default function OriginalCopyStudioPane({
         model_id: snap.model_id,
         client_rev: snap.client_rev,
       });
-      if (!isBackgroundFlush && loadedTopicIdRef.current === snap.topicId) {
-        if (res?.ok) {
+      if (res?.ok) {
+        clearLocalPending(snap.topicId, snap.client_rev);
+        if (!isBackgroundFlush && loadedTopicIdRef.current === snap.topicId) {
           if (snap.client_rev >= draftRevRef.current) {
             dirtyRef.current = false;
             setDraftState('saved');
           }
           setDraftSavedAt(res.draft?.updated_at || new Date().toISOString());
-        } else {
-          setDraftState('error');
-          setDraftErr(res?.error || '草稿保存失败');
         }
+      } else if (!isBackgroundFlush && loadedTopicIdRef.current === snap.topicId) {
+        dirtyRef.current = true;
+        setDraftState('error');
+        setDraftErr(res?.error || '草稿保存失败（已本地备份，请点击重试）');
       }
     } catch (e: any) {
       if (!isBackgroundFlush && loadedTopicIdRef.current === snap.topicId) {
+        dirtyRef.current = true;
         setDraftState('error');
-        setDraftErr(`草稿保存失败：${e?.message || e}`);
+        setDraftErr(`草稿保存失败（已本地备份，请点击重试）：${e?.message || e}`);
       }
     }
   }, []);
 
-  // 立即 flush 当前未保存草稿（用于切选题、卸载、切标签页、最大化与页面关闭前）
+  // FIX-10: 立即 flush 当前未保存草稿（绝不在收到成功确认前清除 dirtyRef，本地持久化保护）
   const flushPendingDraft = useCallback(
     (isBackgroundFlush = false) => {
       if (debounceTimerRef.current) {
@@ -163,7 +188,7 @@ export default function OriginalCopyStudioPane({
       }
       if (dirtyRef.current && latestSnapshotRef.current) {
         const snap = latestSnapshotRef.current;
-        dirtyRef.current = false;
+        saveLocalPending(snap);
         void persistSnapshot(snap, isBackgroundFlush);
       }
     },
@@ -230,16 +255,46 @@ export default function OriginalCopyStudioPane({
           throw new Error(dr?.error || '读取草稿失败');
         }
         const d = dr.draft || {};
-        draftRevRef.current = Number(d.revision || 0);
-        setDraftTitle(d.title || topicTitle || '');
-        setDraftContent(d.content || '');
-        setExtraReq(d.extra_requirements || '');
-        if (d.skill_id) setSelectedSkillId(d.skill_id);
-        if (d.engine_id && d.model_id) setSelectedModelKey(`${d.engine_id}::${d.model_id}`);
+        const serverRev = Number(d.revision || 0);
+        // FIX-10: 检查是否存在比服务端更新的本地未同步待保存草稿快照（重启/故障恢复）
+        let restoredLocal: DraftSnapshot | null = null;
+        try {
+          const rawPending = localStorage.getItem(pendingStorageKey(tid));
+          if (rawPending) {
+            const p = JSON.parse(rawPending);
+            if (p && Number(p.topicId) === tid && Number(p.client_rev || 0) > serverRev) {
+              restoredLocal = p;
+            } else {
+              localStorage.removeItem(pendingStorageKey(tid));
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        if (restoredLocal) {
+          draftRevRef.current = restoredLocal.client_rev;
+          setDraftTitle(restoredLocal.title || topicTitle || '');
+          setDraftContent(restoredLocal.content || '');
+          setExtraReq(restoredLocal.extra_requirements || '');
+          if (restoredLocal.skill_id) setSelectedSkillId(restoredLocal.skill_id);
+          if (restoredLocal.engine_id && restoredLocal.model_id) setSelectedModelKey(`${restoredLocal.engine_id}::${restoredLocal.model_id}`);
+          dirtyRef.current = true;
+          latestSnapshotRef.current = restoredLocal;
+          setDraftState('error');
+          setDraftErr('已从本地持久化保护恢复未同步的草稿内容，请点击「重试保存」同步至数据库');
+        } else {
+          draftRevRef.current = serverRev;
+          setDraftTitle(d.title || topicTitle || '');
+          setDraftContent(d.content || '');
+          setExtraReq(d.extra_requirements || '');
+          if (d.skill_id) setSelectedSkillId(d.skill_id);
+          if (d.engine_id && d.model_id) setSelectedModelKey(`${d.engine_id}::${d.model_id}`);
+          dirtyRef.current = false;
+          latestSnapshotRef.current = null;
+        }
         setDraftSavedAt(d.updated_at || null);
         setVersions(vr?.versions || []);
-        dirtyRef.current = false;
-        latestSnapshotRef.current = null;
         loadedTopicIdRef.current = tid;
       } catch (e: any) {
         if (seq !== topicLoadSeqRef.current) return;
@@ -388,16 +443,22 @@ export default function OriginalCopyStudioPane({
 
   const handleGenerate = async () => {
     if (!topicId || generating || loadingDraft || draftLoadError) return;
-    if (draftContent.trim() && !window.confirm('当前编辑区已有原创文案内容，确认生成新文案吗？（原有已保存的正式版本不会丢失）')) {
+    // FIX-03: 模型未就绪时明确提示并提供配置入口，绝不空跑
+    const [engineId, modelId] = (selectedModelKey || '::').split('::');
+    const selectedModel = models.find((m) => m.engine_id === engineId && m.model_id === modelId);
+    if (!selectedModel || !(selectedModel.configured || selectedModel.ready)) {
+      setErrMsg('当前所选 AI 模型尚未配置或未就绪，请先点击左下角「翻译 Key / 设置」完成配置后再生成二创文案');
+      return;
+    }
+    if (draftContent.trim() && !window.confirm('当前编辑区已有二创文案内容，确认生成新二创文案吗？（原有已保存的正式版本不会丢失）')) {
       return;
     }
     const targetTid = topicId;
     const seq = ++genSeqRef.current;
     const editCounterAtStart = editCounterRef.current;
-    const [engineId, modelId] = (selectedModelKey || '::').split('::');
     setGenerating(true);
     setErrMsg('');
-    setMsg('正在调用所选 Skill 与模型生成原创文案...');
+    setMsg('正在调用所选 Skill 与模型生成二创文案...');
     try {
       const refIds = selectedRefIds.length ? selectedRefIds : activeContentId ? [activeContentId] : [];
       const res = await api.generateStudioOriginalVersion({
@@ -409,33 +470,32 @@ export default function OriginalCopyStudioPane({
         engine_id: engineId || '',
         model_id: modelId || '',
         extra_requirements: extraReq.trim(),
-        title: draftTitle.trim() || `${topicTitle} · 原创文案`,
+        title: draftTitle.trim() || `${topicTitle} · 二创文案`,
       });
-      // FIX-01: 严格校验目标选题与请求版本，绝不写入后来切换的其他选题
       if (seq !== genSeqRef.current || currentTopicIdRef.current !== targetTid || loadedTopicIdRef.current !== targetTid) {
         return;
       }
-      if (res?.ok && res.version) {
+      // FIX-03: 统一读取 content_markdown / content，严格验证正文非空才可标记成功
+      const bodyText = String(res?.version?.content_markdown || res?.version?.content || '').trim();
+      if (res?.ok && res.version && bodyText.length > 0) {
         const vr = await api.listStudioOriginalVersions(projectId, null, targetTid);
         if (currentTopicIdRef.current === targetTid) setVersions(vr?.versions || []);
-        // FIX-01: 生成期间若用户继续编辑了内容，绝不直接覆盖最新编辑内容
         if (editCounterRef.current !== editCounterAtStart) {
-          setMsg(`✅ 新文案已保存为独立正式版本 #${res.version.version_no}（因生成期间你继续编辑了草稿，未覆盖当前编辑区，可在「历史」中查看/恢复）`);
+          setMsg(`✅ 新二创文案已保存为独立正式版本 #${res.version.version_no}（因生成期间你继续编辑了草稿，未覆盖当前编辑区，可在「历史」中查看/恢复）`);
         } else {
           const nextTitle = res.version.title || draftTitle;
-          const nextContent = res.version.content || '';
           setDraftTitle(nextTitle);
-          setDraftContent(nextContent);
-          markDraftEdited({ title: nextTitle, content: nextContent });
-          setMsg(`✅ 已生成独立原创版本 #${res.version.version_no}（原文未受任何修改）`);
+          setDraftContent(bodyText);
+          markDraftEdited({ title: nextTitle, content: bodyText });
+          setMsg(`✅ 已生成独立二创版本 #${res.version.version_no}（共 ${bodyText.length} 字，参考原文未受任何修改）`);
         }
       } else {
-        setErrMsg(res?.error || '生成原创文案失败');
+        setErrMsg(res?.error || '模型返回正文为空，未标记生成成功，当前编辑区内容已保留');
         setMsg('');
       }
     } catch (e: any) {
       if (seq !== genSeqRef.current || currentTopicIdRef.current !== targetTid) return;
-      setErrMsg(`生成原创文案失败：${e?.message || e}`);
+      setErrMsg(`生成二创文案失败：${e?.message || e}`);
       setMsg('');
     } finally {
       if (seq === genSeqRef.current) setGenerating(false);
@@ -498,7 +558,7 @@ export default function OriginalCopyStudioPane({
       <div className="gcw-panel-header px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <PenTool className="w-4 h-4 text-purple-400 shrink-0" />
-          <span className="gcw-section-title text-slate-100">原创文案</span>
+          <span className="gcw-section-title text-slate-100">二创文案</span>
           <span className="gcw-text-tag text-slate-400">
             {loadingDraft
               ? '加载草稿中...'
@@ -618,7 +678,7 @@ export default function OriginalCopyStudioPane({
             >
               {models.map((m) => (
                 <option key={`${m.engine_id}::${m.model_id}`} value={`${m.engine_id}::${m.model_id}`}>
-                  {m.label || `${m.engine_id} / ${m.model_id}`}{m.ready ? '' : '（未就绪）'}
+                  {m.label || m.name || `${m.engine_id} / ${m.model_id}`}{m.configured || m.ready ? '' : '（未就绪）'}
                 </option>
               ))}
             </select>
@@ -644,7 +704,7 @@ export default function OriginalCopyStudioPane({
             className="gcw-btn-purple px-3 py-1 rounded-lg gcw-text-btn font-semibold inline-flex items-center gap-1.5 shrink-0 disabled:opacity-40"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {generating ? '生成中...' : '生成原创'}
+            {generating ? '生成中...' : '生成二创文案'}
           </button>
           <button
             type="button"
@@ -701,37 +761,46 @@ export default function OriginalCopyStudioPane({
       ) : showHistory ? (
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
           {!versions.length ? (
-            <div className="text-center py-8 text-slate-500 gcw-text-base">当前选题暂无已保存的原创文案正式版本</div>
+            <div className="text-center py-8 text-slate-500 gcw-text-base">当前选题暂无已保存的二创文案正式版本</div>
           ) : (
-            versions.map((v) => (
-              <div key={v.id} className="p-3 rounded-lg bg-[#0c1424] border border-[#1e2e4a] space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="gcw-text-btn font-semibold text-slate-100 truncate">
-                    #{v.version_no} {v.title || '原创文案'}
+            versions.map((v) => {
+              const body = String(v.content_markdown || v.content || '');
+              const isEmptyAnomaly = body.trim().length === 0;
+              return (
+                <div key={v.id} className="p-3 rounded-lg bg-[#0c1424] border border-[#1e2e4a] space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="gcw-text-btn font-semibold text-slate-100 truncate flex items-center gap-1.5">
+                      <span>#{v.version_no} {v.title || '二创文案'}</span>
+                      {isEmptyAnomaly && (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 gcw-text-meta">异常：空正文</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isEmptyAnomaly}
+                      onClick={() => {
+                        if (draftContent.trim() && !window.confirm('确认将此历史二创版本恢复到编辑区吗？')) return;
+                        const nt = v.title || draftTitle;
+                        setDraftTitle(nt);
+                        setDraftContent(body);
+                        markDraftEdited({ title: nt, content: body });
+                        setShowHistory(false);
+                        setMsg(`已恢复历史二创版本 #${v.version_no} 至编辑区`);
+                      }}
+                      className="gcw-btn-cyan px-2.5 py-0.5 rounded gcw-text-tag shrink-0 disabled:opacity-40"
+                    >
+                      恢复到编辑区
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (draftContent.trim() && !window.confirm('确认将此历史版本恢复到编辑区吗？')) return;
-                      const nt = v.title || draftTitle;
-                      const nc = v.content || '';
-                      setDraftTitle(nt);
-                      setDraftContent(nc);
-                      markDraftEdited({ title: nt, content: nc });
-                      setShowHistory(false);
-                      setMsg(`已恢复历史版本 #${v.version_no} 至编辑区`);
-                    }}
-                    className="gcw-btn-cyan px-2.5 py-0.5 rounded gcw-text-tag shrink-0"
-                  >
-                    恢复到编辑区
-                  </button>
+                  <div className="gcw-text-meta text-slate-400 font-mono-num">
+                    字数：{body.length} · Skill：{v.skill_name || v.skill_id || '—'} · 模型：{v.model_id || '—'} · 时间：{formatLocalDateTime(v.created_at)}
+                  </div>
+                  <div className="gcw-text-tag text-slate-300 line-clamp-3 whitespace-pre-wrap">
+                    {isEmptyAnomaly ? '（该历史版本正文为空，已标记为异常记录）' : body}
+                  </div>
                 </div>
-                <div className="gcw-text-meta text-slate-400">
-                  Skill：{v.skill_id || '—'} · 模型：{v.model_id || '—'} · 时间：{formatLocalDateTime(v.created_at)}
-                </div>
-                <div className="gcw-text-tag text-slate-300 line-clamp-3 whitespace-pre-wrap">{v.content}</div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       ) : (
@@ -743,7 +812,7 @@ export default function OriginalCopyStudioPane({
               setDraftTitle(e.target.value);
               markDraftEdited({ title: e.target.value });
             }}
-            placeholder={loadingDraft ? '正在加载草稿...' : '原创文案标题...'}
+            placeholder={loadingDraft ? '正在加载草稿...' : '二创文案标题...'}
             className="gcw-input px-3 py-1.5 gcw-video-title font-semibold shrink-0 disabled:opacity-50"
           />
           <textarea
@@ -753,7 +822,7 @@ export default function OriginalCopyStudioPane({
               setDraftContent(e.target.value);
               markDraftEdited({ content: e.target.value });
             }}
-            placeholder={loadingDraft ? '正在加载草稿，请稍候...' : '在此编辑原创文案（自动保存为当前选题独立草稿，绝不覆盖参考原文）...'}
+            placeholder={loadingDraft ? '正在加载草稿，请稍候...' : '在此编辑二创文案（自动保存为当前选题独立草稿，绝不覆盖参考原文）...'}
             className="gcw-input gcw-editor-text flex-1 min-h-0 w-full p-3 resize-none leading-relaxed disabled:opacity-50"
           />
         </div>

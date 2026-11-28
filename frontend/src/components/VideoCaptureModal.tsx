@@ -354,7 +354,7 @@ export default function VideoCaptureModal({
         <div className="px-5 py-3 bg-[#131E36] border-b border-[#1E2E4A] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookmarkPlus className="w-4 h-4 text-cyan-400" />
-            <span className="font-bold text-sm">收录作品至选题资产中心</span>
+            <span className="font-bold text-sm">加入选题库（选题资产中心）</span>
             {initialPreview?.existing_content && (
               <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 gcw-text-meta">
                 作品已存在 (#{initialPreview.existing_content.content_id})，本次将去重复用并建立选题关联
@@ -394,7 +394,7 @@ export default function VideoCaptureModal({
               <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/15 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-200">
                 <div className="space-y-0.5">
                   <div>
-                    ✅ 已成功收录至 <strong>选题资产中心</strong>（项目：<strong>{savedResult.project_name || `#${savedResult.project_id}`}</strong> · 选题 <strong>#{savedResult.topic_id}</strong>「{savedResult.topic_title}」）
+                    ✅ 已成功加入选题库（项目：<strong>{savedResult.project_name || `#${savedResult.project_id}`}</strong> · 选题 <strong>#{savedResult.topic_id}</strong>「{savedResult.topic_title}」）
                   </div>
                   <div className="gcw-text-tag text-emerald-300/90">
                     作品 #{savedResult.content_id}（{savedResult.dedup_reused ? '已存在去重复用' : '新收录'}）·

@@ -347,7 +347,16 @@ export default function ReferenceTranscriptPane({
                     {fmtTs(seg.start)}
                   </button>
 
-                  <div className="flex-1 min-w-0 space-y-1">
+                  <div
+                    onClick={() => {
+                      if (isEditing) return;
+                      const sel = window.getSelection?.()?.toString()?.trim();
+                      if (sel) return; // FIX-05: 选中复制文字时不误触视频跳转
+                      onSeekToSeconds(Number(seg.start || 0));
+                    }}
+                    className={`flex-1 min-w-0 space-y-1 ${isEditing ? '' : 'cursor-pointer'}`}
+                    title={isEditing ? undefined : '点击整句跳转至对应视频时间（选中文字复制不会误触）'}
+                  >
                     {(viewMode === 'bilingual' || viewMode === 'original') && (
                       <div className="gcw-text-base text-slate-100 leading-relaxed break-words">
                         {seg.text}

@@ -359,7 +359,29 @@ function createWindow() {
   }
 }
 
-// ==================== 显式目标实例 IPC 路由 ====================
+// ==================== 显式目标实例 IPC 路由（FIX-01 全局单一活动视图令牌） ====================
+let activeBrowserViewId = null;
+
+ipcMain.handle('gcw-browser:set-active-view', async (event, viewId) => {
+  if (!isWorkbenchSender(event)) return { ok: false, error: 'forbidden_sender' };
+  const nextActive = VALID_VIEW_IDS.has(viewId) ? viewId : null;
+  activeBrowserViewId = nextActive;
+  const toPause = [];
+  for (const vid of VALID_VIEW_IDS) {
+    if (vid !== nextActive && views[vid]) {
+      if (views[vid].visible) toPause.push(vid);
+      // 先同步瞬间隐藏，彻底消除 await 期间双视图同时可见的窗口
+      views[vid].visible = false;
+      syncViewBounds(vid);
+      pushViewState(vid);
+    }
+  }
+  for (const vid of toPause) {
+    await pauseViewMedia(vid);
+  }
+  return { ok: true, activeViewId: activeBrowserViewId };
+});
+
 ipcMain.handle('gcw-browser:navigate', (event, viewId, url) => {
   if (!isWorkbenchSender(event)) return { ok: false, error: 'forbidden_sender' };
   const entry = getManagedView(viewId);
@@ -370,7 +392,8 @@ ipcMain.handle('gcw-browser:navigate', (event, viewId, url) => {
   }
   entry.state.lastError = '';
   entry.state.url = target;
-  entry.visible = true;
+  // FIX-01: 仅当目标视图就是当前全局活动视图时才允许置为可见，防止后台视图叠加
+  entry.visible = activeBrowserViewId === null || activeBrowserViewId === viewId;
   syncViewBounds(viewId);
   entry.view.webContents.loadURL(target).catch((err) => {
     entry.state.lastError = `打开失败：${err?.message || err}`;
@@ -401,6 +424,12 @@ ipcMain.handle('gcw-browser:set-visible', async (event, viewId, visible) => {
   const entry = getManagedView(viewId);
   if (!entry) return { ok: false, error: 'invalid_view_id' };
   const nextVisible = Boolean(visible);
+  // FIX-01: 非当前活动模块视图绝不允许被旧异步回调重新置为可见
+  if (nextVisible && activeBrowserViewId !== null && activeBrowserViewId !== viewId) {
+    entry.visible = false;
+    syncViewBounds(viewId);
+    return { ok: true, viewId, visible: false, blockedByActiveView: activeBrowserViewId };
+  }
   // 隐藏时自动暂停该视图内正在播放的视频，但不销毁实例、不清空 URL 或进度
   if (!nextVisible && entry.visible) {
     await pauseViewMedia(viewId);

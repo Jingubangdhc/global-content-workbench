@@ -589,3 +589,220 @@ def api_refresh_content_metrics(content_id: int, body: RefreshContentMetricsBody
         code = 409 if res.get("identity_mismatch") else 400
         raise HTTPException(code, res.get("error") or "刷新作品数据失败")
     return res
+
+
+# ==================== FIX-04: 全文拆解 Skill 工作区（通用执行与结果保存，绝不硬编码模板） ====================
+class BreakdownRunBody(BaseModel):
+    skill_id: str
+    engine_id: str = ""
+    model_id: str = ""
+    text_mode: str = "original"  # original | zh | bilingual
+    extra_requirements: str = ""
+
+
+@router.get("/contents/{content_id}/breakdown-reports")
+def api_list_breakdown_reports(content_id: int):
+    import json
+    from backend.db import get_conn
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (f"content_breakdown_reports_{content_id}",)).fetchone()
+        reports = json.loads(row["value"]) if row and row["value"] else []
+        return {"ok": True, "content_id": content_id, "reports": reports}
+    finally:
+        conn.close()
+
+
+@router.post("/contents/{content_id}/breakdown-run")
+def api_run_breakdown_skill(content_id: int, body: BreakdownRunBody):
+    import json
+    from datetime import datetime, timezone
+    import httpx
+    from backend.db import get_conn
+    from backend.services import translation_provider as tp_svc
+
+    skills = pkg_svc.list_available_script_skills()
+    sk = next((s for s in skills if s.get("skill_id") == body.skill_id and not s.get("is_builtin")), None)
+    if not sk:
+        raise HTTPException(400, "未找到已导入的拆解 Skill，请先导入拆解 Skill（绝不生成虚构分析）")
+
+    sub = tp_svc.get_content_subtitles(content_id, "zh-CN")
+    segs = sub.get("segments") or []
+    if not segs:
+        raise HTTPException(400, "当前视频尚无参考文案，请先提取参考文案后再执行全文拆解")
+
+    lines = []
+    for s in segs:
+        orig = (s.get("text") or "").strip()
+        zh = (s.get("translated_text") or "").strip()
+        if body.text_mode == "zh":
+            lines.append(zh or orig)
+        elif body.text_mode == "bilingual":
+            lines.append(f"{orig}\n{zh}" if zh else orig)
+        else:
+            lines.append(orig)
+    full_text = "\n".join(x for x in lines if x).strip()
+    if not full_text:
+        raise HTTPException(400, "所选文案视图为空，无法执行全文拆解")
+
+    try:
+        api_key, base_url, resolved_model, resolved_engine = pkg_svc._resolve_writing_llm(body.engine_id, body.model_id)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+    sys_prompt = sk.get("system_prompt") or ""
+    user_prompt = f"以下是待拆解视频的完整参考文案（模式：{body.text_mode}）：\n\n{full_text[:18000]}"
+    if body.extra_requirements.strip():
+        user_prompt += f"\n\n额外分析要求：\n{body.extra_requirements.strip()}"
+
+    try:
+        r = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": resolved_model,
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.4,
+            },
+            timeout=90.0,
+        )
+        r.raise_for_status()
+        data = r.json()
+        report_md = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+    except Exception as e:
+        raise HTTPException(502, f"调用模型执行拆解 Skill 失败：{e}")
+
+    if not report_md:
+        raise HTTPException(502, "模型返回的拆解报告为空，未保存")
+
+    item = {
+        "id": f"bd_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+        "content_id": content_id,
+        "skill_id": sk.get("skill_id"),
+        "skill_name": sk.get("name"),
+        "engine_id": resolved_engine,
+        "model_id": resolved_model,
+        "text_mode": body.text_mode,
+        "extra_requirements": body.extra_requirements.strip(),
+        "report_markdown": report_md,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    conn = get_conn()
+    try:
+        key = f"content_breakdown_reports_{content_id}"
+        row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+        reports = json.loads(row["value"]) if row and row["value"] else []
+        reports.insert(0, item)
+        conn.execute(
+            "INSERT INTO app_settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, json.dumps(reports[:30], ensure_ascii=False)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "report": item}
+
+
+# ==================== FIX-08: 高赞评论选题发现（严格基于真实评论，绝不编造评论与点赞） ====================
+class CommentDiscoverTopicsBody(BaseModel):
+    project_id: int
+    content_id: int
+    comment_ids: list[int]
+    count: int = 3
+    engine_id: str = ""
+    model_id: str = ""
+
+
+@router.post("/comments/discover-topics")
+def api_discover_topics_from_comments(body: CommentDiscoverTopicsBody):
+    import json
+    from datetime import datetime, timezone
+    import httpx
+    from backend.db import get_conn
+
+    cids = [int(x) for x in (body.comment_ids or []) if int(x) > 0]
+    if not cids:
+        raise HTTPException(400, "请先选择至少 1 条真实评论")
+    want_n = max(1, min(10, int(body.count or 3)))
+
+    conn = get_conn()
+    try:
+        content_row = conn.execute("SELECT id, title, url FROM contents WHERE id=?", (body.content_id,)).fetchone()
+        if not content_row:
+            raise HTTPException(404, f"未找到源视频 #{body.content_id}")
+        placeholders = ",".join("?" for _ in cids)
+        rows = conn.execute(
+            f"SELECT id, author, text, like_count FROM comments WHERE content_id=? AND id IN ({placeholders}) ORDER BY like_count DESC",
+            (body.content_id, *cids),
+        ).fetchall()
+        real_comments = [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+    if not real_comments:
+        raise HTTPException(400, "所选评论在当前视频下不存在，禁止编造评论生成选题")
+
+    try:
+        api_key, base_url, resolved_model, resolved_engine = pkg_svc._resolve_writing_llm(body.engine_id, body.model_id)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+    cmt_block = "\n".join(
+        f"- [comment_id={c['id']}, likes={c.get('like_count') or 0}] {c.get('text') or ''}"
+        for c in real_comments
+    )
+    prompt = (
+        f"请严格基于以下真实用户评论，提炼 {want_n} 个短视频候选选题。\n"
+        f"源视频：{content_row['title']}\n真实评论：\n{cmt_block}\n\n"
+        "严格返回 JSON 数组，每项字段为：suggested_title, user_pain_point, angle, source_comment_id（必须是上述真实 comment_id 之一）。严禁编造不存在的评论或数据。"
+    )
+    try:
+        r = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": resolved_model,
+                "messages": [
+                    {"role": "system", "content": "你是严谨的内容选题研究助手，只输出合法 JSON 数组，严禁编造评论与互动数据。"},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.5,
+            },
+            timeout=60.0,
+        )
+        r.raise_for_status()
+        raw_txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+        s_idx = raw_txt.find("[")
+        e_idx = raw_txt.rfind("]")
+        parsed = json.loads(raw_txt[s_idx : e_idx + 1]) if s_idx >= 0 and e_idx > s_idx else []
+    except Exception as e:
+        raise HTTPException(502, f"调用模型生成候选选题失败：{e}")
+
+    by_id = {int(c["id"]): c for c in real_comments}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    candidates = []
+    for idx, item in enumerate(parsed[:want_n]):
+        if not isinstance(item, dict) or not str(item.get("suggested_title") or "").strip():
+            continue
+        scid = int(item.get("source_comment_id") or real_comments[idx % len(real_comments)]["id"])
+        src_c = by_id.get(scid) or real_comments[0]
+        candidates.append({
+            "suggested_title": str(item.get("suggested_title") or "").strip()[:140],
+            "user_pain_point": str(item.get("user_pain_point") or "").strip()[:300],
+            "angle": str(item.get("angle") or "").strip()[:300],
+            "source_comment_id": int(src_c["id"]),
+            "source_comment_text": src_c.get("text") or "",
+            "comment_likes": src_c.get("like_count"),
+            "content_id": int(content_row["id"]),
+            "content_url": content_row["url"] or "",
+            "project_id": int(body.project_id),
+            "engine_id": resolved_engine,
+            "model_id": resolved_model,
+            "generated_at": now_iso,
+        })
+    if not candidates:
+        raise HTTPException(502, "模型未能生成有效的候选选题，请重试")
+    return {"ok": True, "candidates": candidates}

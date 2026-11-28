@@ -362,11 +362,12 @@ def get_topic_original_draft(topic_id: int) -> dict[str, Any]:
 
 
 def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    """GCW-WORKSPACE-05 / FIX-01: 持久化选题级原创文案草稿，带 revision 修订号防旧请求覆盖新版本。"""
+    """GCW-WORKSPACE-05 / FIX-10: BEGIN IMMEDIATE 原子事务校验 revision，严格拒绝重复或过期修订号覆盖。"""
     conn = get_conn()
     try:
         from datetime import datetime, timezone
         key = f"topic_original_draft_{int(topic_id)}"
+        conn.execute("BEGIN IMMEDIATE")
         existing_rev = 0
         row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
         if row and row["value"]:
@@ -382,14 +383,15 @@ def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[st
                 c_rev = int(client_rev)
             except Exception:
                 c_rev = 0
-            if c_rev < existing_rev:
+            if c_rev <= existing_rev:
+                conn.rollback()
                 return {
                     "ok": False,
                     "stale_rejected": True,
                     "current_revision": existing_rev,
-                    "error": f"检测到过期草稿保存请求（client_rev={c_rev} < current={existing_rev}），已拒绝覆盖最新草稿",
+                    "error": f"检测到重复或过期草稿保存请求（client_rev={c_rev} <= current={existing_rev}），已拒绝覆盖最新草稿",
                 }
-            next_rev = max(existing_rev + 1, c_rev)
+            next_rev = c_rev
         else:
             next_rev = existing_rev + 1
 
@@ -411,7 +413,11 @@ def save_topic_original_draft(topic_id: int, payload: dict[str, Any]) -> dict[st
         conn.commit()
         return {"ok": True, "topic_id": topic_id, "draft": draft}
     except Exception as e:
-        return {"ok": False, "error": f"保存原创草稿失败：{e}"}
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {"ok": False, "error": f"保存草稿失败：{e}"}
     finally:
         conn.close()
 

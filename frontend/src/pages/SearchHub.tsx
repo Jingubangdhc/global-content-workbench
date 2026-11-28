@@ -54,6 +54,7 @@ declare global {
 }
 
 interface Props {
+  isActive?: boolean;
   projectId: number;
   projectName?: string;
   projects?: { id: number; name: string }[];
@@ -86,7 +87,7 @@ function parseEmbedUrl(rawUrl: string): { kind: 'youtube' | 'bilibili' | null; e
  * - 主体真实市场研究区（约 75%，支持一键最大化；左 70% 官方嵌入/真实网页同屏区 + 右 30% 证据收录与笔记栏）。
  * 深度打通 Chrome Extension MV3 Side Panel：扩展已连接时点击平台自动同屏展开原生网页 + 右侧研究侧栏。
  */
-export default function SearchHub({ projectId, projectName = '', projects = [], externalQuery, onGoTopicHub }: Props) {
+export default function SearchHub({ isActive = true, projectId, projectName = '', projects = [], externalQuery, onGoTopicHub }: Props) {
   const [rootInput, setRootInput] = useState('');
   const [nodes, setNodes] = useState<any[]>([]);
   const [presets, setPresets] = useState<any[]>([]);
@@ -183,7 +184,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
 
   const handleOpenOneClickCapture = async () => {
     if (!researchBrowser) {
-      showToast('请在桌面版内置浏览器中使用「收录当前视频」');
+      showToast('请在桌面版内置浏览器中使用「加入选题库」');
       return;
     }
     if (!ebState.url) {
@@ -254,7 +255,23 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
     setTimeout(() => setToast(''), 4500);
   };
 
-  // FIX-A02: 专属 researchView 生命周期管理——返回 SearchHub 自动恢复原网页与视频进度（不重新加载），离开仅暂停并隐藏
+  // FIX-01 & FIX-09: 仅当 SearchHub 处于激活态且未打开收录弹窗时才显示 researchView，切换页面仅隐藏保活不重加载
+  useEffect(() => {
+    if (!researchBrowser) return;
+    if (!isActive || captureModalOpen) {
+      researchBrowser.setVisible(false).catch(() => {});
+      return;
+    }
+    const el = browserHostRef.current;
+    if (el && ebState.url) {
+      const r = el.getBoundingClientRect();
+      if (r.width >= 80 && r.height >= 80) {
+        researchBrowser.setBounds({ x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) })
+          .then(() => researchBrowser.setVisible(true))
+          .catch(() => {});
+      }
+    }
+  }, [isActive, captureModalOpen, researchBrowser]);
   useEffect(() => {
     if (!researchBrowser) return;
     const syncRect = () => {
@@ -911,7 +928,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
                       className="gcw-btn-cyan px-2.5 py-0.5 rounded font-semibold flex items-center gap-1 shrink-0"
                       title="自动提取当前真实视频数据并一键收录至 TopicHub"
                     >
-                      <BookmarkPlus className="w-3.5 h-3.5" /> 收录当前视频
+                      <BookmarkPlus className="w-3.5 h-3.5" /> 加入选题库
                     </button>
                     <button
                       onClick={() => {
@@ -1132,7 +1149,7 @@ export default function SearchHub({ projectId, projectName = '', projects = [], 
         </div>
       </div>
 
-      {/* FIX-A05 / FIX-F03 方案 A：一键收录当前视频至选题资产中心弹窗（打开时自动暂隐 researchView 防遮挡） */}
+      {/* FIX-A05 / FIX-F03 方案 A：一键加入选题库至选题资产中心弹窗（打开时自动暂隐 researchView 防遮挡） */}
       <VideoCaptureModal
         open={captureModalOpen}
         onClose={closeCaptureModal}
